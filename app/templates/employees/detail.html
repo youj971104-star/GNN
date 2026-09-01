@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_macros.html" import asset_status %}
+{% set active = 'employees' %}
+{% block page_title %}직원 상세{% endblock %}
+{% block content %}
+
+<div class="breadcrumb"><a href="/employees">직원 관리</a> / 상세</div>
+
+<div class="page-head">
+  <div>
+    <h2 style="margin:0 0 4px; font-size:19px;">
+      {{ employee.name }}
+      <span class="badge {{ employee.status }}">{{ employee.status_label }}</span>
+    </h2>
+    <div class="muted mono">{{ employee.emp_no }}</div>
+  </div>
+  {% if current_user.is_admin %}
+  <div class="section-actions">
+    <a href="/employees/{{ employee.id }}/edit" class="btn">수정</a>
+    <a href="/assignments/new" class="btn primary">자산 지급</a>
+    <form method="post" action="/employees/{{ employee.id }}/delete" class="inline-form"
+          onsubmit="return confirm('{{ employee.name }} 님을 삭제할까요?');">
+      <button type="submit" class="btn danger">삭제</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>기본 정보</h2>
+    <div class="card-body">
+      <dl class="detail">
+        <dt>부서</dt><dd>{{ employee.department or '-' }}</dd>
+        <dt>직급</dt><dd>{{ employee.position or '-' }}</dd>
+        <dt>이메일</dt><dd>{{ employee.email or '-' }}</dd>
+        <dt>연락처</dt><dd>{{ employee.phone or '-' }}</dd>
+        <dt>등록일</dt><dd>{{ employee.created_at | datetime }}</dd>
+        <dt>비고</dt><dd>{{ employee.note or '-' }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">현재 보유 자산 ({{ assets | length }}건)</div>
+    <div class="card-body tight">
+      {% if assets %}
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>자산번호</th><th>자산명</th><th>분류</th><th class="center">상태</th></tr></thead>
+          <tbody>
+          {% for asset in assets %}
+            <tr>
+              <td class="mono nowrap"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
+              <td>{{ asset.name }}</td>
+              <td class="nowrap">{{ asset.category_label }}</td>
+              <td class="center">{{ asset_status(asset) }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="empty">보유 중인 자산이 없습니다.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    지급 / 반납 이력 ({{ history | length }}건)
+    <a href="/assignments?employee_id={{ employee.id }}" class="btn small">이력 화면에서 보기</a>
+  </div>
+  <div class="card-body tight">
+    {% if history %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>자산번호</th><th>자산명</th><th>지급일</th><th>반납일</th><th class="num">보유일수</th><th class="center">상태</th><th>메모</th></tr></thead>
+        <tbody>
+        {% for item in history %}
+          <tr>
+            <td class="mono nowrap"><a href="/assets/{{ item.asset.id }}">{{ item.asset.asset_no }}</a></td>
+            <td>{{ item.asset.name }}</td>
+            <td class="nowrap">{{ item.assigned_at | date }}</td>
+            <td class="nowrap">{{ item.returned_at | date }}</td>
+            <td class="num">{{ '{:,}'.format(item.days_held) }}일</td>
+            <td class="center">
+              {% if item.is_open %}<span class="badge open">지급중</span>{% else %}<span class="badge returned">반납완료</span>{% endif %}
+            </td>
+            <td class="muted">
+              {{ item.assigned_note or '' }}
+              {% if item.return_note %}<div>↩ {{ item.return_note }}</div>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="empty">지급 이력이 없습니다.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

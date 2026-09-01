@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% set active = 'employees' %}
+{% set editing = employee is not none %}
+{% macro val(field) %}
+  {%- if form is not none -%}{{ form.get(field, '') }}
+  {%- elif editing and employee[field] is not none -%}{{ employee[field] }}{%- endif -%}
+{% endmacro %}
+{% block page_title %}{{ '직원 수정' if editing else '직원 등록' }}{% endblock %}
+{% block content %}
+
+<div class="breadcrumb"><a href="/employees">직원 관리</a> / {{ '수정' if editing else '신규 등록' }}</div>
+
+<div class="card" style="max-width:760px;">
+  <h2>{{ (employee.name ~ ' (' ~ employee.emp_no ~ ')') if editing else '새 직원 정보' }}</h2>
+  <div class="card-body">
+    <form method="post" action="{{ '/employees/' ~ employee.id ~ '/edit' if editing else '/employees/new' }}">
+      <div class="form-grid">
+        <div class="field">
+          <label for="emp_no">사번<span class="req">*</span></label>
+          {% if editing %}
+            <input type="text" id="emp_no" value="{{ employee.emp_no }}" disabled>
+            <div class="hint">사번은 변경할 수 없습니다.</div>
+          {% else %}
+            <input type="text" id="emp_no" name="emp_no" value="{{ val('emp_no') }}" required maxlength="30">
+          {% endif %}
+        </div>
+        <div class="field">
+          <label for="name">이름<span class="req">*</span></label>
+          <input type="text" id="name" name="name" value="{{ val('name') }}" required maxlength="50">
+        </div>
+        <div class="field">
+          <label for="department">부서</label>
+          <input type="text" id="department" name="department" value="{{ val('department') }}" maxlength="50" placeholder="예: 개발팀">
+        </div>
+        <div class="field">
+          <label for="position">직급</label>
+          <input type="text" id="position" name="position" value="{{ val('position') }}" maxlength="50" placeholder="예: 선임">
+        </div>
+        <div class="field">
+          <label for="email">이메일</label>
+          <input type="email" id="email" name="email" value="{{ val('email') }}" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="phone">연락처</label>
+          <input type="text" id="phone" name="phone" value="{{ val('phone') }}" maxlength="30" placeholder="예: 010-1234-5678">
+        </div>
+        <div class="field">
+          <label for="status">재직상태<span class="req">*</span></label>
+          {% set current_status = form.get('status', 'ACTIVE') if form is not none else (employee.status if editing else 'ACTIVE') %}
+          <select id="status" name="status" required>
+            {% for code, label in EMPLOYEE_STATUSES.items() %}
+              <option value="{{ code }}" {{ 'selected' if current_status == code }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">'퇴사'로 바꾸려면 보유 자산을 모두 반납 처리해야 합니다.</div>
+        </div>
+        <div class="field full">
+          <label for="note">비고</label>
+          <textarea id="note" name="note">{{ val('note') }}</textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">{{ '수정 저장' if editing else '등록' }}</button>
+        <a href="{{ '/employees/' ~ employee.id if editing else '/employees' }}" class="btn">취소</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  {%- set page_name = self.page_title() %}
+  <title>{{ (page_name ~ ' · ') if page_name }}{{ APP_NAME }}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>💻</text></svg>">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <a href="/">{{ APP_NAME }}<small>사내 IT 자산 통합 관리</small></a>
+    </div>
+    <nav>
+      <div class="nav-section">업무</div>
+      <a href="/" class="{{ 'active' if active == 'dashboard' }}">대시보드</a>
+      <a href="/assets" class="{{ 'active' if active == 'assets' }}">자산 관리</a>
+      <a href="/employees" class="{{ 'active' if active == 'employees' }}">직원 관리</a>
+      <a href="/assignments" class="{{ 'active' if active == 'assignments' }}">지급 / 반납 이력</a>
+      {% if current_user and current_user.is_admin %}
+      <div class="nav-section">관리자</div>
+      <a href="/assets/import" class="{{ 'active' if active == 'import' }}">엑셀 일괄 등록</a>
+      <a href="/users" class="{{ 'active' if active == 'users' }}">계정 관리</a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-foot">v{{ APP_VERSION }}</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+      <div class="user-box">
+        {% if current_user %}
+          <span><strong>{{ current_user.name }}</strong> 님</span>
+          <span class="badge {{ current_user.role }}">{{ current_user.role_label }}</span>
+          <a href="/me/password" class="btn small">비밀번호 변경</a>
+          <form method="post" action="/logout" class="inline-form">
+            <button type="submit" class="btn small">로그아웃</button>
+          </form>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="content">
+      {% for item in flashes %}
+        <div class="alert {{ item.category }}">{{ item.message }}</div>
+      {% endfor %}
+      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+</body>
+</html>

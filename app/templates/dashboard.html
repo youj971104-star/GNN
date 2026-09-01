@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% from "_macros.html" import bar, asset_status %}
+{% set active = 'dashboard' %}
+{% block page_title %}대시보드{% endblock %}
+{% block content %}
+
+<div class="stat-grid">
+  <div class="stat is-accent">
+    <div class="label">전체 자산</div>
+    <div class="value">{{ '{:,}'.format(stats.total) }}<small>건</small></div>
+  </div>
+  <div class="stat is-success">
+    <div class="label">사용중 (지급됨)</div>
+    <div class="value">{{ '{:,}'.format(stats.status_counts.IN_USE) }}<small>건</small></div>
+  </div>
+  <div class="stat">
+    <div class="label">재고 (지급 가능)</div>
+    <div class="value">{{ '{:,}'.format(stats.status_counts.IN_STOCK) }}<small>건</small></div>
+  </div>
+  <div class="stat is-warn">
+    <div class="label">수리중</div>
+    <div class="value">{{ '{:,}'.format(stats.status_counts.REPAIR) }}<small>건</small></div>
+  </div>
+  <div class="stat is-danger">
+    <div class="label">분실 / 폐기</div>
+    <div class="value">{{ '{:,}'.format(stats.status_counts.LOST + stats.status_counts.DISPOSED) }}<small>건</small></div>
+  </div>
+  <div class="stat">
+    <div class="label">총 취득가액</div>
+    <div class="value">{{ stats.total_amount | money }}<small>원</small></div>
+  </div>
+  <div class="stat">
+    <div class="label">등록 임직원</div>
+    <div class="value">{{ '{:,}'.format(stats.employee_count) }}<small>명</small></div>
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-head">
+      분류별 자산 현황
+      <a href="/assets" class="btn small">자산 목록</a>
+    </div>
+    <div class="card-body">
+      {% if stats.by_category %}
+        {% for row in stats.by_category %}
+          {{ bar(row.label, row.count, stats.max_category) }}
+        {% endfor %}
+      {% else %}
+        <p class="muted">등록된 자산이 없습니다.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">부서별 보유 현황</div>
+    <div class="card-body">
+      {% if stats.by_department %}
+        {% for row in stats.by_department %}
+          {{ bar(row.label, row.count, stats.max_department) }}
+        {% endfor %}
+      {% else %}
+        <p class="muted">지급된 자산이 없습니다.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if stats.resigned_holding %}
+<div class="card">
+  <div class="card-head" style="color:var(--danger);">
+    확인 필요 · 퇴사자가 아직 보유 중인 자산 ({{ stats.resigned_holding | length }}건)
+  </div>
+  <div class="card-body tight table-wrap">
+    <table class="data">
+      <thead><tr><th>자산번호</th><th>자산명</th><th>보유자</th><th>지급일</th><th class="num">보유일수</th><th></th></tr></thead>
+      <tbody>
+      {% for item in stats.resigned_holding %}
+        <tr>
+          <td class="mono"><a href="/assets/{{ item.asset.id }}">{{ item.asset.asset_no }}</a></td>
+          <td>{{ item.asset.name }}</td>
+          <td>{{ item.employee.name }} <span class="badge RESIGNED">퇴사</span></td>
+          <td class="nowrap">{{ item.assigned_at | date }}</td>
+          <td class="num">{{ '{:,}'.format(item.days_held) }}일</td>
+          <td class="center"><a href="/assets/{{ item.asset.id }}" class="btn small">반납 처리</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="two-col">
+  <div class="card">
+    <div class="card-head">보증 만료 임박 · 만료 ({{ stats.warranty_days }}일 이내)</div>
+    <div class="card-body tight">
+      {% if stats.warranty_soon %}
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>자산번호</th><th>자산명</th><th>보증만료일</th><th class="center">남은 기간</th></tr></thead>
+          <tbody>
+          {% for asset in stats.warranty_soon %}
+            {% set days = asset.warranty_days_left() %}
+            <tr>
+              <td class="mono"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
+              <td>{{ asset.name }}</td>
+              <td class="nowrap">{{ asset.warranty_until | date }}</td>
+              <td class="center">
+                {% if days < 0 %}
+                  <span class="badge LOST">만료됨</span>
+                {% else %}
+                  <span class="badge REPAIR">{{ days }}일 남음</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="empty">보증 만료가 임박한 자산이 없습니다.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      최근 지급 / 반납
+      <a href="/assignments" class="btn small">전체 이력</a>
+    </div>
+    <div class="card-body tight">
+      {% if stats.recent_assignments %}
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>자산</th><th>대상자</th><th>지급일</th><th class="center">상태</th></tr></thead>
+          <tbody>
+          {% for item in stats.recent_assignments %}
+            <tr>
+              <td><a href="/assets/{{ item.asset.id }}">{{ item.asset.name }}</a>
+                  <div class="muted mono" style="font-size:11px;">{{ item.asset.asset_no }}</div></td>
+              <td>{{ item.employee.name }}</td>
+              <td class="nowrap">{{ item.assigned_at | date }}</td>
+              <td class="center">
+                {% if item.is_open %}
+                  <span class="badge open">지급중</span>
+                {% else %}
+                  <span class="badge returned">{{ item.returned_at | date }} 반납</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="empty">지급 이력이 없습니다.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

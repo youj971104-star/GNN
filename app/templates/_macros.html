@@ -1,0 +1,57 @@
+{# 여러 화면에서 재사용하는 조각 모음 #}
+
+{% macro pagination(page_obj, request) %}
+  {% if page_obj.total %}
+  <div class="pagination">
+    <div class="summary">
+      전체 {{ '{:,}'.format(page_obj.total) }}건 중 {{ page_obj.start_index }}–{{ page_obj.end_index }}건 표시
+    </div>
+    {% if page_obj.pages > 1 %}
+    <div class="pages">
+      {% if page_obj.has_prev %}
+        <a href="{{ merge_query(request, page=1) }}">처음</a>
+        <a href="{{ merge_query(request, page=page_obj.page - 1) }}">이전</a>
+      {% else %}
+        <span class="disabled">처음</span><span class="disabled">이전</span>
+      {% endif %}
+      {% for p in page_obj.page_range() %}
+        {% if p == page_obj.page %}
+          <span class="current">{{ p }}</span>
+        {% else %}
+          <a href="{{ merge_query(request, page=p) }}">{{ p }}</a>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+        <a href="{{ merge_query(request, page=page_obj.page + 1) }}">다음</a>
+        <a href="{{ merge_query(request, page=page_obj.pages) }}">마지막</a>
+      {% else %}
+        <span class="disabled">다음</span><span class="disabled">마지막</span>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro asset_status(asset) %}
+  <span class="badge {{ asset.status }}">{{ asset.status_label }}</span>
+{% endmacro %}
+
+{% macro holder_link(asset) %}
+  {% if asset.holder %}
+    <a href="/employees/{{ asset.holder.id }}">{{ asset.holder.name }}</a>
+    {% if asset.holder.department %}<span class="muted">· {{ asset.holder.department }}</span>{% endif %}
+  {% else %}
+    <span class="muted">-</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro bar(label, count, max_value) %}
+  <div class="bar-row">
+    <div class="bar-label" title="{{ label }}">{{ label }}</div>
+    <div class="bar-track">
+      <div class="bar-fill" style="width: {{ (count / max_value * 100) | round(1) if max_value else 0 }}%"></div>
+    </div>
+    <div class="bar-value">{{ '{:,}'.format(count) }}</div>
+  </div>
+{% endmacro %}

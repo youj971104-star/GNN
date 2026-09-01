@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% set active = 'employees' %}
+{% block page_title %}직원 관리{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="muted">자산을 지급받는 임직원 명부입니다.</div>
+  <div class="section-actions">
+    <a href="/employees/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
+    {% if current_user.is_admin %}<a href="/employees/new" class="btn primary">+ 직원 등록</a>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="get" action="/employees" class="filter-form">
+      <div class="field grow">
+        <label for="q">검색어</label>
+        <input type="text" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="이름, 사번, 부서, 직급, 이메일">
+      </div>
+      <div class="field">
+        <label for="department">부서</label>
+        <select id="department" name="department">
+          <option value="">전체</option>
+          {% for dept in departments %}
+            <option value="{{ dept }}" {{ 'selected' if params.get('department') == dept }}>{{ dept }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="status">재직상태</label>
+        <select id="status" name="status">
+          <option value="">전체</option>
+          {% for code, label in EMPLOYEE_STATUSES.items() %}
+            <option value="{{ code }}" {{ 'selected' if params.get('status') == code }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field"><button type="submit" class="btn primary">검색</button></div>
+      <div class="field"><a href="/employees" class="btn">초기화</a></div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body tight">
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>사번</th><th>이름</th><th>부서</th><th>직급</th>
+            <th>이메일</th><th>연락처</th><th class="center">재직상태</th><th class="num">보유 자산</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for emp in page_obj.items %}
+          <tr>
+            <td class="mono nowrap"><a href="/employees/{{ emp.id }}">{{ emp.emp_no }}</a></td>
+            <td>{{ emp.name }}</td>
+            <td>{{ emp.department or '-' }}</td>
+            <td>{{ emp.position or '-' }}</td>
+            <td class="muted">{{ emp.email or '-' }}</td>
+            <td class="muted nowrap">{{ emp.phone or '-' }}</td>
+            <td class="center"><span class="badge {{ emp.status }}">{{ emp.status_label }}</span></td>
+            <td class="num">{{ emp.assets | length }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8" class="empty">등록된 직원이 없습니다.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page_obj, request) }}
+  </div>
+</div>
+
+{% endblock %}

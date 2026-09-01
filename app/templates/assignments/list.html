@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination %}
+{% set active = 'assignments' %}
+{% block page_title %}지급 / 반납 이력{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="muted">누가 어떤 자산을 언제 지급받고 반납했는지 모두 기록됩니다.</div>
+  <div class="section-actions">
+    <a href="/assignments/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
+    {% if current_user.is_admin %}<a href="/assignments/new" class="btn primary">+ 자산 지급</a>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="get" action="/assignments" class="filter-form">
+      <div class="field grow">
+        <label for="q">검색어</label>
+        <input type="text" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="자산번호, 자산명, 직원명, 사번">
+      </div>
+      <div class="field">
+        <label for="state">상태</label>
+        <select id="state" name="state">
+          <option value="">전체</option>
+          <option value="open" {{ 'selected' if params.get('state') == 'open' }}>지급중 (미반납)</option>
+          <option value="returned" {{ 'selected' if params.get('state') == 'returned' }}>반납완료</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="employee_id">직원</label>
+        <select id="employee_id" name="employee_id">
+          <option value="">전체</option>
+          {% for emp in employees %}
+            <option value="{{ emp.id }}" {{ 'selected' if params.get('employee_id') == emp.id | string }}>
+              {{ emp.name }} ({{ emp.emp_no }})
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field"><button type="submit" class="btn primary">검색</button></div>
+      <div class="field"><a href="/assignments" class="btn">초기화</a></div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body tight">
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>자산번호</th><th>자산명</th><th>대상자</th><th>부서</th>
+            <th>지급일</th><th>반납일</th><th class="num">보유일수</th>
+            <th class="center">상태</th><th>메모</th><th class="center">처리</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for item in page_obj.items %}
+          <tr>
+            <td class="mono nowrap"><a href="/assets/{{ item.asset.id }}">{{ item.asset.asset_no }}</a></td>
+            <td>{{ item.asset.name }}</td>
+            <td class="nowrap"><a href="/employees/{{ item.employee.id }}">{{ item.employee.name }}</a></td>
+            <td class="nowrap">{{ item.employee.department or '-' }}</td>
+            <td class="nowrap">{{ item.assigned_at | date }}</td>
+            <td class="nowrap">{{ item.returned_at | date }}</td>
+            <td class="num">{{ '{:,}'.format(item.days_held) }}일</td>
+            <td class="center">
+              {% if item.is_open %}<span class="badge open">지급중</span>{% else %}<span class="badge returned">반납완료</span>{% endif %}
+            </td>
+            <td class="muted">
+              {{ item.assigned_note or '' }}
+              {% if item.return_note %}<div>↩ {{ item.return_note }}</div>{% endif %}
+            </td>
+            <td class="center">
+              {% if item.is_open and current_user.is_admin %}
+                <form method="post" action="/assignments/{{ item.id }}/return" class="inline-form"
+                      onsubmit="return confirm('[{{ item.asset.asset_no }}] 자산을 오늘 날짜로 반납 처리할까요?');">
+                  <input type="hidden" name="back_url" value="/assignments">
+                  <input type="hidden" name="new_status" value="IN_STOCK">
+                  <button type="submit" class="btn small">반납</button>
+                </form>
+              {% else %}
+                <span class="muted">-</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="10" class="empty">지급 이력이 없습니다.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page_obj, request) }}
+  </div>
+</div>
+
+{% endblock %}

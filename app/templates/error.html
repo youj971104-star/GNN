@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-body" style="text-align:center; padding:48px 18px;">
+    <div style="font-size:42px; font-weight:700; color:var(--text-muted);">{{ code }}</div>
+    <h2 style="margin:8px 0 6px;">{{ title }}</h2>
+    <p class="muted">{{ message }}</p>
+    <p style="margin-top:22px;"><a href="/" class="btn primary">대시보드로 돌아가기</a></p>
+  </div>
+</div>
+{% endblock %}

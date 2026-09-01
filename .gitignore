@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# 애플리케이션 데이터
+*.db
+*.db-journal
+data/
+uploads/
+
+# 환경설정
+.env
+
+# OS / 에디터
+.DS_Store
+.idea/
+.vscode/
