@@ -30,3 +30,10 @@ SESSION_MAX_AGE = int(os.getenv("ITAM_SESSION_MAX_AGE", str(12 * 60 * 60)))
 
 # 엑셀 업로드 최대 크기(바이트). 기본 10MB.
 MAX_UPLOAD_BYTES = int(os.getenv("ITAM_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
+
+# 세션 쿠키를 HTTPS 로만 전송할지 여부.
+# 사내망 HTTP 로 쓰는 동안은 0, 도메인 + HTTPS 로 전환하면 1 로 바꾸면 된다.
+HTTPS_ONLY = os.getenv("ITAM_HTTPS_ONLY", "0") == "1"
+
+# 컨테이너 헬스체크 등에서 인증 없이 호출하는 상태 확인 경로
+HEALTH_PATH = "/healthz"

@@ -18,10 +18,15 @@ engine = create_engine(config.DATABASE_URL, connect_args=_connect_args, future=T
 if config.DATABASE_URL.startswith("sqlite"):
 
     @event.listens_for(engine, "connect")
-    def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
-        """SQLite 는 기본적으로 외래키 제약을 끄고 동작하므로 켜 준다."""
+    def _tune_sqlite(dbapi_connection, connection_record):
+        """SQLite 커넥션마다 필요한 설정을 켠다."""
         cursor = dbapi_connection.cursor()
+        # SQLite 는 기본적으로 외래키 제약을 끄고 동작한다.
         cursor.execute("PRAGMA foreign_keys=ON")
+        # WAL 모드라야 여러 워커 프로세스가 동시에 읽고 쓸 때 서로 막지 않는다.
+        cursor.execute("PRAGMA journal_mode=WAL")
+        # 잠깐 잠겨 있으면 바로 실패하지 말고 5초까지 기다린다.
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 
 

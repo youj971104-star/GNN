@@ -41,34 +41,119 @@
 
 ---
 
-## 빠르게 실행해 보기
+## 배포하기 (Docker · 권장)
+
+서버에 Docker 만 설치되어 있으면 됩니다. Python 버전이나 패키지 충돌을 신경 쓸 필요가 없고,
+리눅스·윈도우·클라우드 어디서든 같은 명령으로 동작합니다.
 
 ```bash
 # 1. 소스 내려받기
 git clone <저장소 주소>
 cd GNN
 
-# 2. 가상환경 만들고 패키지 설치
+# 2. 설정 파일 만들기 (최초 1회)
+#    세션 키와 관리자 비밀번호가 자동으로 생성되어 화면에 표시됩니다.
+./deploy.sh setup            # 다른 포트를 쓰려면: ./deploy.sh setup 9000
+
+# 3. 시작
+./deploy.sh start
+```
+
+끝나면 접속 주소가 화면에 표시됩니다.
+
+```
+  ✔ 정상적으로 시작되었습니다.
+
+     사내망 접속 주소 : http://192.168.0.50:8000
+     이 서버에서 확인 : http://localhost:8000
+```
+
+직원들에게는 이 **사내망 주소**를 알려주면 됩니다.
+`./deploy.sh setup` 이 출력한 관리자 비밀번호로 로그인한 뒤,
+우측 상단 **비밀번호 변경**에서 바로 바꿔 주세요.
+
+### 운영 명령어
+
+| 명령 | 하는 일 |
+| --- | --- |
+| `./deploy.sh start` | 서비스 시작 (필요하면 이미지도 빌드) |
+| `./deploy.sh stop` | 서비스 중지 (**자산 데이터는 그대로 보존**) |
+| `./deploy.sh restart` | 재시작 |
+| `./deploy.sh status` | 실행 상태와 접속 주소 확인 |
+| `./deploy.sh logs` | 실행 로그 보기 (Ctrl+C 로 종료) |
+| `./deploy.sh update` | 코드를 받은 뒤 최신 버전으로 다시 빌드·재시작 |
+| `./deploy.sh backup` | 데이터베이스 백업 → `backups/` 폴더에 저장 |
+| `./deploy.sh restore <파일>` | 백업 시점으로 되돌리기 (되돌리기 전 현재 상태를 자동 백업) |
+| `./deploy.sh demo` | 샘플 데이터 넣기 (처음 둘러볼 때만) |
+
+### 데이터는 어디에 있나요
+
+자산·직원·이력 데이터는 `itam-data` 라는 **Docker 볼륨**에 저장됩니다.
+`./deploy.sh stop`, `docker compose down`, 컨테이너 삭제·재생성, 이미지 재빌드 어느 경우에도
+데이터는 그대로 남습니다.
+
+### 백업
+
+```bash
+./deploy.sh backup
+# ✔ 백업 완료: backups/itam-20260901-093012.db  (72K)
+```
+
+서비스를 멈추지 않고 안전하게 스냅샷을 뜹니다(SQLite 온라인 백업 API).
+파일 하나가 곧 전체 데이터이므로, 이 파일만 사내 파일서버나 백업 스토리지에 보관하면 됩니다.
+
+**매일 새벽 3시 자동 백업**을 걸고 싶다면 서버의 crontab 에 다음 한 줄을 추가하세요.
+
+```cron
+0 3 * * * cd /opt/itam && ./deploy.sh backup >> /var/log/itam-backup.log 2>&1
+```
+
+되돌릴 때는 백업 파일을 지정합니다. 실행 전에 확인 절차가 있고,
+되돌리기 직전의 상태도 자동으로 백업해 둡니다.
+
+```bash
+./deploy.sh restore backups/itam-20260901-093012.db
+```
+
+### 버전 올리기
+
+```bash
+git pull
+./deploy.sh update
+```
+
+### 나중에 사내 도메인 + HTTPS 로 바꾸려면
+
+지금은 `http://<서버IP>:8000` 으로 쓰다가, 도메인과 인증서가 준비되면
+**애플리케이션 코드 수정 없이** 전환할 수 있습니다.
+인증서를 `deploy/certs/` 에 넣고, `.env` 의 `ITAM_HTTPS_ONLY=1` 로 바꾼 뒤:
+
+```bash
+docker compose --profile https up -d
+```
+
+자세한 절차는 [`deploy/README-HTTPS.md`](deploy/README-HTTPS.md) 를 참고하세요.
+
+---
+
+## Docker 없이 직접 실행하기 (개발용)
+
+```bash
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-# 3. (선택) 샘플 데이터 넣기 - 화면을 먼저 둘러보고 싶을 때
-python seed_demo.py
-
-# 4. 실행
-python run.py
+python seed_demo.py                # (선택) 샘플 데이터
+python run.py                      # http://localhost:8000
 ```
-
-브라우저에서 <http://localhost:8000> 접속 → 최초 관리자 계정으로 로그인합니다.
 
 | 구분 | 아이디 | 비밀번호 |
 | --- | --- | --- |
 | 관리자 (자동 생성) | `admin` | `admin1234` |
 | 조회 전용 (샘플 데이터 실행 시) | `viewer` | `viewer1234` |
 
-> **첫 로그인 후 우측 상단 '비밀번호 변경'에서 반드시 비밀번호를 바꾸세요.**
-> 기본 비밀번호는 `ITAM_ADMIN_PASSWORD` 환경변수로도 지정할 수 있습니다.
+> 이 방식은 개발·테스트용입니다. 운영에는 위의 Docker 배포를 사용하세요.
+> 직접 실행할 때도 `ITAM_SECRET_KEY` 를 고정하지 않으면 재시작 시 로그인이 풀립니다.
 
 ---
 
@@ -94,28 +179,19 @@ python run.py
 
 ---
 
-## 운영 서버에 배포하기
+## 부록 · Docker 를 쓸 수 없는 환경이라면
 
-### 1) 환경변수 설정
-
-`.env.example` 을 참고해 최소한 아래 두 가지는 반드시 지정하세요.
+사내 정책 등으로 Docker 를 쓰지 못하는 경우, 리눅스 서버에 직접 올릴 수도 있습니다.
 
 ```bash
+# 세션 키는 반드시 고정 값으로 지정해야 재시작 후에도 로그인이 유지됩니다
 export ITAM_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 export ITAM_ADMIN_PASSWORD="회사에서_정한_초기_비밀번호"
+
+.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 ```
 
-`ITAM_SECRET_KEY` 를 지정하지 않으면 서버를 재시작할 때마다 값이 새로 만들어져
-**모든 사용자의 로그인이 풀립니다.**
-
-### 2) 실행
-
-```bash
-# 워커 4개로 실행 (개발용 자동 리로드 없음)
-.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-`systemd` 서비스 예시:
+`systemd` 로 서비스 등록:
 
 ```ini
 # /etc/systemd/system/itam.service
@@ -127,29 +203,28 @@ After=network.target
 User=itam
 WorkingDirectory=/opt/itam
 EnvironmentFile=/opt/itam/.env
-ExecStart=/opt/itam/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+ExecStart=/opt/itam/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### 3) HTTPS 사용 시
-
-Nginx 등 리버스 프록시 뒤에 두고 HTTPS 를 적용했다면,
-`app/main.py` 의 `SessionMiddleware` 설정에서 `https_only=True` 로 바꿔 주세요.
-세션 쿠키가 HTTPS 로만 전송되어 더 안전합니다.
-
-### 4) 백업
-
-SQLite 를 쓰는 경우 **`data/itam.db` 파일 하나만 복사하면 전체 백업**입니다.
-운영 중에도 안전하게 백업하려면:
-
 ```bash
-sqlite3 data/itam.db ".backup '/backup/itam-$(date +%Y%m%d).db'"
+sudo systemctl daemon-reload && sudo systemctl enable --now itam
 ```
 
-### 5) PostgreSQL 로 옮기기
+백업은 Docker 없이도 같은 명령으로 됩니다.
+
+```bash
+.venv/bin/python -m app.backup /backup/itam-$(date +%Y%m%d).db
+```
+
+HTTPS 를 적용했다면 `.env` 에 `ITAM_HTTPS_ONLY=1` 을 넣고, Nginx 설정은
+[`deploy/nginx.conf`](deploy/nginx.conf) 를 참고하세요
+(`proxy_pass` 주소만 `http://127.0.0.1:8000` 으로 바꾸면 됩니다).
+
+### PostgreSQL 로 옮기기
 
 ```bash
 pip install "psycopg[binary]"
@@ -157,6 +232,7 @@ export ITAM_DATABASE_URL="postgresql+psycopg://itam:비밀번호@db-host:5432/it
 ```
 
 테이블은 첫 실행 시 자동으로 생성됩니다. 기존 데이터 이관은 별도 작업이 필요합니다.
+이 경우 `./deploy.sh backup` 대신 `pg_dump` 를 사용하세요.
 
 ---
 
@@ -172,6 +248,9 @@ export ITAM_DATABASE_URL="postgresql+psycopg://itam:비밀번호@db-host:5432/it
 | `ITAM_PAGE_SIZE` | `20` | 목록 한 페이지 행 수 |
 | `ITAM_SESSION_MAX_AGE` | `43200` (12시간) | 로그인 유지 시간(초) |
 | `ITAM_MAX_UPLOAD_BYTES` | `10485760` (10MB) | 엑셀 업로드 최대 크기 |
+| `ITAM_HTTPS_ONLY` | `0` | `1` 이면 세션 쿠키를 HTTPS 로만 전송 (도메인+HTTPS 전환 시) |
+| `ITAM_WORKERS` | `2` | 워커 프로세스 수 (Docker 실행 시) |
+| `ITAM_PUBLIC_PORT` | `8000` | 서버 바깥에서 접속할 포트 (Docker 실행 시) |
 | `ITAM_HOST` / `ITAM_PORT` | `0.0.0.0` / `8000` | `run.py` 로 실행할 때의 주소·포트 |
 
 ---
@@ -193,9 +272,16 @@ app/
   routers/         화면별 라우터 (auth, dashboard, assets, employees, assignments, users)
   templates/       HTML 템플릿
   static/css/      스타일시트
-tests/             pytest 테스트 (96개)
+  backup.py        데이터베이스 백업 (python -m app.backup)
+tests/             pytest 테스트 (105개)
 run.py             개발용 실행 스크립트
 seed_demo.py       샘플 데이터 생성 스크립트
+
+deploy.sh          배포·운영 명령 모음 (setup / start / backup / restore ...)
+Dockerfile         운영용 이미지 정의
+docker-compose.yml 서비스 실행 설정 (+ HTTPS 프로파일)
+docker/            컨테이너 시작 스크립트
+deploy/            Nginx 설정과 HTTPS 전환 안내
 ```
 
 ## 테스트
@@ -205,7 +291,7 @@ seed_demo.py       샘플 데이터 생성 스크립트
 ```
 
 로그인·권한, 자산 CRUD, 지급/반납 업무 규칙, 엑셀 업로드/다운로드, 대시보드 집계,
-전 화면 렌더링까지 96개 테스트로 확인합니다.
+데이터베이스 백업, 전 화면 렌더링까지 105개 테스트로 확인합니다.
 
 ## 데이터 모델 요약
 

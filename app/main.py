@@ -4,8 +4,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exception_handlers import http_exception_handler
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, text
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import config
@@ -86,7 +87,8 @@ def create_app() -> FastAPI:
         secret_key=config.SECRET_KEY,
         max_age=config.SESSION_MAX_AGE,
         same_site="lax",
-        https_only=False,  # 사내 HTTP 환경을 고려한 기본값. HTTPS 라면 True 권장.
+        # 사내망 HTTP 환경에서는 0, 도메인 + HTTPS 로 전환하면 ITAM_HTTPS_ONLY=1 로 바꾼다.
+        https_only=config.HTTPS_ONLY,
     )
 
     app.mount("/static", StaticFiles(directory=str(config.BASE_DIR / "static")), name="static")
@@ -97,6 +99,22 @@ def create_app() -> FastAPI:
     app.include_router(employees.router)
     app.include_router(assignments.router)
     app.include_router(users.router)
+
+    @app.get(config.HEALTH_PATH, include_in_schema=False)
+    def healthcheck():
+        """컨테이너·로드밸런서가 호출하는 상태 확인. 로그인 없이 열려 있다.
+
+        DB 까지 실제로 조회해 보므로, 응답이 200 이면 서비스가 요청을 받을 수 있는 상태다.
+        """
+        try:
+            with SessionLocal() as db:
+                db.execute(text("SELECT 1"))
+        except Exception:
+            return JSONResponse(
+                {"status": "error", "detail": "데이터베이스에 연결할 수 없습니다."},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return {"status": "ok", "version": app.version}
 
     @app.exception_handler(LoginRequired)
     async def on_login_required(request: Request, exc: LoginRequired):

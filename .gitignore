@@ -8,12 +8,19 @@ venv/
 
 # 애플리케이션 데이터
 *.db
+*.db-wal
+*.db-shm
 *.db-journal
 data/
 uploads/
+backups/
 
-# 환경설정
+# 환경설정 (세션 키·관리자 비밀번호가 들어 있습니다)
 .env
+
+# 인증서 (deploy/README-HTTPS.md 참고)
+deploy/certs/*
+!deploy/certs/.gitkeep
 
 # OS / 에디터
 .DS_Store
