@@ -42,11 +42,58 @@ require_env() {
     fi
 }
 
-# 서버의 사내망 IP 를 찾아 접속 주소를 안내한다
+# 도커가 쓰는 게이트웨이 주소들 (172.17.0.1 같은 것).
+# 이 주소는 서버 자신만 아는 값이라, 다른 PC 에서 접속할 때 쓰면 안 된다.
+# 대역으로 거르면 172.16.0.0/12 을 사내망으로 쓰는 회사에서 진짜 주소까지
+# 사라지므로, 도커에 직접 물어 정확한 값만 제외한다.
+docker_gateway_ips() {
+    docker network ls -q 2>/dev/null \
+        | xargs -r docker network inspect \
+            --format '{{range .IPAM.Config}}{{println .Gateway}}{{end}}' 2>/dev/null \
+        | grep -E '^[0-9]' || true
+}
+
+# 다른 PC 에서 접속할 때 쓸 수 있는 이 서버의 주소 목록
+list_host_ips() {
+    local candidates excluded candidate
+    excluded=$(docker_gateway_ips)
+
+    if command -v ip >/dev/null 2>&1; then
+        candidates=$(ip -o -4 addr show 2>/dev/null \
+            | awk '$2 !~ /^(lo|docker|br-|veth|virbr|tun|tap)/ {print $4}' \
+            | cut -d/ -f1 || true)
+    else
+        candidates=$(hostname -I 2>/dev/null | tr ' ' '\n' \
+            | grep -E '^[0-9]' | grep -vE '^(127\.|169\.254\.)' || true)
+    fi
+
+    for candidate in $candidates; do
+        if ! echo "$excluded" | grep -qx "$candidate"; then
+            echo "$candidate"
+        fi
+    done
+}
+
+# 안내에 쓸 대표 주소 하나를 고른다.
+# 'hostname -I' 첫 값을 그냥 쓰면 도커 내부 주소를 알려주게 되는 일이 있어,
+# 바깥으로 나가는 경로에 실제로 쓰이는 주소를 우선한다.
 guess_host_ip() {
     local ip=""
-    ip=$(hostname -I 2>/dev/null | awk '{print $1}') || true
-    [ -z "$ip" ] && ip=$(ipconfig getifaddr en0 2>/dev/null) || true
+
+    # 1순위: 외부로 나갈 때 사용하는 인터페이스의 주소 (가장 정확하다)
+    if command -v ip >/dev/null 2>&1; then
+        ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}') || true
+    fi
+
+    # 2순위: macOS
+    if [ -z "$ip" ]; then
+        ip=$(ipconfig getifaddr en0 2>/dev/null) || true
+        [ -z "$ip" ] && ip=$(ipconfig getifaddr en1 2>/dev/null) || true
+    fi
+
+    # 3순위: 후보 목록의 첫 번째
+    [ -z "$ip" ] && ip=$(list_host_ips | head -1)
+
     [ -z "$ip" ] && ip="<서버IP>"
     echo "$ip"
 }
@@ -119,8 +166,13 @@ cmd_start() {
             echo ""
             ok "정상적으로 시작되었습니다."
             echo ""
-            echo "     사내망 접속 주소 : http://$(guess_host_ip):${port}"
-            echo "     이 서버에서 확인 : http://localhost:${port}"
+            echo "  ── 접속 주소 ───────────────────────────────────"
+            echo "     이 서버에서      : http://localhost:${port}"
+            echo "     다른 PC 에서     : http://$(guess_host_ip):${port}"
+            echo "  ────────────────────────────────────────────────"
+            echo ""
+            info "다른 PC 에서 접속이 안 되면 서버 방화벽에서 ${port} 번 포트를 열어야 합니다."
+            info "원인을 자동으로 짚어 보려면:  ./deploy.sh doctor"
             echo ""
             return 0
         fi
@@ -211,6 +263,123 @@ cmd_restore() {
     ok "복원을 마쳤습니다."
 }
 
+# 접속이 안 될 때 원인을 순서대로 짚어 준다
+cmd_doctor() {
+    local port failed=0
+    port=$(grep -E '^ITAM_PUBLIC_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || true)
+    port="${port:-8000}"
+
+    echo ""
+    echo "  IT 자산관리 시스템 접속 진단"
+    echo "  ═══════════════════════════════════════════════"
+    echo ""
+
+    # 1. Docker 데몬
+    if ! docker info >/dev/null 2>&1; then
+        fail "Docker 가 실행되고 있지 않습니다."
+        info "  → 리눅스:  sudo systemctl start docker"
+        info "  → 윈도우/맥: Docker Desktop 을 실행해 주세요."
+        return 1
+    fi
+    ok "Docker 실행 중"
+
+    # 2. 설정 파일
+    if [ ! -f "$ENV_FILE" ]; then
+        fail "설정 파일(.env)이 없습니다."
+        info "  → ./deploy.sh setup 을 먼저 실행하세요."
+        return 1
+    fi
+    ok "설정 파일 확인 (접속 포트: ${port})"
+
+    # 3. 컨테이너
+    local state
+    # 컨테이너가 아예 없으면 docker inspect 가 빈 줄을 남기므로 따로 정리한다
+    state=$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null | tr -d '[:space:]' || true)
+    [ -z "$state" ] && state="만들어지지 않음"
+    if [ "$state" != "running" ]; then
+        fail "컨테이너가 실행 중이 아닙니다. (상태: ${state})"
+        info "  → ./deploy.sh start 로 시작하세요."
+        info "  → 시작했는데도 이 상태라면: ./deploy.sh logs"
+        return 1
+    fi
+    ok "컨테이너 실행 중"
+
+    # 4. 서버 자신에서의 응답
+    if curl -fsS --max-time 5 "http://127.0.0.1:${port}/healthz" >/dev/null 2>&1; then
+        ok "서버 내부 응답 정상 (http://localhost:${port})"
+    else
+        fail "서버 안에서도 응답이 없습니다."
+        info "  → 앱이 뜨는 중일 수 있습니다. 10초 뒤 다시 시도해 보세요."
+        info "  → 계속 같다면: ./deploy.sh logs"
+        return 1
+    fi
+
+    # 5. 포트가 서버 바깥으로 연결되어 있는지
+    #    ss/netstat 는 설치되지 않은 서버가 많아, 도커에 직접 물어보는 편이 정확하다.
+    local mapping
+    mapping=$(docker port "$CONTAINER" 8000/tcp 2>/dev/null | head -1 || true)
+    if [ -z "$mapping" ]; then
+        fail "컨테이너 포트가 서버 바깥으로 연결되어 있지 않습니다."
+        info "  → docker-compose.yml 의 ports 설정을 확인한 뒤 ./deploy.sh restart"
+        failed=1
+    elif echo "$mapping" | grep -q '^127\.0\.0\.1:'; then
+        fail "포트가 이 서버 안에서만 열려 있습니다 (${mapping})."
+        info "  → 다른 PC 에서 접속하려면 docker-compose.yml 의 ports 에서"
+        info "     '127.0.0.1:' 부분을 지운 뒤 ./deploy.sh restart"
+        failed=1
+    else
+        ok "포트 연결 확인 (${mapping} → 컨테이너 8000)"
+    fi
+
+    # 6. 방화벽 - 사내망에서 접속이 막히는 가장 흔한 원인이다
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+        if ufw status 2>/dev/null | grep -q "${port}"; then
+            ok "방화벽(ufw)에 포트 ${port} 허용됨"
+        else
+            fail "방화벽(ufw)이 켜져 있는데 포트 ${port} 가 허용되어 있지 않습니다."
+            info "  → sudo ufw allow ${port}/tcp"
+            failed=1
+        fi
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        if firewall-cmd --list-ports 2>/dev/null | grep -q "${port}/tcp"; then
+            ok "방화벽(firewalld)에 포트 ${port} 허용됨"
+        else
+            fail "방화벽(firewalld)이 켜져 있는데 포트 ${port} 가 허용되어 있지 않습니다."
+            info "  → sudo firewall-cmd --permanent --add-port=${port}/tcp && sudo firewall-cmd --reload"
+            failed=1
+        fi
+    else
+        info "방화벽 설정을 확인하지 못했습니다 (ufw/firewalld 미사용)."
+        info "  → 클라우드 서버라면 보안 그룹/방화벽 규칙에서 ${port} 번 포트를 열어야 합니다."
+    fi
+
+    # 7. 접속 주소 안내
+    echo ""
+    echo "  ── 접속 주소 ───────────────────────────────────"
+    echo "     이 서버에서      : http://localhost:${port}"
+    echo "     다른 PC 에서     : http://$(guess_host_ip):${port}"
+    local others
+    others=$(list_host_ips | grep -v "^$(guess_host_ip)$" | tr '\\n' ' ')
+    if [ -n "$others" ]; then
+        echo ""
+        echo "     위 주소로 안 되면 아래 주소도 시도해 보세요:"
+        for other in $others; do
+            echo "       http://${other}:${port}"
+        done
+    fi
+    echo "  ────────────────────────────────────────────────"
+    echo ""
+
+    if [ "$failed" -eq 0 ]; then
+        ok "서버 쪽에는 문제가 없어 보입니다."
+        info "그래도 안 된다면 접속하는 PC 가 같은 사내망에 있는지,"
+        info "주소 앞에 https:// 가 아니라 http:// 를 썼는지 확인해 주세요."
+    else
+        fail "위에 표시된 항목을 먼저 해결해 주세요."
+    fi
+    echo ""
+}
+
 cmd_demo() {
     require_env
     $DC exec -T "$SERVICE" python seed_demo.py
@@ -228,6 +397,7 @@ case "${1:-}" in
     backup)     cmd_backup ;;
     restore) shift; cmd_restore "$@" ;;
     demo)       cmd_demo ;;
+    doctor|진단) cmd_doctor ;;
     *)
         cat <<'USAGE'
 IT 자산관리 시스템 배포 도우미
@@ -242,6 +412,7 @@ IT 자산관리 시스템 배포 도우미
   ./deploy.sh backup           데이터베이스 백업
   ./deploy.sh restore <파일>   백업 파일로 되돌리기
   ./deploy.sh demo             샘플 데이터 넣기 (처음 둘러볼 때만)
+  ./deploy.sh doctor           접속이 안 될 때 원인 진단
 
 처음이라면:  ./deploy.sh setup  →  ./deploy.sh start
 USAGE
