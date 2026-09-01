@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% set active = 'users' %}
+{% block page_title %}계정 관리{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="muted">시스템에 로그인할 수 있는 계정 목록입니다. 관리자만 볼 수 있습니다.</div>
+  <div class="section-actions"><a href="/users/new" class="btn primary">+ 계정 생성</a></div>
+</div>
+
+<div class="card">
+  <div class="card-body tight">
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>아이디</th><th>이름</th><th class="center">권한</th><th class="center">사용여부</th>
+              <th>최근 로그인</th><th>생성일</th><th class="center">관리</th></tr>
+        </thead>
+        <tbody>
+        {% for account in users %}
+          <tr>
+            <td class="mono">{{ account.username }}</td>
+            <td>{{ account.name }}</td>
+            <td class="center"><span class="badge {{ account.role }}">{{ account.role_label }}</span></td>
+            <td class="center">
+              {% if account.is_active %}<span class="badge IN_STOCK">사용</span>
+              {% else %}<span class="badge DISPOSED">중지</span>{% endif %}
+            </td>
+            <td class="nowrap muted">{{ account.last_login_at | datetime('없음') }}</td>
+            <td class="nowrap muted">{{ account.created_at | date }}</td>
+            <td class="center nowrap">
+              <a href="/users/{{ account.id }}/edit" class="btn small">수정</a>
+              {% if account.id != current_user.id %}
+              <form method="post" action="/users/{{ account.id }}/delete" class="inline-form"
+                    onsubmit="return confirm('계정 {{ account.username }} 을(를) 삭제할까요?');">
+                <button type="submit" class="btn small danger">삭제</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="alert info">
+  <strong>권한 안내</strong> · 관리자는 자산·직원·계정 등록과 지급/반납 처리를 모두 할 수 있고,
+  일반 사용자는 조회와 엑셀 다운로드만 할 수 있습니다.
+</div>
+
+{% endblock %}

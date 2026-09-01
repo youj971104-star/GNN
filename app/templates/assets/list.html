@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pagination, asset_status, holder_link %}
+{% set active = 'assets' %}
+{% block page_title %}자산 관리{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="muted">사내 IT 자산 대장입니다. 자산번호·모델명·시리얼번호 등으로 검색할 수 있습니다.</div>
+  <div class="section-actions">
+    <a href="/assets/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
+    {% if current_user.is_admin %}
+      <a href="/assets/import" class="btn">엑셀 일괄 등록</a>
+      <a href="/assets/new" class="btn primary">+ 자산 등록</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body">
+    <form method="get" action="/assets" class="filter-form">
+      <div class="field grow">
+        <label for="q">검색어</label>
+        <input type="text" id="q" name="q" value="{{ filters.q or '' }}" placeholder="자산번호, 자산명, 모델명, 시리얼번호, 보관위치…">
+      </div>
+      <div class="field">
+        <label for="category">분류</label>
+        <select id="category" name="category">
+          <option value="">전체</option>
+          {% for code, label in ASSET_CATEGORIES.items() %}
+            <option value="{{ code }}" {{ 'selected' if filters.category == code }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="status">상태</label>
+        <select id="status" name="status">
+          <option value="">전체</option>
+          {% for code, label in ASSET_STATUSES.items() %}
+            <option value="{{ code }}" {{ 'selected' if filters.status == code }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="department">부서</label>
+        <select id="department" name="department">
+          <option value="">전체</option>
+          {% for dept in departments %}
+            <option value="{{ dept }}" {{ 'selected' if filters.department == dept }}>{{ dept }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="sort">정렬</label>
+        <select id="sort" name="sort">
+          {% for code, label in filters.SORTS.items() %}
+            <option value="{{ code }}" {{ 'selected' if filters.sort == code }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field checkbox-field" style="padding-bottom:8px;">
+        <input type="checkbox" id="unassigned" name="unassigned" value="1" {{ 'checked' if filters.unassigned }}>
+        <label for="unassigned" style="margin:0;">미지급만</label>
+      </div>
+      <div class="field">
+        <button type="submit" class="btn primary">검색</button>
+      </div>
+      {% if filters.is_active %}
+      <div class="field"><a href="/assets" class="btn">초기화</a></div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-body tight">
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>자산번호</th>
+            <th>자산명</th>
+            <th>분류</th>
+            <th>모델 / 시리얼</th>
+            <th class="center">상태</th>
+            <th>사용자</th>
+            <th>보관위치</th>
+            <th>도입일</th>
+            <th class="num">취득가액</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for asset in page_obj.items %}
+          <tr>
+            <td class="mono nowrap"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
+            <td>{{ asset.name }}</td>
+            <td class="nowrap">{{ asset.category_label }}</td>
+            <td>
+              {{ asset.model_name or '-' }}
+              {% if asset.serial_no %}<div class="muted mono" style="font-size:11px;">{{ asset.serial_no }}</div>{% endif %}
+            </td>
+            <td class="center">{{ asset_status(asset) }}</td>
+            <td class="nowrap">{{ holder_link(asset) }}</td>
+            <td class="nowrap">{{ asset.location or '-' }}</td>
+            <td class="nowrap">{{ asset.purchase_date | date }}</td>
+            <td class="num nowrap">{{ asset.purchase_price | money }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="empty">
+            {% if filters.is_active %}검색 조건에 맞는 자산이 없습니다.{% else %}등록된 자산이 없습니다.{% endif %}
+          </td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {{ pagination(page_obj, request) }}
+  </div>
+</div>
+
+{% endblock %}

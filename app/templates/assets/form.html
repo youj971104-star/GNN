@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% set active = 'assets' %}
+{% set editing = asset is not none %}
+{# form 이 있으면 방금 입력한 값(오류 재표시), 없으면 DB 값을 보여준다 #}
+{% macro val(field, fallback='') %}
+  {%- if form is not none -%}{{ form.get(field, '') }}
+  {%- elif editing -%}{{ (asset[field] if asset[field] is not none else fallback) }}
+  {%- else -%}{{ fallback }}{%- endif -%}
+{% endmacro %}
+{% macro dateval(field) %}
+  {%- if form is not none -%}{{ form.get(field, '') }}
+  {%- elif editing -%}{{ asset[field] | input_date }}
+  {%- endif -%}
+{% endmacro %}
+{% macro selected(field, code, default='') %}
+  {%- set current = form.get(field, default) if form is not none else (asset[field] if editing else default) -%}
+  {{- 'selected' if current == code -}}
+{% endmacro %}
+{% block page_title %}{{ '자산 수정' if editing else '자산 등록' }}{% endblock %}
+{% block content %}
+
+<div class="breadcrumb"><a href="/assets">자산 관리</a> / {{ '수정' if editing else '신규 등록' }}</div>
+
+<div class="card">
+  <h2>{{ ('[' ~ asset.asset_no ~ '] ' ~ asset.name) if editing else '새 자산 정보' }}</h2>
+  <div class="card-body">
+    <form method="post" action="{{ '/assets/' ~ asset.id ~ '/edit' if editing else '/assets/new' }}">
+      <div class="form-grid">
+        <div class="field">
+          <label for="asset_no">자산번호<span class="req">*</span></label>
+          {% if editing %}
+            <input type="text" id="asset_no" value="{{ asset.asset_no }}" disabled>
+            <div class="hint">자산번호는 변경할 수 없습니다.</div>
+          {% else %}
+            <input type="text" id="asset_no" name="asset_no" value="{{ val('asset_no') }}" required maxlength="50">
+            <div class="hint">사내 자산 라벨과 동일하게 입력하세요. 예: IT-2026-0001</div>
+          {% endif %}
+        </div>
+        <div class="field">
+          <label for="name">자산명<span class="req">*</span></label>
+          <input type="text" id="name" name="name" value="{{ val('name') }}" required maxlength="120" placeholder="예: 개발팀 노트북">
+        </div>
+
+        <div class="field">
+          <label for="category">분류<span class="req">*</span></label>
+          <select id="category" name="category" required>
+            {% for code, label in ASSET_CATEGORIES.items() %}
+              <option value="{{ code }}" {{ selected('category', code, 'NOTEBOOK') }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="status">상태<span class="req">*</span></label>
+          <select id="status" name="status" required>
+            {% for code, label in ASSET_STATUSES.items() %}
+              <option value="{{ code }}" {{ selected('status', code, 'IN_STOCK') }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">'사용중'은 직원에게 지급할 때 자동으로 설정됩니다.</div>
+        </div>
+
+        <div class="field">
+          <label for="manufacturer">제조사</label>
+          <input type="text" id="manufacturer" name="manufacturer" value="{{ val('manufacturer') }}" maxlength="60">
+        </div>
+        <div class="field">
+          <label for="model_name">모델명</label>
+          <input type="text" id="model_name" name="model_name" value="{{ val('model_name') }}" maxlength="120">
+        </div>
+
+        <div class="field">
+          <label for="serial_no">시리얼번호</label>
+          <input type="text" id="serial_no" name="serial_no" value="{{ val('serial_no') }}" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="location">보관위치</label>
+          <input type="text" id="location" name="location" value="{{ val('location') }}" maxlength="80" placeholder="예: 본사 3층 창고">
+        </div>
+
+        <div class="field full">
+          <label for="spec">사양</label>
+          <input type="text" id="spec" name="spec" value="{{ val('spec') }}" placeholder="예: i7-1360P / 32GB / SSD 1TB">
+        </div>
+
+        <div class="field">
+          <label for="purchase_date">도입일</label>
+          <input type="date" id="purchase_date" name="purchase_date" value="{{ dateval('purchase_date') }}">
+        </div>
+        <div class="field">
+          <label for="purchase_price">취득가액 (원)</label>
+          <input type="text" id="purchase_price" name="purchase_price" value="{{ val('purchase_price') }}" inputmode="numeric" placeholder="예: 2150000">
+        </div>
+
+        <div class="field">
+          <label for="warranty_until">보증만료일</label>
+          <input type="date" id="warranty_until" name="warranty_until" value="{{ dateval('warranty_until') }}">
+        </div>
+        <div class="field">
+          <label for="supplier">공급업체</label>
+          <input type="text" id="supplier" name="supplier" value="{{ val('supplier') }}" maxlength="80">
+        </div>
+
+        <div class="field full">
+          <label for="license_key">라이선스 키 / 계약번호</label>
+          <input type="text" id="license_key" name="license_key" value="{{ val('license_key') }}" maxlength="255">
+          <div class="hint">소프트웨어 자산의 경우 라이선스 키나 계약번호를 기록해 두세요.</div>
+        </div>
+
+        <div class="field full">
+          <label for="note">비고</label>
+          <textarea id="note" name="note">{{ val('note') }}</textarea>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn primary">{{ '수정 저장' if editing else '등록' }}</button>
+        <a href="{{ '/assets/' ~ asset.id if editing else '/assets' }}" class="btn">취소</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

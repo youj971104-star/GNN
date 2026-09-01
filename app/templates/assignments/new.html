@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% set active = 'assignments' %}
+{% block page_title %}자산 지급{% endblock %}
+{% block content %}
+
+<div class="breadcrumb"><a href="/assignments">지급 / 반납 이력</a> / 자산 지급</div>
+
+<div class="card" style="max-width:760px;">
+  <h2>지급 정보 입력</h2>
+  <div class="card-body">
+    {% if assets %}
+    <form method="post" action="/assignments/new">
+      <input type="hidden" name="back_url" value="/assignments/new">
+      <div class="form-grid">
+        <div class="field full">
+          <label for="asset_id">지급할 자산<span class="req">*</span></label>
+          <select id="asset_id" name="asset_id" required>
+            <option value="">자산을 선택하세요</option>
+            {% for asset in assets %}
+              <option value="{{ asset.id }}" {{ 'selected' if selected_asset_id == asset.id }}>
+                [{{ asset.asset_no }}] {{ asset.name }} · {{ asset.category_label }}{% if asset.model_name %} · {{ asset.model_name }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="hint">지급 가능한(재고·수리중, 미지급) 자산만 표시됩니다.</div>
+        </div>
+        <div class="field full">
+          <label for="employee_id">지급받을 직원<span class="req">*</span></label>
+          <select id="employee_id" name="employee_id" required>
+            <option value="">직원을 선택하세요</option>
+            {% for emp in employees %}
+              <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.emp_no }}{% if emp.department %} · {{ emp.department }}{% endif %})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="assigned_at">지급일<span class="req">*</span></label>
+          <input type="date" id="assigned_at" name="assigned_at" value="{{ today() | input_date }}" required>
+        </div>
+        <div class="field">
+          <label for="assigned_note">지급 메모</label>
+          <input type="text" id="assigned_note" name="assigned_note" placeholder="예: 신규 입사자 지급">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">지급 처리</button>
+        <a href="/assignments" class="btn">취소</a>
+      </div>
+    </form>
+    {% else %}
+      <p class="empty">
+        지급 가능한 자산이 없습니다.<br>
+        <a href="/assets/new" class="btn primary" style="margin-top:12px;">자산 등록하기</a>
+      </p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

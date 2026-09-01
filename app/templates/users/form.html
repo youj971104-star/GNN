@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% set active = 'users' %}
+{% set editing = target is not none %}
+{% macro val(field) %}
+  {%- if form is not none -%}{{ form.get(field, '') }}
+  {%- elif editing and target[field] is not none -%}{{ target[field] }}{%- endif -%}
+{% endmacro %}
+{% block page_title %}{{ '계정 수정' if editing else '계정 생성' }}{% endblock %}
+{% block content %}
+
+<div class="breadcrumb"><a href="/users">계정 관리</a> / {{ '수정' if editing else '생성' }}</div>
+
+<div class="card" style="max-width:560px;">
+  <h2>{{ target.username if editing else '새 계정' }}</h2>
+  <div class="card-body">
+    <form method="post" action="{{ '/users/' ~ target.id ~ '/edit' if editing else '/users/new' }}">
+      <div class="field" style="margin-bottom:14px;">
+        <label for="username">아이디<span class="req">*</span></label>
+        {% if editing %}
+          <input type="text" id="username" value="{{ target.username }}" disabled>
+        {% else %}
+          <input type="text" id="username" name="username" value="{{ val('username') }}" required maxlength="50" autocomplete="off">
+        {% endif %}
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="name">이름<span class="req">*</span></label>
+        <input type="text" id="name" name="name" value="{{ val('name') }}" required maxlength="50">
+      </div>
+      <div class="field" style="margin-bottom:14px;">
+        <label for="role">권한<span class="req">*</span></label>
+        {% set current_role = form.get('role', 'USER') if form is not none else (target.role if editing else 'USER') %}
+        <select id="role" name="role" required>
+          {% for code, label in ROLES.items() %}
+            <option value="{{ code }}" {{ 'selected' if current_role == code }}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if editing %}
+      <div class="field checkbox-field" style="margin-bottom:14px;">
+        {% set active_checked = (form.get('is_active') == 'on') if form is not none else target.is_active %}
+        <input type="checkbox" id="is_active" name="is_active" {{ 'checked' if active_checked }}>
+        <label for="is_active" style="margin:0;">계정 사용 (해제하면 로그인할 수 없습니다)</label>
+      </div>
+      {% endif %}
+      <div class="field" style="margin-bottom:14px;">
+        <label for="password">비밀번호{% if not editing %}<span class="req">*</span>{% endif %}</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" {{ 'required' if not editing }}>
+        <div class="hint">
+          8자 이상, 숫자만으로는 설정할 수 없습니다.{% if editing %} 비워두면 기존 비밀번호를 유지합니다.{% endif %}
+        </div>
+      </div>
+      <div class="field">
+        <label for="confirm_password">비밀번호 확인</label>
+        <input type="password" id="confirm_password" name="confirm_password" autocomplete="new-password">
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">{{ '수정 저장' if editing else '생성' }}</button>
+        <a href="/users" class="btn">취소</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
