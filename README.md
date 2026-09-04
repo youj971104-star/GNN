@@ -41,6 +41,52 @@
 
 ---
 
+## 내 컴퓨터에서 먼저 써보기
+
+서버에 올리기 전에 본인 PC 에서 그대로 실행해 볼 수 있습니다. Docker 는 필요 없고,
+**파이썬만 설치되어 있으면** 스크립트가 나머지를 알아서 준비합니다.
+
+### 윈도우
+
+1. 소스를 내려받아 압축을 풉니다.
+   (`Code ▾ → Download ZIP`, 또는 `git clone`)
+2. 폴더 안의 **`start-windows.bat`** 를 더블클릭합니다.
+3. 파이썬이 없다면 설치 안내가 뜹니다. 설치할 때 화면 맨 아래
+   **"Add python.exe to PATH"** 를 반드시 체크하고, 설치 후 다시 더블클릭하세요.
+4. 잠시 뒤 브라우저가 자동으로 열립니다.
+
+### macOS / 리눅스
+
+```bash
+git clone <저장소 주소>
+cd GNN
+./start.sh
+```
+
+### 실행하면
+
+처음 한 번은 필요한 패키지를 받느라 1~2분 걸리고, 그 다음부터는 바로 뜹니다.
+처음 실행할 때 샘플 데이터를 넣을지 물어보니, 둘러보실 거면 `y` 를 누르세요.
+
+```
+       http://localhost:8000
+
+   최초 관리자 계정   아이디: admin   비밀번호: admin1234
+```
+
+| 항목 | 내용 |
+| --- | --- |
+| 종료 | 실행된 검은 창에서 `Ctrl+C` (또는 창 닫기) |
+| 다시 실행 | 같은 파일을 다시 더블클릭 / `./start.sh` |
+| 포트가 이미 사용 중 | `start-windows.bat 8001` / `./start.sh 8001` 처럼 뒤에 다른 번호를 붙이세요 |
+| 데이터 위치 | 폴더 안 `data/itam.db` 파일 하나에 모두 저장됩니다 |
+| 전부 지우고 다시 시작 | `data` 폴더를 지우고 다시 실행하면 빈 상태가 됩니다 |
+
+> 이 방식은 **혼자 써보는 용도**입니다. 같은 PC 에서만 접속되고,
+> PC 를 끄면 서비스도 멈춥니다. 여러 직원이 함께 쓰려면 아래 Docker 배포로 서버에 올리세요.
+
+---
+
 ## 배포하기 (Docker · 권장)
 
 서버에 Docker 만 설치되어 있으면 됩니다. Python 버전이나 패키지 충돌을 신경 쓸 필요가 없고,
@@ -166,27 +212,6 @@ docker compose --profile https up -d
 
 ---
 
-## Docker 없이 직접 실행하기 (개발용)
-
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-
-python seed_demo.py                # (선택) 샘플 데이터
-python run.py                      # http://localhost:8000
-```
-
-| 구분 | 아이디 | 비밀번호 |
-| --- | --- | --- |
-| 관리자 (자동 생성) | `admin` | `admin1234` |
-| 조회 전용 (샘플 데이터 실행 시) | `viewer` | `viewer1234` |
-
-> 이 방식은 개발·테스트용입니다. 운영에는 위의 Docker 배포를 사용하세요.
-> 직접 실행할 때도 `ITAM_SECRET_KEY` 를 고정하지 않으면 재시작 시 로그인이 풀립니다.
-
----
-
 ## 처음 도입할 때 권장 순서
 
 1. **관리자 비밀번호 변경** — 우측 상단 `비밀번호 변경`
@@ -307,7 +332,9 @@ tests/             pytest 테스트 (105개)
 run.py             개발용 실행 스크립트
 seed_demo.py       샘플 데이터 생성 스크립트
 
-deploy.sh          배포·운영 명령 모음 (setup / start / backup / restore ...)
+start-windows.bat  내 컴퓨터에서 실행 (윈도우, 더블클릭)
+start.sh           내 컴퓨터에서 실행 (macOS / 리눅스)
+deploy.sh          서버 배포·운영 명령 모음 (setup / start / backup / restore ...)
 Dockerfile         운영용 이미지 정의
 docker-compose.yml 서비스 실행 설정 (+ HTTPS 프로파일)
 docker/            컨테이너 시작 스크립트

@@ -26,3 +26,6 @@ deploy/certs/*
 .DS_Store
 .idea/
 .vscode/
+
+# 로컬 실행용 세션 키
+.local-secret
