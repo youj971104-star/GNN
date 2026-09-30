@@ -138,10 +138,43 @@ fi
 
 # ── 3) 서비스 설정과 기동 ──────────────────────────
 step "3/4  서비스 설정과 기동"
+
+# 메모리가 작은 VM(예: 무료 x86 shape VM.Standard.E2.1.Micro 는 1GB)에서는
+# 스왑이 없으면 이미지 빌드 도중 메모리가 모자라 실패한다.
+TOTAL_MB=$(awk '/MemTotal/ {printf "%d", $2/1024}' /proc/meminfo 2>/dev/null || echo 0)
+LOW_MEMORY=0
+if [ "$TOTAL_MB" -gt 0 ] && [ "$TOTAL_MB" -lt 2048 ]; then
+    LOW_MEMORY=1
+    info "메모리가 ${TOTAL_MB}MB 로 작습니다. 스왑을 준비합니다."
+
+    if [ -n "$(swapon --show 2>/dev/null)" ]; then
+        ok "스왑이 이미 켜져 있습니다"
+    else
+        # 빌드 중 메모리 부족(OOM)을 막기 위한 2GB 스왑 파일
+        if fallocate -l 2G /swapfile 2>/dev/null || \
+           dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none 2>/dev/null; then
+            chmod 600 /swapfile
+            mkswap /swapfile >/dev/null 2>&1
+            swapon /swapfile
+            grep -q '^/swapfile ' /etc/fstab 2>/dev/null \
+                || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+            ok "2GB 스왑을 만들어 켰습니다 (재부팅 후에도 유지됩니다)"
+        else
+            fail "스왑을 만들지 못했습니다. 빌드가 실패할 수 있습니다."
+        fi
+    fi
+fi
+
 if [ -f ".env" ]; then
     ok "설정 파일(.env)이 이미 있습니다"
 else
     sudo -u "$REAL_USER" ./deploy.sh setup "$PORT" 2>/dev/null || ./deploy.sh setup "$PORT"
+fi
+
+# 메모리가 작으면 워커를 1개로 줄인다. 2개를 띄우면 1GB 서버에서는 빠듯하다.
+if [ "$LOW_MEMORY" -eq 1 ] && grep -q '^ITAM_WORKERS=' .env; then
+    sed -i 's/^ITAM_WORKERS=.*/ITAM_WORKERS=1/' .env
+    info "메모리가 작아 워커를 1개로 맞췄습니다"
 fi
 
 info "이미지를 빌드하고 서비스를 시작합니다... (처음엔 3~5분 걸립니다)"
