@@ -74,54 +74,41 @@ list_host_ips() {
     done
 }
 
-# 받은 값이 진짜 IPv4 주소인지 확인한다.
-# 프록시나 오류 페이지가 엉뚱한 문자열을 돌려줄 수 있어 형식을 꼭 검사한다.
-is_ipv4() {
-    local value="${1:-}" part
-    case "$value" in
-        *[!0-9.]*|"") return 1 ;;
-    esac
-    local IFS=.
-    # shellcheck disable=SC2086
-    set -- $value
-    [ "$#" -eq 4 ] || return 1
-    for part in "$@"; do
-        [ -n "$part" ] || return 1
-        [ "$part" -le 255 ] 2>/dev/null || return 1
-    done
-    return 0
+# 공용 헬퍼(is_ipv4, cloud_public_ip)를 불러온다.
+# 위에서 이미 스크립트가 있는 폴더로 이동했으므로 상대경로로 충분하다.
+# shellcheck source=deploy/lib-common.sh
+. ./deploy/lib-common.sh
+
+# 도커가 쓰는 게이트웨이 주소들 (172.17.0.1 같은 것).
+# 이 주소는 서버 자신만 아는 값이라, 다른 PC 에서 접속할 때 쓰면 안 된다.
+# 대역으로 거르면 172.16.0.0/12 을 사내망으로 쓰는 회사에서 진짜 주소까지
+# 사라지므로, 도커에 직접 물어 정확한 값만 제외한다.
+docker_gateway_ips() {
+    docker network ls -q 2>/dev/null \
+        | xargs -r docker network inspect \
+            --format '{{range .IPAM.Config}}{{println .Gateway}}{{end}}' 2>/dev/null \
+        | grep -E '^[0-9]' || true
 }
 
-# 클라우드 VM 의 공인 IP.
-#
-# 오라클·AWS 같은 클라우드는 공인 IP 를 랜카드에 직접 붙이지 않고 NAT 로 연결한다.
-# 그래서 서버 안에서는 사설 IP(10.0.0.x)만 보이고, 그 주소를 안내하면
-# 바깥에서 아무도 접속하지 못한다. 메타데이터 서비스에 직접 물어본다.
-# (메타데이터 주소는 클라우드 안에서만 응답하므로, 일반 서버에서는 조용히 넘어간다)
-cloud_public_ip() {
-    local ip="" token=""
+# 다른 PC 에서 접속할 때 쓸 수 있는 이 서버의 주소 목록
+list_host_ips() {
+    local candidates excluded candidate
+    excluded=$(docker_gateway_ips)
 
-    # 메타데이터 주소는 절대 프록시를 거치면 안 된다.
-    # 사내 프록시가 설정된 서버에서는 프록시가 응답을 가로채 엉뚱한 값을 돌려준다.
-    local curl_opts=(-s --max-time 2 --noproxy '*')
-
-    # 오라클 클라우드
-    ip=$(curl "${curl_opts[@]}" -H "Authorization: Bearer Oracle" \
-            http://169.254.169.254/opc/v2/vnics/ 2>/dev/null \
-         | grep -oE '"publicIp"[[:space:]]*:[[:space:]]*"[0-9.]+"' \
-         | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1) || true
-    if is_ipv4 "$ip"; then echo "$ip"; return; fi
-
-    # AWS EC2 (IMDSv2)
-    token=$(curl "${curl_opts[@]}" -X PUT http://169.254.169.254/latest/api/token \
-                -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null) || true
-    if [ -n "$token" ]; then
-        ip=$(curl "${curl_opts[@]}" -H "X-aws-ec2-metadata-token: $token" \
-                http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null) || true
-        if is_ipv4 "$ip"; then echo "$ip"; return; fi
+    if command -v ip >/dev/null 2>&1; then
+        candidates=$(ip -o -4 addr show 2>/dev/null \
+            | awk '$2 !~ /^(lo|docker|br-|veth|virbr|tun|tap)/ {print $4}' \
+            | cut -d/ -f1 || true)
+    else
+        candidates=$(hostname -I 2>/dev/null | tr ' ' '\n' \
+            | grep -E '^[0-9]' | grep -vE '^(127\.|169\.254\.)' || true)
     fi
 
-    echo ""
+    for candidate in $candidates; do
+        if ! echo "$excluded" | grep -qx "$candidate"; then
+            echo "$candidate"
+        fi
+    done
 }
 
 # 안내에 쓸 대표 주소 하나를 고른다.

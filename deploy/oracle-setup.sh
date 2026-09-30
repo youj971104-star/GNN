@@ -197,13 +197,12 @@ ok "서비스 정상 동작"
 
 # 오라클은 공인 IP 를 랜카드에 직접 붙이지 않고 NAT 로 연결한다.
 # 그래서 'hostname -I' 로는 사설 IP(10.0.0.x)만 보인다. 메타데이터에서 공인 IP 를 가져온다.
-# 메타데이터 주소는 프록시를 거치면 안 된다 (--noproxy).
-PUBLIC_IP=$(curl -s --max-time 5 --noproxy '*' -H "Authorization: Bearer Oracle" \
-    http://169.254.169.254/opc/v2/vnics/ 2>/dev/null \
-    | grep -oE '"publicIp"[[:space:]]*:[[:space:]]*"[0-9.]+"' \
-    | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
-# 형식이 IP 가 아니면(오류 응답 등) 안내 문구로 대체한다
-echo "$PUBLIC_IP" | grep -qE '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' || PUBLIC_IP="<오라클 콘솔에 표시된 공인 IP>"
+# 공인 IP 를 알아낸다.
+# 오라클 메타데이터에는 publicIp 항목이 없어(사설 IP 만 있다) 바깥 서비스에 되묻는다.
+# shellcheck source=deploy/lib-common.sh
+. "$PROJECT_DIR/deploy/lib-common.sh"
+PUBLIC_IP=$(cloud_public_ip)
+[ -z "$PUBLIC_IP" ] && PUBLIC_IP="<오라클 콘솔에 표시된 공인 IP>"
 
 ADMIN_PW=$(grep -E '^ITAM_ADMIN_PASSWORD=' .env 2>/dev/null | cut -d= -f2 || echo "(.env 파일 참고)")
 
