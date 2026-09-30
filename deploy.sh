@@ -735,11 +735,20 @@ cmd_duckdns() {
         exit 1
     fi
 
-    # 공인 IP 가 바뀌어도 주소가 따라오도록 5분마다 갱신한다
-    local line="*/5 * * * * cd $PWD && ./deploy/duckdns-update.sh >/dev/null 2>&1"
-    ( crontab -l 2>/dev/null | grep -v 'duckdns-update.sh' ; echo "$line" ) | crontab -
+    # 공인 IP 가 바뀌어도 주소가 따라오도록 5분마다 갱신한다.
+    # grep 은 걸러낼 줄이 하나도 없으면 실패로 끝나므로 || true 가 필요하다.
+    # 없으면 크론 등록이 조용히 건너뛰어진다.
+    if command -v crontab >/dev/null 2>&1; then
+        local line="*/5 * * * * cd $PWD && ./deploy/duckdns-update.sh >/dev/null 2>&1"
+        local current; current=$(crontab -l 2>/dev/null | grep -v 'duckdns-update.sh' || true)
+        printf '%s\n%s\n' "$current" "$line" | grep -v '^$' | crontab -
+        ok "5분마다 주소를 자동으로 맞춥니다 (crontab 등록 완료)"
+    else
+        info "crontab 을 찾지 못해 자동 갱신은 등록하지 못했습니다."
+        info "공인 IP 가 바뀌면 './deploy/duckdns-update.sh' 를 다시 실행해 주세요."
+    fi
 
-    ok "${name}.duckdns.org 가 이 서버를 가리키도록 설정했습니다 (5분마다 자동 확인)"
+    ok "${name}.duckdns.org 가 이 서버를 가리키도록 설정했습니다"
     info "이제 HTTPS 로 전환할 수 있습니다:"
     info "  ./deploy.sh https ${name}.duckdns.org 담당자@회사.com"
 }
