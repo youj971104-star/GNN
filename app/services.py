@@ -51,6 +51,17 @@ class AssetFilter:
     def apply(self, stmt: Select) -> Select:
         if self.q:
             keyword = f"%{self.q.strip()}%"
+            # 자산 자체의 정보뿐 아니라, 그 자산을 쓰고 있는 직원으로도 찾을 수 있게 한다.
+            # "김서준이 뭘 들고 있지?" 를 자산 목록에서 바로 확인하는 쪽이 자연스럽다.
+            holder_match = Asset.holder_id.in_(
+                select(Employee.id).where(
+                    or_(
+                        Employee.name.ilike(keyword),
+                        Employee.emp_no.ilike(keyword),
+                        Employee.department.ilike(keyword),
+                    )
+                )
+            )
             stmt = stmt.where(
                 or_(
                     Asset.asset_no.ilike(keyword),
@@ -60,6 +71,7 @@ class AssetFilter:
                     Asset.manufacturer.ilike(keyword),
                     Asset.location.ilike(keyword),
                     Asset.note.ilike(keyword),
+                    holder_match,
                 )
             )
         if self.category:

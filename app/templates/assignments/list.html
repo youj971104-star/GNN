@@ -29,10 +29,11 @@
       </div>
       <div class="field">
         <label for="employee_id">직원</label>
-        <select id="employee_id" name="employee_id">
+        <select id="employee_id" name="employee_id" data-searchable="이름, 사번으로 검색">
           <option value="">전체</option>
           {% for emp in employees %}
-            <option value="{{ emp.id }}" {{ 'selected' if params.get('employee_id') == emp.id | string }}>
+            <option value="{{ emp.id }}" {{ 'selected' if params.get('employee_id') == emp.id | string }}
+                    data-search="{{ emp.name }} {{ emp.emp_no }} {{ emp.department or '' }}">
               {{ emp.name }} ({{ emp.emp_no }})
             </option>
           {% endfor %}
