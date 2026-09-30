@@ -2,12 +2,12 @@
 
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
-from app import excel, forms
+from app import config, excel, forms
 from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import EMPLOYEE_STATUSES, Asset, Assignment, Employee
 from app.routers.assets import _xlsx_response
@@ -126,6 +126,43 @@ def export_employees(request: Request, db: DbSession, user: CurrentUser):
     return _xlsx_response(excel.export_employees(employees), f"직원목록_{date.today():%Y%m%d}.xlsx")
 
 
+@router.get("/template")
+def download_employee_template(request: Request, user: AdminUser):
+    return _xlsx_response(excel.export_employee_template(), "직원등록_양식.xlsx")
+
+
+@router.get("/import")
+def import_employee_form(request: Request, user: AdminUser):
+    return render(request, "employees/import.html", {"result": None})
+
+
+@router.post("/import")
+async def import_employees(request: Request, db: DbSession, user: AdminUser, file: UploadFile):
+    if not (file.filename or "").lower().endswith((".xlsx", ".xlsm")):
+        return render(
+            request,
+            "employees/import.html",
+            {"result": None, "error": "엑셀 파일(.xlsx)만 올릴 수 있습니다."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    content = await file.read()
+    if len(content) > config.MAX_UPLOAD_BYTES:
+        limit_mb = config.MAX_UPLOAD_BYTES // (1024 * 1024)
+        return render(
+            request,
+            "employees/import.html",
+            {"result": None, "error": f"파일이 너무 큽니다. {limit_mb}MB 이하로 올려 주세요."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    result = excel.import_employees(db, content)
+    if result.total_processed and not result.has_errors:
+        flash(request, result.summary())
+        return RedirectResponse("/employees", status_code=status.HTTP_303_SEE_OTHER)
+    return render(request, "employees/import.html", {"result": result})
+
+
 @router.get("/{employee_id}")
 def employee_detail(request: Request, db: DbSession, user: CurrentUser, employee_id: int):
     employee = _get_employee(db, employee_id)
@@ -158,7 +195,12 @@ async def update_employee(request: Request, db: DbSession, user: AdminUser, empl
     employee = _get_employee(db, employee_id)
     data = dict(await request.form())
     try:
-        values = _read_employee_form(data, emp_no_required=False)
+        values = _read_employee_form(data)
+        # 사번을 바꿀 때는 다른 직원과 겹치지 않아야 한다
+        if values["emp_no"] != employee.emp_no:
+            clash = db.scalar(select(Employee).where(Employee.emp_no == values["emp_no"]))
+            if clash is not None:
+                raise ValueError(f"사번 '{values['emp_no']}'는 이미 다른 직원이 쓰고 있습니다.")
     except ValueError as exc:
         return render(
             request,

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% set active = 'employees' %}
+{% block page_title %}직원 일괄 등록{% endblock %}
+{% block content %}
+
+<div class="card">
+  <h2>1단계 · 양식 내려받기</h2>
+  <div class="card-body">
+    <p style="margin-top:0;">아래 양식을 내려받아 직원 정보를 채운 뒤 업로드하세요.
+      이미 등록된 직원 명부를 수정하려면 '현재 직원 목록 다운로드'로 받은 파일을 고쳐서 올려도 됩니다.</p>
+    <div class="section-actions">
+      <a href="/employees/template" class="btn primary">양식 다운로드</a>
+      <a href="/employees/export" class="btn">현재 직원 목록 다운로드</a>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>2단계 · 파일 업로드</h2>
+  <div class="card-body">
+    <form method="post" action="/employees/import" enctype="multipart/form-data">
+      <div class="field">
+        <label for="file">엑셀 파일 (.xlsx)</label>
+        <input type="file" id="file" name="file" accept=".xlsx,.xlsm" required>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn primary">업로드하기</button>
+        <a href="/employees" class="btn">직원 목록으로</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if result %}
+<div class="card">
+  <h2>업로드 결과</h2>
+  <div class="card-body">
+    <div class="alert {{ 'warn' if result.has_errors else 'success' }}">{{ result.summary() }}</div>
+    <div class="stat-grid" style="margin-bottom:0;">
+      <div class="stat is-success"><div class="label">신규 등록</div><div class="value">{{ result.created }}<small>명</small></div></div>
+      <div class="stat is-accent"><div class="label">기존 직원 수정</div><div class="value">{{ result.updated }}<small>명</small></div></div>
+      <div class="stat is-danger"><div class="label">처리 실패</div><div class="value">{{ result.skipped }}<small>건</small></div></div>
+    </div>
+    {% if result.errors %}
+      <div class="alert error" style="margin-top:16px;">
+        <strong>확인이 필요한 행</strong>
+        <ul>{% for message in result.errors %}<li>{{ message }}</li>{% endfor %}</ul>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>작성 규칙</h2>
+  <div class="card-body">
+    <ul style="margin:0; padding-left:18px;">
+      <li><strong>사번</strong>과 <strong>이름</strong>은 필수입니다.</li>
+      <li>이미 등록된 <strong>사번</strong>이 있으면 그 직원 정보가 <strong>갱신</strong>되고, 없으면 새로 등록됩니다.</li>
+      <li>재직상태는 한글 이름({{ EMPLOYEE_STATUSES.values() | join(', ') }})으로 적습니다. 비우면 '재직'입니다.</li>
+      <li>직원을 먼저 등록해야 자산 업로드에서 '사용자 사번'으로 지급 처리를 할 수 있습니다.</li>
+      <li>오류가 있는 행은 건너뛰고 나머지는 그대로 반영됩니다.</li>
+    </ul>
+  </div>
+</div>
+
+{% endblock %}

@@ -55,6 +55,21 @@ ASSET_COLUMNS: list[tuple[str, str, int]] = [
 # 업로드 파일에서 필수인 열
 REQUIRED_UPLOAD_HEADERS = ("자산번호", "자산명")
 
+# 직원 업로드 열
+EMPLOYEE_COLUMNS: list[tuple[str, int]] = [
+    ("사번", 14),
+    ("이름", 12),
+    ("부서", 16),
+    ("직급", 12),
+    ("이메일", 26),
+    ("연락처", 16),
+    ("재직상태", 10),
+    ("비고", 30),
+]
+REQUIRED_EMPLOYEE_HEADERS = ("사번", "이름")
+
+_EMPLOYEE_STATUS_BY_LABEL = {label: code for code, label in EMPLOYEE_STATUSES.items()}
+
 _CATEGORY_BY_LABEL = {label: code for code, label in ASSET_CATEGORIES.items()}
 _STATUS_BY_LABEL = {label: code for code, label in ASSET_STATUSES.items()}
 _DEPRECIATION_BY_LABEL = {label: code for code, label in DEPRECIATION_METHODS.items()}
@@ -473,6 +488,125 @@ def import_assets(db: Session, content: bytes, *, actor: str | None = None) -> I
     wb.close()
     if result.skipped > MAX_REPORTED_ERRORS:
         result.errors.append(f"... 그 외 {result.skipped - MAX_REPORTED_ERRORS}건의 오류가 더 있습니다.")
+    return result
+
+
+def export_employee_template() -> bytes:
+    """직원 일괄 등록용 빈 양식."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "직원등록양식"
+    _style_header(ws, [name for name, _ in EMPLOYEE_COLUMNS], [w for _, w in EMPLOYEE_COLUMNS])
+    ws.append(["2026001", "홍길동", "개발팀", "선임", "gildong@example.com",
+               "010-1234-5678", "재직", "예시 행입니다. 지우고 사용하세요."])
+
+    guide = wb.create_sheet("작성안내")
+    guide.column_dimensions["A"].width = 16
+    guide.column_dimensions["B"].width = 80
+    guide.append(["항목", "설명"])
+    for cell in guide[1]:
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+    for row in [
+        ("사번", "필수. 직원을 구분하는 고유 번호입니다. 이미 있는 사번이면 정보가 갱신됩니다."),
+        ("이름", "필수."),
+        ("부서", "자산 현황을 부서별로 집계할 때 쓰입니다."),
+        ("재직상태", f"다음 중 하나: {', '.join(EMPLOYEE_STATUSES.values())} (비우면 '재직')"),
+        ("이메일", "@ 가 들어간 형식이어야 합니다. 비워도 됩니다."),
+    ]:
+        guide.append(row)
+        guide.cell(row=guide.max_row, column=2).alignment = Alignment(wrap_text=True, vertical="top")
+    return _to_bytes(wb)
+
+
+def import_employees(db: Session, content: bytes) -> ImportResult:
+    """엑셀 파일을 읽어 직원을 등록/갱신한다.
+
+    사번이 이미 있으면 갱신, 없으면 새로 등록한다.
+    자산 업로드와 마찬가지로, 잘못된 행은 건너뛰고 나머지는 그대로 반영한다.
+    """
+    result = ImportResult()
+
+    try:
+        wb = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    except Exception as exc:
+        result.errors.append(f"엑셀 파일을 열 수 없습니다: {exc}")
+        result.skipped = 1
+        return result
+
+    ws = wb.worksheets[0]
+    rows = ws.iter_rows(values_only=True)
+    try:
+        header_row = next(rows)
+    except StopIteration:
+        result.errors.append("빈 파일입니다. 데이터가 있는 엑셀을 올려 주세요.")
+        return result
+
+    headers = [(_cell_text(c) or "") for c in header_row]
+    index = {header: pos for pos, header in enumerate(headers) if header}
+    missing = [h for h in REQUIRED_EMPLOYEE_HEADERS if h not in index]
+    if missing:
+        result.errors.append(
+            f"필수 열이 없습니다: {', '.join(missing)}. '양식 다운로드'로 받은 파일을 사용해 주세요."
+        )
+        return result
+
+    def value_of(row: tuple, header: str):
+        pos = index.get(header)
+        if pos is None or pos >= len(row):
+            return None
+        return row[pos]
+
+    seen: set[str] = set()
+    for row_no, row in enumerate(rows, start=2):
+        if row is None or all(cell is None or str(cell).strip() == "" for cell in row):
+            continue
+
+        try:
+            emp_no = _cell_text(value_of(row, "사번"))
+            if not emp_no:
+                raise ValueError("사번이 비어 있습니다.")
+            if emp_no in seen:
+                raise ValueError(f"같은 파일 안에 사번 '{emp_no}'가 중복으로 있습니다.")
+            seen.add(emp_no)
+
+            name = _cell_text(value_of(row, "이름"))
+            if not name:
+                raise ValueError("이름이 비어 있습니다.")
+
+            email = _cell_text(value_of(row, "이메일"))
+            if email and "@" not in email:
+                raise ValueError(f"이메일 형식이 올바르지 않습니다: '{email}'")
+
+            employee = db.scalar(select(Employee).where(Employee.emp_no == emp_no))
+            is_new = employee is None
+            if is_new:
+                employee = Employee(emp_no=emp_no)
+                db.add(employee)
+
+            employee.name = name
+            employee.department = _cell_text(value_of(row, "부서"))
+            employee.position = _cell_text(value_of(row, "직급"))
+            employee.email = email
+            employee.phone = _cell_text(value_of(row, "연락처"))
+            employee.status = _cell_code(
+                value_of(row, "재직상태"), EMPLOYEE_STATUSES,
+                _EMPLOYEE_STATUS_BY_LABEL, "재직상태", "ACTIVE",
+            )
+            employee.note = _cell_text(value_of(row, "비고"))
+
+            result.created += int(is_new)
+            result.updated += int(not is_new)
+        except Exception as exc:
+            db.rollback()
+            result.skipped += 1
+            if len(result.errors) < MAX_REPORTED_ERRORS:
+                result.errors.append(f"{row_no}행: {exc}")
+            continue
+        else:
+            db.commit()
+
+    wb.close()
     return result
 
 
