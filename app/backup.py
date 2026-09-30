@@ -37,6 +37,21 @@ def backup(destination: Path) -> Path:
 
     destination.parent.mkdir(parents=True, exist_ok=True)
 
+    if config.DB_KEY:
+        # 암호화된 DB 는 같은 키로 연 대상에 백업해야 백업 파일도 암호화된다.
+        # (키 없이 연 대상에 백업하면 평문 사본이 생겨 암호화한 의미가 없어진다)
+        from app import dbcrypt
+
+        src = dbcrypt.connect(source, config.DB_KEY)
+        dst = dbcrypt.driver().connect(str(destination))
+        try:
+            dst.execute(dbcrypt.key_pragma(config.DB_KEY))
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+        return destination
+
     with sqlite3.connect(f"file:{source}?mode=ro", uri=True) as src, \
             sqlite3.connect(destination) as dst:
         src.backup(dst)

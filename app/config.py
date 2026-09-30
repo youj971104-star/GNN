@@ -18,6 +18,11 @@ SECRET_KEY = os.getenv("ITAM_SECRET_KEY") or secrets.token_hex(32)
 # SQLite 파일 경로. PostgreSQL 등으로 옮길 때는 ITAM_DATABASE_URL 만 바꾸면 된다.
 DATABASE_URL = os.getenv("ITAM_DATABASE_URL") or f"sqlite:///{DATA_DIR / 'itam.db'}"
 
+# 데이터베이스 파일 암호화 키(64자리 16진수). 비워 두면 암호화하지 않는다.
+# './deploy.sh encrypt-db' 가 만들어 .env 에 적어 준다.
+# 잃어버리면 데이터와 백업을 열 수 없으니 서버 밖에도 따로 보관해야 한다.
+DB_KEY = (os.getenv("ITAM_DB_KEY") or "").strip() or None
+
 # 최초 실행 시 자동 생성되는 관리자 계정
 DEFAULT_ADMIN_USERNAME = os.getenv("ITAM_ADMIN_USERNAME", "admin")
 DEFAULT_ADMIN_PASSWORD = os.getenv("ITAM_ADMIN_PASSWORD", "admin1234")

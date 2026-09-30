@@ -5,6 +5,9 @@ Jinja2==3.1.6
 python-multipart==0.0.32
 itsdangerous==2.2.0
 openpyxl==3.1.5
+# 데이터베이스 파일 암호화(선택). 설치 파일이 리눅스 x86_64 용만 있어 거기서만 받는다.
+# 윈도우·맥·ARM 에서는 건너뛰고, 암호화 없이 그대로 동작한다.
+sqlcipher3-binary==0.6.0; sys_platform == "linux" and platform_machine == "x86_64"
 
 # 개발/테스트용
 pytest==9.1.1

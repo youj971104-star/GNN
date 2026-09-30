@@ -191,6 +191,10 @@ cd GNN
 | `./deploy.sh update` | 코드를 받은 뒤 최신 버전으로 다시 빌드·재시작 |
 | `./deploy.sh backup` | 데이터베이스 백업 → `backups/` 폴더에 저장 |
 | `./deploy.sh restore <파일>` | 백업 시점으로 되돌리기 (되돌리기 전 현재 상태를 자동 백업) |
+| `./deploy.sh autobackup [HH:MM]` | 매일 자동 백업 (기본 03:17) |
+| `./deploy.sh encrypt-db` | 데이터베이스 파일 암호화 (한 번만, 아래 *보안* 참고) |
+| `./deploy.sh db-key` | 데이터베이스 암호화 키 보기 |
+| `./deploy.sh autoupdate [HH:MM]` | 운영체제 보안 패치 자동 설치 (재부팅 시각, 기본 04:30) |
 | `./deploy.sh doctor` | **접속이 안 될 때** 원인 진단 |
 | `./deploy.sh demo` | 샘플 데이터 넣기 (처음 둘러볼 때만) |
 
@@ -261,7 +265,8 @@ cd GNN
 (`.env` 의 `ITAM_BACKUP_KEEP` 으로 조절). 기록은 `backups/backup.log` 에 쌓입니다.
 
 > 백업 파일도 같은 서버 안에 있습니다. 디스크가 고장 나면 함께 사라지므로,
-> 가끔 다른 곳으로 내려받아 두세요.
+> 가끔 다른 곳으로 내려받아 두세요. (DB 를 암호화했다면 백업도 암호화되어 있어,
+> 열려면 암호화 키가 있어야 합니다.)
 >
 > ```bash
 > scp -i <키파일> ubuntu@<서버IP>:~/GNN/backups/*.db .
@@ -325,16 +330,56 @@ Let's Encrypt 무료 인증서를 받아 적용하고, 90일마다 자동으로 
 | 응답 헤더 | CSP, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, HTTPS 시 HSTS |
 | SQL | ORM 으로만 질의(문자열을 이어 붙여 만들지 않음) |
 | 로그인 후 이동 | 같은 사이트 경로만 허용(오픈 리다이렉트 차단) |
+| DB 파일 | `./deploy.sh encrypt-db` 후 AES-256 으로 암호화(SQLCipher). 백업 파일도 암호화된 채로 만들어짐 |
+| 서버 패치 | `./deploy.sh autoupdate` 후 운영체제 보안 패치 매일 자동 설치, 컨테이너 기반 이미지 매주 갱신 |
+
+### 데이터베이스 파일 암호화
+
+```bash
+./deploy.sh encrypt-db
+```
+
+지금 쓰는 데이터를 그대로 암호화합니다. 변환 전에 백업을 받고, 변환 뒤 표마다 건수를
+대조하며, `backups/` 에 있던 예전 백업도 같은 키로 암호화합니다. 1분 남짓 서비스가 멈춥니다.
+이후로는 백업도 암호화된 채로 만들어집니다.
+
+암호화하면 DB 파일이나 백업 파일을 가져가도 **키 없이는 열 수 없습니다**(머리부터 무작위
+바이트로 보입니다). 키는 `.env` 의 `ITAM_DB_KEY` 에 들어갑니다.
+
+> ⚠ **키를 잃어버리면 데이터와 백업을 영영 열 수 없습니다.**
+> 명령이 끝날 때 보여 주는 키를 **서버 밖**(비밀번호 관리자 등)에 꼭 보관하세요.
+> 서버를 통째로 잃으면 `.env` 도 함께 사라집니다. 나중에 다시 보려면 `./deploy.sh db-key`.
+>
+> 새 서버로 옮길 때는 백업 파일과 함께 `.env` 에 같은 키(`ITAM_DB_KEY=...`)를 넣으면 됩니다.
+
+- 서버가 **x86** 이어야 합니다(지금 쓰는 E2.1.Micro 는 해당). ARM(Ampere) 서버는 지원하지 않습니다.
+- 내 컴퓨터에서 실행할 때(윈도우·맥)는 암호화 없이 예전처럼 동작합니다.
+- 암호화해서 쓰는 중에 예전 평문 백업으로 `restore` 하면, 넣기 전에 자동으로 암호화합니다.
+- 다른 곳으로 옮기느라 평문이 필요하면 컨테이너 안에서
+  `python -m app.dbcrypt decrypt /data/itam.db /data/plain.db` (다 쓴 뒤 지우세요).
+
+### 서버 자동 보안 업데이트
+
+```bash
+./deploy.sh autoupdate           # 재부팅이 필요할 때 04:30 에 (시각 지정: ./deploy.sh autoupdate 03:40)
+./deploy.sh autoupdate status    # 켜져 있는지, 최근에 무엇이 설치됐는지
+./deploy.sh autoupdate off       # 끄기
+```
+
+- **운영체제**: Ubuntu 보안 업데이트만 매일 자동으로 설치합니다(`unattended-upgrades`).
+  커널처럼 재부팅이 필요한 패치가 있을 때만 정해 둔 시각에 재부팅하고, 서비스는 자동으로 다시 뜹니다.
+  도커 저장소는 대상이 아니라서, 도커가 한밤중에 멋대로 올라가 서비스가 끊기는 일은 없습니다.
+- **컨테이너**: 파이썬 기반 이미지·Nginx·certbot 의 보안 패치는 apt 로 들어오지 않습니다.
+  매주 일요일 04:53 에 기반 이미지를 새로 받아 다시 만듭니다. **코드는 바꾸지 않습니다.**
+- 밀려 있는 패치를 지금 바로 설치하려면 `sudo unattended-upgrade -v`.
 
 ### 되어 있지 않은 것 (알고 쓰셔야 합니다)
 
-- **데이터베이스 파일은 암호화되지 않습니다.** 서버에 들어올 수 있는 사람(root·SSH 접속자)이나
-  백업 파일을 가져간 사람은 자산·직원 정보와 **라이선스 키**까지 그대로 볼 수 있습니다.
-  서버 접속 권한과 백업 파일 보관을 사람 관리로 막아야 합니다.
+- **서버에 root 로 들어온 사람은 막지 못합니다.** 암호화 키가 같은 서버의 `.env` 에 있기 때문입니다.
+  DB 암호화는 *파일이나 백업만 빠져나간 경우*를 막습니다. 서버 접속(SSH 키)은 사람 관리로 지켜야 합니다.
+- **엑셀로 내려받은 파일은 암호화되지 않습니다.** 내려받은 뒤의 관리는 각자의 몫입니다.
 - **IP 단위 차단은 없습니다.** 계정 잠금만 있어서, 남의 아이디로 일부러 5번 틀려
   그 사람을 10분간 못 들어오게 만들 수 있습니다.
-- **운영체제·의존성 보안 업데이트는 자동이 아닙니다.** 가끔 서버에서
-  `sudo apt update && sudo apt upgrade` 와 `./deploy.sh update` 를 해 주세요.
 
 ## 다른 자산관리 서비스에서 옮겨오기
 
@@ -473,6 +518,7 @@ export ITAM_DATABASE_URL="postgresql+psycopg://itam:비밀번호@db-host:5432/it
 | `ITAM_DOMAIN` | (없음) | HTTPS 로 전환하면 기록됩니다. 이 값이 있으면 배포 명령이 HTTPS 설정을 함께 씁니다 |
 | `ITAM_DUCKDNS_NAME` / `ITAM_DUCKDNS_TOKEN` | (없음) | DuckDNS 무료 주소를 쓸 때의 이름과 토큰 |
 | `ITAM_BACKUP_KEEP` | `30` | 보관할 백업 파일 개수. 넘으면 오래된 것부터 지웁니다 |
+| `ITAM_DB_KEY` | (없음) | 데이터베이스 암호화 키(64자리 16진수). `./deploy.sh encrypt-db` 가 넣어 줍니다. **잃어버리면 복구 불가** |
 | `ITAM_MAX_FAILED_LOGINS` | `5` | 이 횟수만큼 틀리면 계정을 잠급니다 |
 | `ITAM_LOGIN_LOCK_SECONDS` | `600` | 계정이 잠기는 시간(초) |
 | `ITAM_WORKERS` | `2` | 워커 프로세스 수 (Docker 실행 시) |
@@ -504,12 +550,13 @@ app/
   backup.py        데이터베이스 백업 (python -m app.backup)
   labels.py        자산 QR 코드 생성
   scanning.py      찍은 QR·바코드 값에서 자산번호 읽어내기
+  dbcrypt.py       데이터베이스 파일 암호화 (SQLCipher) · 변환·확인 명령
   twofactor.py     2단계 인증(TOTP)과 복구 코드
   useragent.py     카카오톡 등 '앱 안의 브라우저' 판별 (QR 스캔 안내용)
   migrations.py    기존 DB 에 새 컬럼을 덧붙이는 스키마 이전
   numbering.py     자산번호·사번 자동 채번 (기존 번호에서 형식 읽기)
   settings_store.py  DB 에 저장하는 설정값 (재시작 없이 바뀝니다)
-tests/             pytest 테스트 (367개)
+tests/             pytest 테스트 (390개)
 run.py             개발용 실행 스크립트
 seed_demo.py       샘플 데이터 생성 스크립트
 tools/             AssetTiger 등 다른 서비스에서 옮겨오는 변환 도구
@@ -533,7 +580,8 @@ docker-compose.https.yml  도메인+HTTPS 로 쓸 때 함께 적용되는 설정
 로그인·권한, 자산 CRUD, 지급/반납 업무 규칙, 엑셀 업로드/다운로드, 대시보드 집계,
 데이터베이스 백업, 감가상각 계산, 정비 이력, QR 라벨, 2단계 인증, 자동 채번,
 로그인 유지와 QR 스캔 흐름, 스캔 값 해석, 스키마 이전, 보안 헤더와 입력값 처리,
-전 화면 렌더링까지 367개 테스트로 확인합니다.
+데이터베이스 암호화, 전 화면 렌더링까지 390개 테스트로 확인합니다.
+(암호화 테스트는 SQLCipher 가 설치되는 리눅스 x86_64 에서만 돌고, 다른 곳에서는 건너뜁니다.)
 
 ## 데이터 모델 요약
 

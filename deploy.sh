@@ -14,6 +14,8 @@
 #   ./deploy.sh https <도메인> [이메일]   무료 인증서로 HTTPS 전환
 #   ./deploy.sh https-off                 HTTP 로 되돌리기
 #   ./deploy.sh duckdns <이름> <토큰>     DuckDNS 주소가 늘 이 서버를 가리키게
+#   ./deploy.sh encrypt-db                데이터베이스 파일 암호화
+#   ./deploy.sh autoupdate [HH:MM]        운영체제 보안 패치 자동 설치
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -355,6 +357,299 @@ cmd_backup() {
     info "보관 중인 백업: $(ls -1 backups/itam-*.db 2>/dev/null | wc -l)개"
 }
 
+# 호스트에 있는 DB 파일 하나를 열어 본다 (암호화돼 있으면 .env 의 키로).
+# 이미지 안의 파이썬으로 열기 때문에 호스트에 SQLCipher 가 없어도 된다.
+verify_db_file() {
+    local file="$1" dir name
+    dir="$(cd "$(dirname "$file")" && pwd)"
+    name="$(basename "$file")"
+    $DC run --rm -T --no-deps --user "$(id -u):$(id -g)" \
+        -v "${dir}:/check" --entrypoint python "$SERVICE" \
+        -m app.dbcrypt verify "/check/${name}"
+}
+
+# 앱 이미지에 암호화 드라이버가 들어 있는지
+image_has_sqlcipher() {
+    $DC run --rm -T --no-deps --entrypoint python "$SERVICE" \
+        -c "import sqlcipher3" >/dev/null 2>&1
+}
+
+# 볼륨 안 DB 가 평문인지 (plain / encrypted / missing)
+db_state() {
+    $DC run --rm -T --no-deps --entrypoint sh "$SERVICE" -c \
+        "if [ ! -s /data/itam.db ]; then echo missing;
+         elif [ \"\$(head -c 15 /data/itam.db)\" = 'SQLite format 3' ]; then echo plain;
+         else echo encrypted; fi" | tr -d '[:space:]'
+}
+
+wait_healthy() {
+    local i
+    for i in $(seq 1 30); do
+        if $DC exec -T "$SERVICE" python -c \
+            "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=3)" \
+            >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
+cmd_encrypt_db() {
+    require_env
+
+    if ! image_has_sqlcipher; then
+        fail "지금 이미지에는 암호화 드라이버(SQLCipher)가 없습니다."
+        info "먼저 최신 코드로 다시 만들어 주세요:  git pull && ./deploy.sh update"
+        info "(서버가 ARM(Ampere)이면 지원하지 않습니다. x86 서버에서만 됩니다.)"
+        exit 1
+    fi
+
+    local key state generated=0
+    key="$(env_value ITAM_DB_KEY || true)"
+    state="$(db_state)"
+
+    if [ "$state" = "encrypted" ]; then
+        if [ -z "$key" ]; then
+            fail "데이터베이스는 암호화되어 있는데 .env 에 ITAM_DB_KEY 가 없습니다."
+            info "보관해 둔 키를 .env 에 ITAM_DB_KEY=... 로 넣고 './deploy.sh restart' 하세요."
+            exit 1
+        fi
+        ok "데이터베이스는 이미 암호화되어 있습니다."
+        encrypt_old_backups "$key"
+        return 0
+    fi
+    if [ "$state" = "missing" ]; then
+        fail "데이터베이스 파일이 아직 없습니다. './deploy.sh start' 로 한 번 띄운 뒤 다시 실행하세요."
+        exit 1
+    fi
+
+    echo ""
+    echo "  ────────────────────────────────────────────────────────────"
+    echo "   데이터베이스 파일을 암호화합니다 (AES-256, SQLCipher)"
+    echo "  ────────────────────────────────────────────────────────────"
+    echo "   · 변환하는 1분 남짓 서비스가 멈춥니다."
+    echo "   · 변환 전에 백업을 먼저 받고, 변환 뒤 건수를 대조합니다."
+    echo "   · 예전 백업 파일들도 같은 키로 암호화합니다."
+    echo ""
+    echo "   ⚠ 키를 잃어버리면 데이터와 백업을 영영 열 수 없습니다."
+    echo "     끝나고 보여 드리는 키를 서버 밖(비밀번호 관리자 등)에 꼭 보관하세요."
+    echo ""
+    printf "  계속하려면 'yes' 를 입력하세요: "
+    read -r answer
+    [ "$answer" = "yes" ] || { info "취소했습니다."; exit 0; }
+
+    # 키를 먼저 .env 에 적는다. 도중에 끊겨도 키를 잃지 않게 하기 위해서다.
+    # (끊기면 앱이 '평문인데 키가 있다'고 알려 주고, 이 명령을 다시 실행하면 이어서 된다)
+    if [ -z "$key" ]; then
+        key=$($DC run --rm -T --no-deps --entrypoint python "$SERVICE" -m app.dbcrypt new-key | tr -d '[:space:]')
+        if ! echo "$key" | grep -qE '^[0-9a-f]{64}$'; then
+            fail "키를 만들지 못했습니다."
+            exit 1
+        fi
+        set_env_value ITAM_DB_KEY "$key"
+        chmod 600 "$ENV_FILE"
+        generated=1
+    fi
+
+    info "변환 전 백업을 받습니다..."
+    cmd_backup
+
+    info "서비스를 멈추고 변환합니다..."
+    $DC stop "$SERVICE"
+    if ! $DC run --rm -T --no-deps -e ITAM_DB_KEY="$key" --entrypoint sh "$SERVICE" -c \
+        "set -e; cd /data
+         python -m app.dbcrypt encrypt itam.db itam.db.encrypted
+         rm -f itam.db-wal itam.db-shm
+         mv itam.db.encrypted itam.db"; then
+        fail "변환에 실패했습니다. 데이터는 원래대로(평문) 남아 있습니다."
+        if [ "$generated" -eq 1 ]; then
+            sed -i.bak '/^ITAM_DB_KEY=/d' "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
+        fi
+        $DC up -d "$SERVICE"
+        exit 1
+    fi
+
+    # start 는 예전 환경변수 그대로 다시 켠다. 새 키를 읽도록 컨테이너를 새로 만든다.
+    $DC up -d "$SERVICE"
+    reload_nginx
+    if ! wait_healthy; then
+        fail "서비스가 올라오지 않습니다. './deploy.sh logs' 로 확인해 주세요."
+        exit 1
+    fi
+    ok "암호화한 데이터베이스로 서비스가 다시 떴습니다."
+    $DC exec -T "$SERVICE" python -m app.dbcrypt verify /data/itam.db | sed 's/^/    /'
+
+    encrypt_old_backups "$key"
+
+    echo ""
+    echo "  ════════════════════════════════════════════════════════════════════"
+    echo "   데이터베이스 암호화 키 — 지금 서버 밖에 보관하세요"
+    echo ""
+    echo "     $key"
+    echo ""
+    echo "   · .env 에도 들어 있지만, 서버를 잃으면 .env 도 함께 사라집니다."
+    echo "   · 새 서버로 옮기거나 백업을 되살릴 때 이 키가 있어야 열립니다."
+    echo "   · 나중에 다시 보려면:  ./deploy.sh db-key"
+    echo "  ════════════════════════════════════════════════════════════════════"
+    echo ""
+}
+
+# backups/ 에 남아 있는 평문 백업을 같은 키로 암호화한다.
+# 호스트 계정으로 돌려야 만든 파일의 주인이 바뀌지 않는다.
+encrypt_old_backups() {
+    local key="$1"
+    [ -d backups ] || return 0
+    if ! ls backups/itam-*.db >/dev/null 2>&1; then
+        return 0
+    fi
+    info "예전 백업 파일을 같은 키로 암호화합니다..."
+    $DC run --rm -T --no-deps --user "$(id -u):$(id -g)" -e ITAM_DB_KEY="$key" \
+        -v "$PWD/backups:/backups" --entrypoint python "$SERVICE" \
+        -m app.dbcrypt encrypt-dir /backups | sed 's/^/    /'
+}
+
+cmd_db_key() {
+    require_env
+    local key; key="$(env_value ITAM_DB_KEY || true)"
+    if [ -z "$key" ]; then
+        info "데이터베이스를 암호화하지 않았습니다. (./deploy.sh encrypt-db)"
+        return 0
+    fi
+    echo ""
+    echo "  데이터베이스 암호화 키 (다른 사람에게 보여 주지 마세요)"
+    echo ""
+    echo "     $key"
+    echo ""
+}
+
+# ─────────────────────────────────────────────────────────────
+#  서버 자동 보안 업데이트
+# ─────────────────────────────────────────────────────────────
+
+APT_AUTO_FILE="/etc/apt/apt.conf.d/20auto-upgrades"
+APT_ITAM_FILE="/etc/apt/apt.conf.d/52itam-auto-upgrades"
+
+# 운영체제 보안 패치(unattended-upgrades)와, 매주 컨테이너 기반 이미지 새로 받기
+cmd_autoupdate() {
+    local arg="${1:-}" sudo_cmd=""
+    if [ "$(id -u)" -ne 0 ]; then
+        sudo_cmd="sudo"
+    fi
+
+    if [ "$arg" = "status" ]; then
+        autoupdate_status
+        return 0
+    fi
+
+    if [ "$arg" = "off" ]; then
+        $sudo_cmd rm -f "$APT_ITAM_FILE"
+        printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "0";\n' \
+            | $sudo_cmd tee "$APT_AUTO_FILE" >/dev/null
+        remove_cron_line "deploy.sh refresh-images" || true
+        ok "자동 보안 업데이트를 껐습니다."
+        return 0
+    fi
+
+    # 커널 등 재부팅이 필요한 패치가 있을 때만, 이 시각에 재부팅한다
+    local reboot_time="${arg:-04:30}"
+    if ! echo "$reboot_time" | grep -qE '^([01][0-9]|2[0-3]):[0-5][0-9]$'; then
+        fail "재부팅 시각은 HH:MM 형식으로 넣어 주세요.  예)  ./deploy.sh autoupdate 04:30"
+        exit 1
+    fi
+
+    if ! command -v apt-get >/dev/null 2>&1; then
+        fail "apt 를 쓰는 서버(Ubuntu·Debian)에서만 지원합니다."
+        exit 1
+    fi
+
+    info "자동 보안 업데이트 도구를 설치합니다..."
+    $sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades >/dev/null
+
+    # 매일 패키지 목록을 새로 받고, 보안 업데이트를 설치한다
+    $sudo_cmd tee "$APT_AUTO_FILE" >/dev/null <<APTEOF
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+APTEOF
+
+    # 기본 설정(50unattended-upgrades)은 건드리지 않고, 뒤에 오는 파일로 덮어쓴다.
+    # 받는 대상은 기본값 그대로 '보안 업데이트'만이다. 도커 저장소는 포함되지 않아
+    # 도커가 한밤중에 멋대로 올라가 서비스가 끊기는 일은 없다.
+    $sudo_cmd tee "$APT_ITAM_FILE" >/dev/null <<APTEOF
+// IT 자산관리 시스템 - './deploy.sh autoupdate' 가 만든 설정입니다.
+// 커널처럼 재부팅이 필요한 패치가 있으면 아래 시각에 재부팅합니다.
+// 서비스는 재부팅 뒤 자동으로 다시 뜹니다(restart: unless-stopped).
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "${reboot_time}";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+APTEOF
+
+    # apt 가 설정을 제대로 읽었는지 확인한다.
+    # (unattended-upgrade --dry-run 은 패키지를 실제로 내려받느라 몇 분씩 걸려 쓰지 않는다)
+    local dump; dump=$(apt-config dump 2>/dev/null || true)
+    if echo "$dump" | grep -q 'APT::Periodic::Unattended-Upgrade "1"' \
+        && echo "$dump" | grep -q "Unattended-Upgrade::Automatic-Reboot-Time \"${reboot_time}\""; then
+        ok "운영체제 보안 업데이트를 매일 자동으로 설치합니다 (재부팅이 필요하면 ${reboot_time})"
+        info "밀려 있는 패치를 지금 바로 설치하려면:  sudo unattended-upgrade -v"
+    else
+        fail "설정을 확인하지 못했습니다. 'apt-config dump | grep Unattended' 로 확인해 주세요."
+    fi
+
+    # 컨테이너 안(파이썬 기반 이미지, Nginx, certbot)의 보안 패치는 apt 로 들어오지 않는다.
+    # 매주 일요일 새벽에 기반 이미지를 새로 받아 다시 만든다. 코드는 바꾸지 않는다.
+    mkdir -p backups
+    if install_cron_line "deploy.sh refresh-images" \
+        "53 4 * * 0 cd $PWD && ./deploy.sh refresh-images >> backups/refresh.log 2>&1"; then
+        ok "컨테이너 기반 이미지도 매주 일요일 04:53 에 새로 받습니다"
+    else
+        info "crontab 이 없어 컨테이너 이미지 갱신은 등록하지 못했습니다."
+    fi
+    info "상태 보기: ./deploy.sh autoupdate status · 끄기: ./deploy.sh autoupdate off"
+}
+
+autoupdate_status() {
+    echo ""
+    if grep -qs 'Unattended-Upgrade "1"' "$APT_AUTO_FILE"; then
+        ok "운영체제 자동 보안 업데이트: 켜짐"
+    else
+        info "운영체제 자동 보안 업데이트: 꺼짐  (켜기: ./deploy.sh autoupdate)"
+    fi
+    if [ -f "$APT_ITAM_FILE" ]; then
+        info "재부팅 시각: $(grep -o 'Reboot-Time "[0-9:]*"' "$APT_ITAM_FILE" | grep -o '[0-9:]*')"
+    fi
+    if [ -f /var/run/reboot-required ]; then
+        info "재부팅 대기 중인 패치가 있습니다 (정해 둔 시각에 재부팅됩니다)"
+    fi
+    local log=/var/log/unattended-upgrades/unattended-upgrades.log
+    if [ -r "$log" ]; then
+        echo ""
+        info "최근 기록:"
+        # 디버그 줄은 길고 알아보기 어려워 빼고, 한 줄 길이도 줄인다
+        grep -E ' (INFO|WARNING|ERROR) ' "$log" | tail -n 5 | cut -c1-140 | sed 's/^/    /'
+    fi
+    if command -v crontab >/dev/null 2>&1 && crontab -l 2>/dev/null | grep -q 'refresh-images'; then
+        ok "컨테이너 이미지 주간 갱신: 켜짐"
+    fi
+    echo ""
+}
+
+# 코드는 그대로 두고, 보안 패치가 들어간 기반 이미지로 다시 만든다
+cmd_refresh_images() {
+    require_env
+    echo "== $(date '+%Y-%m-%d %H:%M:%S') 컨테이너 이미지 갱신 =="
+    if [ -n "${DOMAIN:-}" ]; then
+        $DC pull nginx certbot
+    fi
+    $DC build --pull "$SERVICE"
+    $DC up -d
+    reload_nginx
+    # 다시 만들 때마다 예전 이미지가 쌓여 디스크를 채운다
+    docker image prune -f >/dev/null 2>&1 || true
+    ok "이미지를 새로 받아 다시 띄웠습니다."
+}
+
 cmd_autobackup() {
     require_env
 
@@ -405,9 +700,10 @@ cmd_restore() {
         exit 1
     fi
 
-    # 엉뚱한 파일로 되돌려 서비스가 죽는 일이 없도록 형식을 먼저 확인한다
-    if [ "$(head -c 15 "$file")" != "SQLite format 3" ]; then
-        fail "'$file' 은 SQLite 백업 파일이 아닙니다."
+    # 엉뚱한 파일로 되돌려 서비스가 죽는 일이 없도록 먼저 열어 본다.
+    # 암호화된 백업은 머리가 무작위 바이트라 파일 머리로는 알 수 없어, 키로 직접 연다.
+    if ! verify_db_file "$file"; then
+        fail "'$file' 을 열 수 없습니다. SQLite 백업이 아니거나, 지금 키로 암호화된 파일이 아닙니다."
         exit 1
     fi
 
@@ -426,9 +722,16 @@ cmd_restore() {
     # WAL/SHM 파일까지 지워야 예전 데이터가 되살아나지 않는다.
     # docker cp 로 들어온 파일은 root 소유라, 앱 계정(uid 10001)이 쓸 수 있도록
     # 소유권을 넘겨줘야 한다. 그래서 이 정리 작업만 root 로 실행한다.
+    #
+    # 암호화해서 쓰는 중에 예전 평문 백업으로 되돌리면, 넣기 전에 암호화한다.
     $DC run --rm -T --user root --entrypoint sh "$SERVICE" -c \
-        "cd /data && rm -f itam.db itam.db-wal itam.db-shm \
-         && mv _restore.db itam.db && chown ${APP_UID}:${APP_UID} itam.db && chmod 644 itam.db"
+        "set -e; cd /data
+         if [ -n \"\$ITAM_DB_KEY\" ] && [ \"\$(head -c 15 _restore.db)\" = 'SQLite format 3' ]; then
+             python -m app.dbcrypt encrypt _restore.db _restore.enc
+             mv _restore.enc _restore.db
+         fi
+         rm -f itam.db itam.db-wal itam.db-shm
+         mv _restore.db itam.db && chown ${APP_UID}:${APP_UID} itam.db && chmod 644 itam.db"
 
     $DC start "$SERVICE"
     ok "복원을 마쳤습니다."
@@ -859,6 +1162,10 @@ case "${1:-}" in
     status|ps)  cmd_status ;;
     backup)     cmd_backup ;;
     autobackup) shift; cmd_autobackup "$@" ;;
+    encrypt-db) cmd_encrypt_db ;;
+    db-key)     cmd_db_key ;;
+    autoupdate) shift; cmd_autoupdate "$@" ;;
+    refresh-images) cmd_refresh_images ;;
     restore) shift; cmd_restore "$@" ;;
     demo)       cmd_demo ;;
     doctor|진단) cmd_doctor ;;
@@ -878,6 +1185,12 @@ IT 자산관리 시스템 배포 도우미
   ./deploy.sh status           상태 확인
   ./deploy.sh backup           데이터베이스 백업 (지금 한 번)
   ./deploy.sh autobackup [HH:MM]  매일 자동 백업 (기본 03:17, 끄기: autobackup off)
+
+  ── 보안 ──
+  ./deploy.sh encrypt-db       데이터베이스 파일 암호화 (한 번만)
+  ./deploy.sh db-key           암호화 키 보기
+  ./deploy.sh autoupdate [HH:MM]  운영체제 보안 패치 자동 설치 (재부팅 시각, 기본 04:30)
+  ./deploy.sh autoupdate status | off
   ./deploy.sh restore <파일>   백업 파일로 되돌리기
   ./deploy.sh demo             샘플 데이터 넣기 (처음 둘러볼 때만)
   ./deploy.sh doctor           접속이 안 될 때 원인 진단
