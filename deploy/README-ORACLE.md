@@ -242,6 +242,19 @@ chmod 600 ~/Downloads/ssh-key-*.key          # 윈도우는 이 줄 생략
 ssh -i ~/Downloads/ssh-key-*.key ubuntu@<공용IP>
 ```
 
+#### SSH 접속이 안 될 때
+
+| 오류 메시지 | 원인과 해결 |
+| --- | --- |
+| `Could not resolve hostname ubuntu` | `@` 앞뒤가 끊겨 사용자명만 전달된 경우입니다. `@` 를 쓰지 않는 형태로 바꾸세요.<br>`ssh -i .\키파일.key -l ubuntu <공용IP>` |
+| `UNPROTECTED PRIVATE KEY FILE` / `Permissions are too open` | 키 파일 권한이 열려 있습니다. 위의 `chmod 600`(macOS·리눅스) 또는 `icacls`(윈도우) 명령을 먼저 실행하세요 |
+| `No such file or directory` | 키 파일 경로가 틀렸습니다. `dir *.key` (윈도우) / `ls ~/Downloads/*.key` 로 실제 파일명을 확인하세요 |
+| `Connection timed out` | 오라클 콘솔의 수신 규칙에 SSH(22번)가 없거나, 공인 IP 가 잘못된 경우입니다 |
+| `Permission denied (publickey)` | 키가 이 인스턴스의 것이 아니거나, 사용자명이 틀렸습니다. Ubuntu 이미지의 기본 사용자명은 `ubuntu` 입니다 |
+
+> 윈도우 PowerShell 에서 오류 메시지의 한글이 `\276\313...` 처럼 깨져 보이는 것은
+> 인코딩 문제일 뿐 접속과는 무관합니다. 앞쪽의 영어 부분을 읽으시면 됩니다.
+
 접속되면 아래를 그대로 붙여넣습니다.
 
 ```bash
