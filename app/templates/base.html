@@ -38,7 +38,7 @@
         {% if current_user %}
           <span><strong>{{ current_user.name }}</strong> 님</span>
           <span class="badge {{ current_user.role }}">{{ current_user.role_label }}</span>
-          <a href="/me/password" class="btn small">비밀번호 변경</a>
+          <a href="/me/security" class="btn small">보안 설정</a>
           <form method="post" action="/logout" class="inline-form">
             <button type="submit" class="btn small">로그아웃</button>
           </form>

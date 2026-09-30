@@ -47,6 +47,14 @@ def pending_columns(engine: Engine) -> list[tuple[str, Column]]:
     return missing
 
 
+def _fixed_default(column: Column):
+    """모델에 정해진 고정 기본값. 함수로 만드는 값(현재 시각 등)은 대상이 아니다."""
+    default = column.default
+    if default is None or getattr(default, "is_callable", False):
+        return None
+    return getattr(default, "arg", None)
+
+
 def apply_pending_migrations(engine: Engine) -> list[str]:
     """빠진 컬럼을 추가하고, 적용한 내용을 문자열 목록으로 돌려준다."""
     applied: list[str] = []
@@ -57,8 +65,21 @@ def apply_pending_migrations(engine: Engine) -> list[str]:
         if ddl is None:
             skipped.append(f"{table_name}.{column.name}")
             continue
+
         with engine.begin() as connection:
             connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
+
+            # 컬럼을 덧붙이면 기존 행은 빈 값(NULL)이 된다.
+            # 모델에 기본값이 정해져 있으면 그 값으로 채워, 새로 만든 행과 같게 맞춘다.
+            # (안 맞춰 두면 "꺼짐"을 찾는 조건 검색에서 기존 행이 빠진다)
+            fill = _fixed_default(column)
+            if fill is not None:
+                connection.execute(
+                    text(f"UPDATE {table_name} SET {column.name} = :value"
+                         f" WHERE {column.name} IS NULL"),
+                    {"value": fill},
+                )
+
         applied.append(f"{table_name}.{column.name}")
 
     if applied:

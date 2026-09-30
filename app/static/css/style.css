@@ -385,3 +385,27 @@ body[data-label="l"] .label-qr svg { width: 26mm; height: 26mm; }
   color: var(--text-muted);
   pointer-events: none;
 }
+
+/* --- 복구 코드 --------------------------------------------------------------- */
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 16px 0;
+}
+.recovery-code {
+  font-family: "D2Coding", Consolas, monospace;
+  font-size: 15px;
+  letter-spacing: 1px;
+  text-align: center;
+  padding: 10px 6px;
+  background: #f7f9fc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  user-select: all;
+}
+@media print {
+  .recovery-codes { grid-template-columns: repeat(2, 1fr); }
+  .form-actions, .sidebar, .topbar { display: none !important; }
+}

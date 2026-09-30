@@ -40,3 +40,9 @@ HEALTH_PATH = "/healthz"
 
 # 라벨 인쇄 한 번에 담을 최대 자산 수 (너무 많으면 브라우저가 느려진다)
 MAX_LABELS_PER_PRINT = int(os.getenv("ITAM_MAX_LABELS", "200"))
+
+# --- 로그인 보호 ---------------------------------------------------------------
+# 비밀번호를 이 횟수만큼 틀리면 계정을 잠시 잠근다 (무차별 대입 차단)
+MAX_FAILED_LOGINS = int(os.getenv("ITAM_MAX_FAILED_LOGINS", "5"))
+# 잠기는 시간(초). 기본 10분.
+LOGIN_LOCK_SECONDS = int(os.getenv("ITAM_LOGIN_LOCK_SECONDS", "600"))

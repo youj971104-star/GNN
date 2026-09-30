@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block page_title %}2단계 인증 켜기{% endblock %}
+{% block content %}
+
+<div class="breadcrumb"><a href="/me/security">보안 설정</a> / 2단계 인증 켜기</div>
+
+<div class="card" style="max-width:760px;">
+  <h2>인증 앱에 등록하기</h2>
+  <div class="card-body">
+
+    <p style="margin-top:0;"><strong>1단계.</strong> 휴대폰에 인증 앱이 없다면 먼저 설치하세요.</p>
+    <p class="muted" style="font-size:13px; margin-top:-6px;">
+      Google Authenticator · Microsoft Authenticator · 1Password 등 아무거나 괜찮습니다.
+    </p>
+
+    <p style="margin-top:18px;"><strong>2단계.</strong> 인증 앱으로 아래 QR 을 찍으세요.</p>
+
+    <div class="qr-box" style="margin:12px 0 18px;">
+      {{ qr_svg | safe }}
+      <div class="qr-help">
+        QR 을 찍을 수 없다면 앱에서 <strong>직접 입력</strong>을 고르고 아래 키를 넣으세요.
+        <div style="margin-top:8px;"><code class="mono" style="font-size:13px; user-select:all;">{{ secret }}</code></div>
+        <div style="margin-top:8px;">계정 이름은 <code>{{ current_user.username }}</code> 로 표시됩니다.</div>
+      </div>
+    </div>
+
+    <p><strong>3단계.</strong> 앱에 나타난 6자리 코드를 입력해 등록을 마칩니다.</p>
+
+    <form method="post" action="/me/security/2fa" class="filter-form" style="margin-top:8px;">
+      <div class="field">
+        <label for="code">인증 코드</label>
+        <input type="text" id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" placeholder="000000"
+               style="font-size:18px; letter-spacing:3px; text-align:center; max-width:160px;"
+               autofocus required>
+      </div>
+      <div class="field">
+        <button type="submit" class="btn primary">등록 완료</button>
+      </div>
+      <div class="field">
+        <a href="/me/security" class="btn">취소</a>
+      </div>
+    </form>
+
+    <div class="alert info" style="margin:20px 0 0;">
+      등록을 마치면 <strong>복구 코드</strong>가 한 번만 표시됩니다.
+      휴대폰을 잃어버렸을 때 들어올 수 있는 유일한 방법이니 꼭 따로 보관하세요.
+    </div>
+  </div>
+</div>
+
+{% endblock %}

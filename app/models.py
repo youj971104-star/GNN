@@ -98,6 +98,16 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # 2단계 인증. 계정마다 켜고 끌 수 있다.
+    totp_secret: Mapped[str | None] = mapped_column(String(64))
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 폰을 잃어버렸을 때 쓰는 일회용 복구 코드 (해시해서 보관)
+    recovery_codes: Mapped[str | None] = mapped_column(Text)
+
+    # 무차별 대입을 막기 위한 로그인 실패 기록
+    failed_logins: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     @property
     def is_admin(self) -> bool:
         return self.role == "ADMIN"
@@ -105,6 +115,25 @@ class User(Base):
     @property
     def role_label(self) -> str:
         return ROLES.get(self.role, self.role)
+
+    def is_locked(self, now: datetime | None = None) -> bool:
+        """로그인 실패가 쌓여 잠긴 상태인지."""
+        if self.locked_until is None:
+            return False
+        now = now or utcnow()
+        # DB 에서 읽어온 값에는 시간대 정보가 없을 수 있어 맞춰 준다
+        until = self.locked_until
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return until > now
+
+    def lock_seconds_left(self, now: datetime | None = None) -> int:
+        if not self.is_locked(now):
+            return 0
+        until = self.locked_until
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return max(0, int((until - (now or utcnow())).total_seconds()))
 
 
 class Employee(Base):

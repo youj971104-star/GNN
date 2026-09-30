@@ -109,3 +109,70 @@ def test_없는_테이블은_건너뛴다(tmp_path):
         conn.execute(text("CREATE TABLE dummy (id INTEGER PRIMARY KEY)"))
 
     assert pending_columns(engine) == []
+
+
+OLD_USERS_SCHEMA = """
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  username VARCHAR(50) UNIQUE,
+  password_hash VARCHAR(255),
+  name VARCHAR(50),
+  role VARCHAR(20),
+  is_active BOOLEAN,
+  created_at DATETIME NOT NULL,
+  last_login_at DATETIME
+);
+"""
+
+
+def _old_users_database(tmp_path):
+    """2단계 인증 컬럼이 없던 시절의 users 테이블."""
+    path = tmp_path / "old_users.db"
+    con = sqlite3.connect(path)
+    con.executescript(OLD_USERS_SCHEMA)
+    con.execute(
+        "INSERT INTO users (username, password_hash, name, role, is_active, created_at)"
+        " VALUES (?,?,?,?,?,?)",
+        ("admin", "x", "기존관리자", "ADMIN", 1, "2026-01-01 00:00:00"),
+    )
+    con.commit()
+    con.close()
+    return create_engine(f"sqlite:///{path}")
+
+
+def test_컬럼을_덧붙일_때_기존_행에_기본값을_채운다(tmp_path):
+    """빈 값으로 두면 '꺼짐'을 찾는 조건 검색에서 기존 행이 빠진다."""
+    engine = _old_users_database(tmp_path)
+    apply_pending_migrations(engine)
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT totp_enabled, failed_logins, totp_secret FROM users")
+        ).one()
+
+    assert row.totp_enabled == 0        # False 로 채워진다 (NULL 이 아니다)
+    assert row.failed_logins == 0
+    assert row.totp_secret is None      # 기본값이 없는 컬럼은 비워 둔다
+
+    # 조건 검색에 제대로 걸리는지
+    with engine.connect() as conn:
+        found = conn.execute(
+            text("SELECT COUNT(*) FROM users WHERE totp_enabled = 0")
+        ).scalar()
+    assert found == 1
+
+
+def test_기존_계정은_2단계_인증이_꺼진_채로_이어진다(tmp_path):
+    """이미 쓰던 계정이 갑자기 로그인 못 하게 되면 안 된다."""
+    engine = _old_users_database(tmp_path)
+    apply_pending_migrations(engine)
+
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT username, name, role, totp_enabled FROM users")
+        ).one()
+
+    assert row.username == "admin"
+    assert row.name == "기존관리자"
+    assert row.role == "ADMIN"
+    assert not row.totp_enabled
