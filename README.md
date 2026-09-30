@@ -255,17 +255,31 @@ git pull
 ./deploy.sh update
 ```
 
-### 나중에 사내 도메인 + HTTPS 로 바꾸려면
+### 도메인 + HTTPS 로 바꾸기 (비용 0원)
 
-지금은 `http://<서버IP>:8000` 으로 쓰다가, 도메인과 인증서가 준비되면
-**애플리케이션 코드 수정 없이** 전환할 수 있습니다.
-인증서를 `deploy/certs/` 에 넣고, `.env` 의 `ITAM_HTTPS_ONLY=1` 로 바꾼 뒤:
+`http://<서버IP>:8000` 을 `https://itam.회사.co.kr` 처럼 바꿀 수 있습니다.
+**애플리케이션 코드 수정 없이**, 무료로 됩니다.
 
-```bash
-docker compose --profile https up -d
-```
+1. **도메인** — 회사 도메인이 있으면 서브도메인 하나를 추가하면 됩니다(무료).
+   없으면 [DuckDNS](https://www.duckdns.org) 에서 `이름.duckdns.org` 를 무료로 받습니다.
 
-자세한 절차는 [`deploy/README-HTTPS.md`](deploy/README-HTTPS.md) 를 참고하세요.
+   ```bash
+   ./deploy.sh duckdns ourcompany 받은토큰   # DuckDNS 를 쓸 때만
+   ```
+
+2. **오라클 콘솔에서 80 · 443 포트 열기** (8000 을 열었던 그 자리)
+
+3. **전환**
+
+   ```bash
+   ./deploy.sh https itam.회사.co.kr 담당자@회사.com
+   ```
+
+Let's Encrypt 무료 인증서를 받아 적용하고, 90일마다 자동으로 갱신합니다.
+**이미 붙여 둔 QR 라벨은 그대로 동작합니다** — 예전 주소로 들어와도 새 주소로 넘겨줍니다.
+되돌리려면 `./deploy.sh https-off`.
+
+자세한 절차와 문제 해결은 [`deploy/README-HTTPS.md`](deploy/README-HTTPS.md) 를 참고하세요.
 
 ---
 
@@ -403,6 +417,8 @@ export ITAM_DATABASE_URL="postgresql+psycopg://itam:비밀번호@db-host:5432/it
 | `ITAM_SHORT_SESSION_MAX_AGE` | `43200` (12시간) | 로그인 화면에서 `공용 PC` 를 체크했을 때의 유지 시간(초) |
 | `ITAM_MAX_UPLOAD_BYTES` | `10485760` (10MB) | 엑셀 업로드 최대 크기 |
 | `ITAM_HTTPS_ONLY` | `0` | `1` 이면 세션 쿠키를 HTTPS 로만 전송 (도메인+HTTPS 전환 시) |
+| `ITAM_DOMAIN` | (없음) | HTTPS 로 전환하면 기록됩니다. 이 값이 있으면 배포 명령이 HTTPS 설정을 함께 씁니다 |
+| `ITAM_DUCKDNS_NAME` / `ITAM_DUCKDNS_TOKEN` | (없음) | DuckDNS 무료 주소를 쓸 때의 이름과 토큰 |
 | `ITAM_MAX_FAILED_LOGINS` | `5` | 이 횟수만큼 틀리면 계정을 잠급니다 |
 | `ITAM_LOGIN_LOCK_SECONDS` | `600` | 계정이 잠기는 시간(초) |
 | `ITAM_WORKERS` | `2` | 워커 프로세스 수 (Docker 실행 시) |
@@ -447,6 +463,7 @@ Dockerfile         운영용 이미지 정의
 docker-compose.yml 서비스 실행 설정 (+ HTTPS 프로파일)
 docker/            컨테이너 시작 스크립트
 deploy/            오라클 클라우드 설치 스크립트·안내, Nginx 설정, HTTPS 전환 안내
+docker-compose.https.yml  도메인+HTTPS 로 쓸 때 함께 적용되는 설정
 ```
 
 ## 테스트

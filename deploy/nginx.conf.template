@@ -1,0 +1,91 @@
+# 이 파일은 './deploy.sh https <도메인>' 이 deploy/nginx.conf 로 만들어 주는 틀입니다.
+# 틀 안의 도메인 자리표시자는 실제 도메인으로 바뀝니다. 직접 고칠 일은 없습니다.
+#
+# 사설 CA 인증서를 직접 넣어 쓰려면 deploy/nginx.conf.example 을 쓰세요.
+
+# ── 80 번: 인증서 확인 경로만 열어 두고 나머지는 HTTPS 로 넘긴다 ──
+server {
+    listen 80;
+    server_name @@DOMAIN@@;
+
+    # Let's Encrypt 가 '이 서버가 그 도메인이 맞는지' 확인하러 오는 경로.
+    # 인증서를 자동으로 갱신하려면 이 경로만은 HTTP 로 열려 있어야 한다.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://@@DOMAIN@@$request_uri;
+    }
+}
+
+# ── 80 번(도메인이 아닌 IP 로 들어온 경우) ──
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://@@DOMAIN@@$request_uri;
+    }
+}
+
+# ── 8000 번: 예전에 인쇄한 QR 라벨이 가리키는 포트 ──
+# 라벨에는 http://<서버IP>:8000/a/<자산번호> 가 박혀 있다. 라벨을 다시 찍지
+# 않아도 되도록, 같은 경로 그대로 HTTPS 주소로 넘겨준다.
+server {
+    listen 8000;
+    server_name _;
+
+    location / {
+        return 301 https://@@DOMAIN@@$request_uri;
+    }
+}
+
+# ── 443 번: 실제 서비스 ──
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    server_name @@DOMAIN@@;
+
+    ssl_certificate     /etc/letsencrypt/live/@@DOMAIN@@/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/@@DOMAIN@@/privkey.pem;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # 폰 카메라로 QR 을 찍는 데 필요한 값은 없지만, 사이트 안 스캐너(카메라)를
+    # 쓰려면 HTTPS 여야 한다. 그래서 이 설정이 필요하다.
+
+    # 엑셀 업로드가 막히지 않도록 넉넉히 잡는다 (앱 기본 제한은 10MB)
+    client_max_body_size 20m;
+
+    access_log /var/log/nginx/itam-access.log;
+    error_log  /var/log/nginx/itam-error.log;
+
+    # 인증서 갱신 확인 경로 (80 번이 막힌 환경을 대비해 여기도 열어 둔다)
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        proxy_pass http://app:8000;
+        proxy_http_version 1.1;
+
+        # 앱이 실제 접속자 IP 와 https 여부를 알 수 있게 넘겨준다.
+        # (컨테이너는 --proxy-headers 옵션으로 이 값들을 신뢰하도록 실행된다)
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # 엑셀 다운로드가 큰 경우를 대비해 여유를 준다
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+}

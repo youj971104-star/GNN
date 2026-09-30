@@ -11,6 +11,9 @@
 #   ./deploy.sh backup    데이터베이스 백업
 #   ./deploy.sh restore <파일>   백업 파일로 되돌리기
 #   ./deploy.sh demo      샘플 데이터 넣기 (처음 둘러볼 때만)
+#   ./deploy.sh https <도메인> [이메일]   무료 인증서로 HTTPS 전환
+#   ./deploy.sh https-off                 HTTP 로 되돌리기
+#   ./deploy.sh duckdns <이름> <토큰>     DuckDNS 주소가 늘 이 서버를 가리키게
 
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -29,6 +32,23 @@ else
     echo "[오류] Docker Compose 를 찾을 수 없습니다. Docker 를 먼저 설치해 주세요."
     echo "       설치 안내: https://docs.docker.com/engine/install/"
     exit 1
+fi
+
+# .env 에 적어 둔 값 하나를 읽는다 (따옴표는 벗겨 준다)
+env_value() {
+    [ -f "$ENV_FILE" ] || return 0
+    grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d "\"'"
+}
+
+# HTTPS 로 전환했다면 도메인, 아니면 빈 값
+DOMAIN="$(env_value ITAM_DOMAIN || true)"
+
+# HTTPS 설정을 뺀 기본 명령 (되돌릴 때와 버전 확인에 쓴다)
+DC_BASE="$DC"
+
+# 전환한 뒤에는 start/stop/update 등 모든 명령이 HTTPS 설정을 함께 써야 한다
+if [ -n "${DOMAIN:-}" ]; then
+    DC="$DC -f docker-compose.yml -f docker-compose.https.yml --profile https"
 fi
 
 info()  { echo "  $*"; }
@@ -196,6 +216,11 @@ ENVEOF
 
 cmd_start() {
     require_env
+    if [ -n "${DOMAIN:-}" ] && [ ! -f deploy/nginx.conf ]; then
+        fail "HTTPS 설정 파일(deploy/nginx.conf)이 없습니다."
+        info "다시 만들려면:  ./deploy.sh https ${DOMAIN}"
+        exit 1
+    fi
     mkdir -p backups
     info "이미지를 준비하고 서비스를 시작합니다..."
     $DC up -d --build
@@ -236,7 +261,7 @@ cmd_stop() {
     ok "서비스를 중지했습니다. (자산 데이터는 그대로 보존됩니다)"
 }
 
-cmd_restart() { require_env; $DC restart "$SERVICE"; ok "재시작했습니다."; }
+cmd_restart() { require_env; $DC restart "$SERVICE"; reload_nginx; ok "재시작했습니다."; }
 
 # 예전 버전에서 만든 .env 를 새 설정에 맞춰 손봐 준다.
 # 이 값이 예전 기본값(12시간) 그대로면, 폰에서 QR 을 찍을 때마다 로그인하게 된다.
@@ -256,7 +281,15 @@ cmd_update() {
     migrate_env
     info "최신 코드로 다시 빌드합니다..."
     $DC up -d --build
+    reload_nginx
     ok "업데이트를 마쳤습니다."
+}
+
+# app 컨테이너를 새로 만들면 주소가 바뀌어, Nginx 가 예전 주소를 붙들고 502 를 낸다.
+# HTTPS 로 쓰는 중일 때만 설정을 다시 읽게 한다.
+reload_nginx() {
+    [ -z "${DOMAIN:-}" ] && return 0
+    $DC exec -T nginx nginx -s reload >/dev/null 2>&1 || true
 }
 
 cmd_logs()   { $DC logs -f --tail=100 "$SERVICE"; }
@@ -265,7 +298,13 @@ cmd_status() {
     $DC ps
     echo ""
     local port; port=$(grep -E '^ITAM_PUBLIC_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo 8000)
-    if curl -fsS "http://127.0.0.1:${port:-8000}/healthz" >/dev/null 2>&1; then
+    if [ -n "${DOMAIN:-}" ]; then
+        if curl -fsS --max-time 10 "https://${DOMAIN}/healthz" >/dev/null 2>&1; then
+            ok "서비스 정상 (https://${DOMAIN})"
+        else
+            fail "HTTPS 주소에 응답이 없습니다. './deploy.sh logs' 로 확인해 주세요."
+        fi
+    elif curl -fsS "http://127.0.0.1:${port:-8000}/healthz" >/dev/null 2>&1; then
         local public_ip; public_ip=$(cloud_public_ip)
         ok "서비스 정상 (http://${public_ip:-$(guess_host_ip)}:${port:-8000})"
     else
@@ -449,6 +488,262 @@ cmd_doctor() {
     echo ""
 }
 
+# ─────────────────────────────────────────────────────────────
+#  도메인 + HTTPS (Let's Encrypt 무료 인증서)
+# ─────────────────────────────────────────────────────────────
+
+CERT_DIR="deploy/certs"
+WEBROOT="deploy/certbot-webroot"
+CERTBOT_IMAGE="certbot/certbot:latest"
+
+# certbot 컨테이너가 인증서 폴더를 root 소유로 만든다.
+# 지우거나 손볼 때도 컨테이너 안에서 root 로 해야 sudo 가 필요 없다.
+certbot_run() {
+    docker run --rm \
+        -v "$PWD/${CERT_DIR}:/etc/letsencrypt" \
+        -v "$PWD/${WEBROOT}:/var/www/certbot" \
+        "$CERTBOT_IMAGE" "$@"
+}
+
+certbot_shell() {
+    docker run --rm --entrypoint sh \
+        -v "$PWD/${CERT_DIR}:/etc/letsencrypt" \
+        -v "$PWD/${WEBROOT}:/var/www/certbot" \
+        "$CERTBOT_IMAGE" -c "$1"
+}
+
+# 이 서버 방화벽에 포트를 연다 (오라클 콘솔의 수신 규칙은 따로 열어야 한다)
+open_firewall_port() {
+    local port="$1" sudo_cmd=""
+    [ "$(id -u)" -ne 0 ] && sudo_cmd="sudo"
+
+    if command -v firewall-cmd >/dev/null 2>&1 && $sudo_cmd firewall-cmd --state >/dev/null 2>&1; then
+        $sudo_cmd firewall-cmd --permanent --add-port="${port}/tcp" >/dev/null
+        $sudo_cmd firewall-cmd --reload >/dev/null
+        ok "방화벽에 ${port}/tcp 를 열었습니다"
+    elif command -v iptables >/dev/null 2>&1; then
+        # 검사(-C)와 추가(-I)의 규칙 내용이 완전히 같아야 중복해서 쌓이지 않는다
+        local rule=(-p tcp --dport "$port" -m state --state NEW,ESTABLISHED -j ACCEPT)
+        if $sudo_cmd iptables -C INPUT "${rule[@]}" 2>/dev/null; then
+            info "방화벽에 ${port} 번이 이미 열려 있습니다"
+        else
+            $sudo_cmd iptables -I INPUT 1 "${rule[@]}"
+            ok "방화벽에 ${port}/tcp 를 열었습니다"
+        fi
+        if command -v netfilter-persistent >/dev/null 2>&1; then
+            $sudo_cmd netfilter-persistent save >/dev/null 2>&1 || true
+        elif [ -d /etc/iptables ]; then
+            $sudo_cmd sh -c "iptables-save > /etc/iptables/rules.v4" 2>/dev/null || true
+        fi
+    else
+        info "방화벽 도구를 찾지 못했습니다. ${port} 번이 열려 있는지 직접 확인해 주세요."
+    fi
+}
+
+# .env 값 하나를 더하거나 고친다
+set_env_value() {
+    local key="$1" value="$2"
+    if grep -qE "^${key}=" "$ENV_FILE"; then
+        sed -i.bak "s|^${key}=.*|${key}=${value}|" "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
+    else
+        printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+    fi
+}
+
+# compose 가 !override 를 이해하는지 (2.24 이상)
+require_compose_version() {
+    local version
+    version=$($DC_BASE version --short 2>/dev/null | tr -d 'v' || echo "")
+    [ -z "$version" ] && return 0
+
+    local major minor
+    major=${version%%.*}
+    minor=$(echo "$version" | cut -d. -f2)
+    if [ "${major:-0}" -gt 2 ] || { [ "${major:-0}" -eq 2 ] && [ "${minor:-0}" -ge 24 ]; }; then
+        return 0
+    fi
+
+    fail "Docker Compose 가 너무 오래된 버전입니다 (현재 ${version}, 2.24 이상 필요)"
+    info "다음 명령으로 올린 뒤 다시 실행해 주세요:"
+    info "  curl -fsSL https://get.docker.com | sudo sh"
+    exit 1
+}
+
+cmd_https() {
+    require_env
+    local domain="${1:-}" email="${2:-}"
+
+    if [ -z "$domain" ]; then
+        fail "도메인을 지정해 주세요.  예)  ./deploy.sh https itam.example.duckdns.org 담당자@회사.com"
+        exit 1
+    fi
+    if ! echo "$domain" | grep -qE '^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$'; then
+        fail "도메인 형식이 올바르지 않습니다: $domain"
+        exit 1
+    fi
+    require_compose_version
+
+    echo ""
+    info "도메인      : $domain"
+    info "인증서      : Let's Encrypt (무료, 90일마다 자동 갱신)"
+    echo ""
+
+    # ── 1. 도메인이 이 서버를 가리키는지 ──
+    local resolved public
+    resolved=$(getent hosts "$domain" 2>/dev/null | awk '{print $1}' | head -1 || true)
+    public=$(cloud_public_ip || true)
+    if [ -z "$resolved" ]; then
+        fail "도메인 '$domain' 이 아직 어떤 IP 도 가리키지 않습니다."
+        info "DNS 에 이 서버 주소(${public:-<서버 공인IP>})를 등록한 뒤 다시 실행해 주세요."
+        info "DuckDNS 를 쓴다면: ./deploy.sh duckdns <이름> <토큰>"
+        exit 1
+    fi
+    if [ -n "$public" ] && [ "$resolved" != "$public" ]; then
+        fail "도메인이 다른 곳을 가리키고 있습니다."
+        info "  $domain → $resolved"
+        info "  이 서버   → $public"
+        info "DNS 를 고치고 몇 분 기다린 뒤 다시 실행해 주세요."
+        exit 1
+    fi
+    ok "도메인이 이 서버(${resolved})를 가리킵니다"
+
+    # ── 2. 80 / 443 열기 ──
+    open_firewall_port 80
+    open_firewall_port 443
+
+    # ── 3. 설정 기록과 Nginx 설정 만들기 ──
+    mkdir -p "$CERT_DIR" "$WEBROOT/.well-known/acme-challenge"
+    sed "s|@@DOMAIN@@|${domain}|g" deploy/nginx.conf.template > deploy/nginx.conf
+    set_env_value ITAM_DOMAIN "$domain"
+    set_env_value ITAM_HTTPS_ONLY 1
+    ok "Nginx 설정을 만들었습니다 (deploy/nginx.conf)"
+
+    # Nginx 는 인증서 파일이 없으면 아예 뜨지 않는다.
+    # 먼저 임시 인증서를 만들어 띄운 뒤, 그 위에서 진짜 인증서를 받는다.
+    if [ ! -s "${CERT_DIR}/live/${domain}/fullchain.pem" ]; then
+        certbot_shell "mkdir -p /etc/letsencrypt/live/${domain} && \
+            openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout /etc/letsencrypt/live/${domain}/privkey.pem \
+            -out /etc/letsencrypt/live/${domain}/fullchain.pem \
+            -subj '/CN=${domain}' >/dev/null 2>&1"
+        info "임시 인증서를 만들었습니다 (곧 진짜 인증서로 바뀝니다)"
+    fi
+
+    local DC_HTTPS="$DC_BASE -f docker-compose.yml -f docker-compose.https.yml --profile https"
+
+    info "서비스를 HTTPS 구성으로 다시 시작합니다..."
+    $DC_HTTPS up -d --build
+    sleep 5
+
+    # ── 4. 80 번이 바깥에서 실제로 열렸는지 먼저 확인한다 ──
+    # 여기서 막혀 있으면 인증서 발급이 실패하고, 실패 횟수 제한에 걸린다.
+    local probe="itam-$(date +%s)"
+    echo "$probe" > "${WEBROOT}/.well-known/acme-challenge/${probe}"
+    if ! curl -fsS --max-time 15 "http://${domain}/.well-known/acme-challenge/${probe}" 2>/dev/null | grep -q "$probe"; then
+        rm -f "${WEBROOT}/.well-known/acme-challenge/${probe}"
+        echo ""
+        fail "바깥에서 80 번 포트로 들어올 수 없습니다. 인증서를 받을 수 없습니다."
+        echo ""
+        info "오라클 클라우드 콘솔에서 수신 규칙을 추가해 주세요:"
+        info "  네트워킹 > 가상 클라우드 네트워크 > 서브넷 > 보안 목록 > 수신 규칙 추가"
+        info "  소스 0.0.0.0/0 · 대상 포트 80"
+        info "  같은 방법으로 443 번도 열어 주세요."
+        echo ""
+        info "열고 나서 다시 실행하시면 이어서 진행됩니다:  ./deploy.sh https $domain $email"
+        exit 1
+    fi
+    rm -f "${WEBROOT}/.well-known/acme-challenge/${probe}"
+    ok "바깥에서 80 번으로 들어올 수 있습니다"
+
+    # ── 5. 진짜 인증서 받기 ──
+    # 임시 인증서를 지워야 certbot 이 새로 발급한다
+    certbot_shell "rm -rf /etc/letsencrypt/live/${domain} /etc/letsencrypt/archive/${domain} \
+        /etc/letsencrypt/renewal/${domain}.conf"
+
+    local email_args=(--register-unsafely-without-email)
+    [ -n "$email" ] && email_args=(--email "$email")
+    local staging_args=()
+    [ "${ITAM_LE_STAGING:-0}" = "1" ] && staging_args=(--staging)
+
+    info "Let's Encrypt 인증서를 받는 중..."
+    if ! certbot_run certonly --webroot -w /var/www/certbot \
+            -d "$domain" "${email_args[@]}" ${staging_args[@]+"${staging_args[@]}"} \
+            --agree-tos --no-eff-email --non-interactive; then
+        echo ""
+        fail "인증서 발급에 실패했습니다. 위 메시지를 확인해 주세요."
+        info "같은 도메인으로 짧은 시간에 여러 번 실패하면 한 시간쯤 기다려야 합니다."
+        info "서비스는 임시 인증서로 계속 떠 있습니다 (브라우저 경고가 뜹니다)."
+        exit 1
+    fi
+
+    $DC_HTTPS exec -T nginx nginx -s reload >/dev/null 2>&1 || $DC_HTTPS restart nginx >/dev/null
+    sleep 3
+
+    # ── 6. 확인 ──
+    echo ""
+    if curl -fsS --max-time 15 "https://${domain}/healthz" >/dev/null 2>&1; then
+        ok "HTTPS 로 접속됩니다"
+    else
+        fail "아직 HTTPS 응답이 없습니다. './deploy.sh logs' 로 확인해 주세요."
+    fi
+
+    echo ""
+    echo "  ──────────────────────────────────────────────"
+    echo "     접속 주소 : https://${domain}"
+    echo "  ──────────────────────────────────────────────"
+    info "인증서는 90일마다 자동으로 갱신됩니다 (certbot 컨테이너)."
+    info "예전 주소(http://<서버IP>:$(env_value ITAM_PUBLIC_PORT || echo 8000))로 들어와도 이 주소로 넘어갑니다."
+    info "이미 붙여 둔 QR 라벨도 그대로 쓸 수 있습니다."
+    info "쿠키가 HTTPS 전용으로 바뀌므로 한 번은 다시 로그인해야 합니다."
+    echo ""
+}
+
+cmd_https_off() {
+    require_env
+    local domain; domain="$(env_value ITAM_DOMAIN || true)"
+    if [ -z "$domain" ]; then
+        info "HTTPS 로 전환된 상태가 아닙니다."
+        exit 0
+    fi
+
+    info "HTTP 로 되돌립니다..."
+    $DC down
+    set_env_value ITAM_HTTPS_ONLY 0
+    sed -i.bak '/^ITAM_DOMAIN=/d' "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
+
+    $DC_BASE up -d
+    ok "되돌렸습니다. http://<서버IP>:$(env_value ITAM_PUBLIC_PORT || echo 8000) 로 접속하세요."
+    info "인증서는 ${CERT_DIR} 에 남아 있어, 다시 켤 때 그대로 쓰입니다."
+}
+
+cmd_duckdns() {
+    require_env
+    local name="${1:-}" token="${2:-}"
+    if [ -z "$name" ] || [ -z "$token" ]; then
+        fail "사용법:  ./deploy.sh duckdns <이름> <토큰>"
+        info "https://www.duckdns.org 에 로그인하면 이름과 토큰을 받을 수 있습니다."
+        info "이름이 'ourcompany' 라면 주소는 ourcompany.duckdns.org 가 됩니다."
+        exit 1
+    fi
+
+    set_env_value ITAM_DUCKDNS_NAME "$name"
+    set_env_value ITAM_DUCKDNS_TOKEN "$token"
+    chmod 600 "$ENV_FILE"
+
+    if ! ./deploy/duckdns-update.sh; then
+        fail "DuckDNS 갱신에 실패했습니다. 이름과 토큰을 확인해 주세요."
+        exit 1
+    fi
+
+    # 공인 IP 가 바뀌어도 주소가 따라오도록 5분마다 갱신한다
+    local line="*/5 * * * * cd $PWD && ./deploy/duckdns-update.sh >/dev/null 2>&1"
+    ( crontab -l 2>/dev/null | grep -v 'duckdns-update.sh' ; echo "$line" ) | crontab -
+
+    ok "${name}.duckdns.org 가 이 서버를 가리키도록 설정했습니다 (5분마다 자동 확인)"
+    info "이제 HTTPS 로 전환할 수 있습니다:"
+    info "  ./deploy.sh https ${name}.duckdns.org 담당자@회사.com"
+}
+
 cmd_demo() {
     require_env
     $DC exec -T "$SERVICE" python seed_demo.py
@@ -467,6 +762,9 @@ case "${1:-}" in
     restore) shift; cmd_restore "$@" ;;
     demo)       cmd_demo ;;
     doctor|진단) cmd_doctor ;;
+    https)      shift; cmd_https "$@" ;;
+    https-off)  cmd_https_off ;;
+    duckdns)    shift; cmd_duckdns "$@" ;;
     *)
         cat <<'USAGE'
 IT 자산관리 시스템 배포 도우미
@@ -483,7 +781,13 @@ IT 자산관리 시스템 배포 도우미
   ./deploy.sh demo             샘플 데이터 넣기 (처음 둘러볼 때만)
   ./deploy.sh doctor           접속이 안 될 때 원인 진단
 
+  ── 도메인 + HTTPS (무료) ──
+  ./deploy.sh duckdns <이름> <토큰>     무료 주소(DuckDNS)가 이 서버를 가리키게
+  ./deploy.sh https <도메인> [이메일]   무료 인증서를 받아 HTTPS 로 전환
+  ./deploy.sh https-off                 HTTP 로 되돌리기
+
 처음이라면:  ./deploy.sh setup  →  ./deploy.sh start
+HTTPS 로 바꾸려면 deploy/README-HTTPS.md 를 보세요.
 USAGE
         exit 1
         ;;

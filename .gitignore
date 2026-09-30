@@ -22,6 +22,10 @@ backups/
 deploy/certs/*
 !deploy/certs/.gitkeep
 
+# 서버마다 도메인이 달라 자동 생성한다 ('./deploy.sh https <도메인>')
+deploy/nginx.conf
+deploy/certbot-webroot/
+
 # OS / 에디터
 .DS_Store
 .idea/
