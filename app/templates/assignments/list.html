@@ -77,7 +77,7 @@
             <td class="center">
               {% if item.is_open and current_user.is_admin %}
                 <form method="post" action="/assignments/{{ item.id }}/return" class="inline-form"
-                      onsubmit="return confirm('[{{ item.asset.asset_no }}] 자산을 오늘 날짜로 반납 처리할까요?');">
+                      data-confirm="[{{ item.asset.asset_no }}] 자산을 오늘 날짜로 반납 처리할까요?">
                   <input type="hidden" name="back_url" value="/assignments">
                   <input type="hidden" name="new_status" value="IN_STOCK">
                   <button type="submit" class="btn small">반납</button>

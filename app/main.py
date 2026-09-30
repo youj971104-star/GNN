@@ -29,6 +29,42 @@ from app.security import hash_password
 from app.templating import render
 
 
+# 모든 응답에 붙이는 보안 헤더.
+#
+# CSP(Content-Security-Policy)는 '이 화면은 우리 서버에서 받은 스크립트만
+# 실행한다'고 브라우저에 알려 준다. 값에 섞여 들어온 코드가 실행되는 사고를
+# 한 겹 더 막아 준다. 그래서 화면 안에 자바스크립트를 직접 적지 않고
+# 모두 /static/js 파일로 두었다.
+#
+# style 만 'unsafe-inline' 을 허용한다. 화면 곳곳에서 style="..." 을 쓰기
+# 때문인데, 스타일은 코드 실행으로 이어지지 않는다.
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "; ".join(
+        [
+            "default-src 'self'",
+            "script-src 'self'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data:",
+            "font-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "frame-ancestors 'none'",   # 다른 사이트가 화면을 몰래 끼워 넣지 못하게
+            "form-action 'self'",
+        ]
+    ),
+    # 내려준 파일의 형식을 브라우저가 멋대로 추측하지 않게 한다
+    "X-Content-Type-Options": "nosniff",
+    # 예전 브라우저용 (CSP 의 frame-ancestors 와 같은 목적)
+    "X-Frame-Options": "DENY",
+    # 다른 사이트로 나갈 때 우리 주소를 넘기지 않는다
+    "Referrer-Policy": "same-origin",
+}
+
+# HTTPS 로 쓰는 중이라면, 다음부터는 처음부터 HTTPS 로만 접속하도록 지시한다.
+# 기간을 30일로 둔 것은, HTTP 로 되돌려야 할 때 오래 발이 묶이지 않게 하기 위해서다.
+HSTS_HEADER = ("Strict-Transport-Security", "max-age=2592000")
+
+
 def ensure_default_admin() -> None:
     """관리자 계정이 하나도 없으면 기본 관리자 계정을 만든다.
 
@@ -92,6 +128,15 @@ def create_app() -> FastAPI:
                 if user is not None and user.is_active:
                     request.state.user = user
         return await call_next(request)
+
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        if config.HTTPS_ONLY:
+            response.headers.setdefault(*HSTS_HEADER)
+        return response
 
     app.add_middleware(
         SessionMiddleware,

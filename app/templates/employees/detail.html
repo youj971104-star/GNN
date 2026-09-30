@@ -20,7 +20,7 @@
     <a href="/employees/{{ employee.id }}/edit" class="btn">수정</a>
     <a href="/assignments/new" class="btn primary">자산 지급</a>
     <form method="post" action="/employees/{{ employee.id }}/delete" class="inline-form"
-          onsubmit="return confirm('{{ employee.name }} 님을 삭제할까요?');">
+          data-confirm="{{ employee.name }} 님을 삭제할까요?">
       <button type="submit" class="btn danger">삭제</button>
     </form>
   </div>

@@ -23,44 +23,12 @@
     </div>
 
     <div class="form-actions">
-      <button type="button" class="btn primary" onclick="copyCodes(this)">코드 복사</button>
-      <button type="button" class="btn" onclick="window.print()">인쇄</button>
+      <button type="button" class="btn primary" data-copy-codes>코드 복사</button>
+      <button type="button" class="btn" data-print>인쇄</button>
       <a href="/me/security" class="btn">보관했습니다</a>
     </div>
   </div>
 </div>
 
-<script>
-function copyCodes(button) {
-  var text = Array.prototype.map.call(
-    document.querySelectorAll("#codes .recovery-code"),
-    function (el) { return el.textContent.trim(); }
-  ).join("\n");
-
-  function done() {
-    var original = button.textContent;
-    button.textContent = "복사했습니다";
-    setTimeout(function () { button.textContent = original; }, 1500);
-  }
-
-  // navigator.clipboard 는 HTTPS 에서만 동작하므로, 안 될 때를 대비해 예전 방식도 남긴다
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).then(done).catch(fallback);
-  } else {
-    fallback();
-  }
-
-  function fallback() {
-    var area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    try { document.execCommand("copy"); done(); } catch (e) { alert("복사하지 못했습니다. 직접 선택해 복사해 주세요."); }
-    document.body.removeChild(area);
-  }
-}
-</script>
 
 {% endblock %}

@@ -190,3 +190,20 @@ def test_팝업_스크립트가_서빙된다(admin_client):
     response = admin_client.get("/static/js/quick-employee.js")
     assert response.status_code == 200
     assert "/employees/quick" in response.text
+
+
+def test_화면_제목에_HTML_이_섞이지_않는다(admin_client, db, asset):
+    """팝업을 제목 블록 안에 넣는 실수를 하면, 브라우저 탭 제목에 HTML 이 새어 나온다."""
+    import re
+
+    for path in (f"/assets/{asset.id}", "/assignments/new"):
+        html = admin_client.get(path).text
+        title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
+        assert "<" not in title, f"{path}: {title[:60]}"
+
+
+def test_빠른_등록_팝업은_화면에_하나만_있다(admin_client, db, asset):
+    """두 번 그려지면 자바스크립트가 엉뚱한 쪽을 붙잡는다."""
+    for path in (f"/assets/{asset.id}", "/assignments/new"):
+        html = admin_client.get(path).text
+        assert html.count('id="employee-modal"') == 1, path

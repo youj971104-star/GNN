@@ -40,7 +40,7 @@
           끄면 비밀번호만으로 로그인할 수 있게 됩니다. 인터넷에 열린 서버라면 권하지 않습니다.
         </p>
         <form method="post" action="/me/security/2fa/disable" class="filter-form"
-              onsubmit="return confirm('2단계 인증을 끌까요? 비밀번호만으로 로그인할 수 있게 됩니다.');">
+              data-confirm="2단계 인증을 끌까요? 비밀번호만으로 로그인할 수 있게 됩니다.">
           <div class="field grow">
             <label for="off_password">비밀번호 확인</label>
             <input type="password" id="off_password" name="password" autocomplete="current-password" required>

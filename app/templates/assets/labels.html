@@ -23,11 +23,11 @@
     </ul>
 
     <div class="section-actions">
-      <button type="button" class="btn primary" onclick="window.print()">인쇄하기</button>
+      <button type="button" class="btn primary" data-print>인쇄하기</button>
       <a href="/assets{{ merge_query(request, page=None) }}" class="btn">자산 목록으로</a>
       <span style="margin-left:8px;">
         <label for="size" style="font-size:13px; color:var(--text-muted);">라벨 크기</label>
-        <select id="size" onchange="document.body.dataset.label=this.value">
+        <select id="size" data-label-size>
           <option value="m">보통 (3칸)</option>
           <option value="s">작게 (4칸)</option>
           <option value="l">크게 (2칸)</option>

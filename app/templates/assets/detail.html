@@ -2,9 +2,7 @@
 {% set back_url = '/assets' %}
 {% from "_macros.html" import asset_status %}
 {% set active = 'assets' %}
-{% block page_title %}자산 상세{% include "_employee_modal.html" %}
-
-{% endblock %}
+{% block page_title %}자산 상세{% endblock %}
 {% block content %}
 
 <div class="breadcrumb"><a href="/assets">자산 관리</a> / 상세</div>
@@ -18,7 +16,7 @@
   <div class="section-actions">
     <a href="/assets/{{ asset.id }}/edit" class="btn">수정</a>
     <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-form"
-          onsubmit="return confirm('자산 [{{ asset.asset_no }}] 을(를) 삭제할까요?\n지급 이력도 함께 삭제되며 되돌릴 수 없습니다.');">
+          data-confirm="자산 [{{ asset.asset_no }}] 을(를) 삭제할까요?&#10;지급 이력도 함께 삭제되며 되돌릴 수 없습니다.">
       <button type="submit" class="btn danger">삭제</button>
     </form>
   </div>
@@ -215,7 +213,7 @@
             {% if current_user.is_admin %}
             <td class="center">
               <form method="post" action="/maintenance/{{ item.id }}/delete" class="inline-form"
-                    onsubmit="return confirm('이 정비 이력을 삭제할까요?');">
+                    data-confirm="이 정비 이력을 삭제할까요?">
                 <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
                 <button type="submit" class="btn small danger">삭제</button>
               </form>

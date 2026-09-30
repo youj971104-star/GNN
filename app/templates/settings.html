@@ -88,7 +88,7 @@
       이미 쓰고 있는 번호와 겹치면 다음 빈 번호로 넘어갑니다.
     </p>
     <form method="post" action="/settings/reset" style="margin-top:14px;"
-          onsubmit="return confirm('직접 정한 형식을 지우고 기존 번호를 따라가도록 되돌릴까요?');">
+          data-confirm="직접 정한 형식을 지우고 기존 번호를 따라가도록 되돌릴까요?">
       <button type="submit" class="btn">기본값으로 되돌리기</button>
     </form>
   </div>
