@@ -124,6 +124,8 @@
         addAndSelect(data);
         closeModal();
         Object.keys(input).forEach(function (key) { input[key].value = ""; });
+        // 이어서 또 등록할 수 있게 다음 사번을 미리 채워 둔다
+        if (data.next_emp_no) input.emp_no.value = data.next_emp_no;
       })
       .catch(function (error) {
         show(error.message || "등록 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");

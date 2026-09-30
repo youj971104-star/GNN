@@ -25,7 +25,11 @@
       <div class="form-grid">
         <div class="field">
           <label for="qe_emp_no">사번<span class="req">*</span></label>
-          <input type="text" id="qe_emp_no" name="emp_no" maxlength="30" autocomplete="off">
+          <input type="text" id="qe_emp_no" name="emp_no" maxlength="30" autocomplete="off"
+                 value="{{ modal_next_emp_no or '' }}">
+          {% if modal_next_emp_no %}
+            <div class="hint">자동으로 매겨진 번호입니다. 고쳐도 됩니다.</div>
+          {% endif %}
         </div>
         <div class="field">
           <label for="qe_name">이름<span class="req">*</span></label>

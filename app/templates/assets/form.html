@@ -34,7 +34,11 @@
             <div class="hint">자산번호는 변경할 수 없습니다.</div>
           {% else %}
             <input type="text" id="asset_no" name="asset_no" value="{{ val('asset_no') }}" required maxlength="50">
-            <div class="hint">사내 자산 라벨과 동일하게 입력하세요. 예: IT-2026-0001</div>
+            {% if auto_numbered %}
+              <div class="hint">기존 번호 다음으로 자동으로 매겨졌습니다. 필요하면 고쳐도 됩니다.</div>
+            {% else %}
+              <div class="hint">사내 자산 라벨과 동일하게 입력하세요.</div>
+            {% endif %}
           {% endif %}
         </div>
         <div class="field">

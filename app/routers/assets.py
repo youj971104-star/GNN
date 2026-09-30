@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app import config, excel, forms, labels
+from app import config, excel, forms, labels, numbering
 from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import (
     ASSET_CATEGORIES,
@@ -109,22 +109,6 @@ def _read_asset_form(data: dict, *, asset_no_required: bool = True) -> dict:
     return values
 
 
-def _next_asset_no(db: DbSession) -> str:
-    """IT-2026-0001 형태의 다음 자산번호를 추천한다."""
-    prefix = f"IT-{date.today().year}-"
-    last = db.scalar(
-        select(Asset.asset_no)
-        .where(Asset.asset_no.like(f"{prefix}%"))
-        .order_by(Asset.asset_no.desc())
-        .limit(1)
-    )
-    seq = 1
-    if last:
-        tail = last[len(prefix):]
-        if tail.isdigit():
-            seq = int(tail) + 1
-    return f"{prefix}{seq:04d}"
-
 
 # --- 목록 / 상세 ---------------------------------------------------------------
 
@@ -146,12 +130,19 @@ def list_assets(request: Request, db: DbSession, user: CurrentUser, page: int = 
 
 @router.get("/new")
 def new_asset_form(request: Request, db: DbSession, user: AdminUser):
+    suggested = numbering.next_asset_no(db)
     return render(
         request,
         "assets/form.html",
         {
             "asset": None,
-            "form": {"asset_no": _next_asset_no(db), "status": "IN_STOCK", "category": "NOTEBOOK"},
+            # 자동 채번이 꺼져 있으면 비워 두고 직접 입력받는다
+            "form": {
+                "asset_no": suggested or "",
+                "status": "IN_STOCK",
+                "category": "NOTEBOOK",
+            },
+            "auto_numbered": suggested is not None,
             "default_useful_life": DEFAULT_USEFUL_LIFE,
         },
     )
@@ -284,8 +275,9 @@ def asset_detail(request: Request, db: DbSession, user: CurrentUser, asset_id: i
             "maintenances": maintenances,
             "current": open_assignment(db, asset.id),
             "employees": _employee_choices(db),
-            # 직원 빠른 등록 팝업의 부서 자동완성 목록
+            # 직원 빠른 등록 팝업에 쓰는 값
             "modal_departments": departments(db),
+            "modal_next_emp_no": numbering.next_employee_no(db),
             "qr_svg": labels.qr_svg(base + labels.short_path(asset.asset_no), box_size=3),
             "qr_target": base + labels.short_path(asset.asset_no),
         },

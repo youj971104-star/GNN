@@ -381,3 +381,15 @@ class Maintenance(Base):
         if self.next_due is None:
             return None
         return (self.next_due - (today or date.today())).days
+
+
+class Setting(Base):
+    """화면에서 바꿀 수 있는 설정값 (키-값 한 쌍)."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow
+    )

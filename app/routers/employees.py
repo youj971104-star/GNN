@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
-from app import config, excel, forms
+from app import config, excel, forms, numbering
 from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import EMPLOYEE_STATUSES, Asset, Assignment, Employee
 from app.routers.assets import _xlsx_response
@@ -87,8 +87,18 @@ def list_employees(request: Request, db: DbSession, user: CurrentUser, page: int
 
 
 @router.get("/new")
-def new_employee_form(request: Request, user: AdminUser):
-    return render(request, "employees/form.html", {"employee": None, "form": {"status": "ACTIVE"}})
+def new_employee_form(request: Request, db: DbSession, user: AdminUser):
+    suggested = numbering.next_employee_no(db)
+    return render(
+        request,
+        "employees/form.html",
+        {
+            "employee": None,
+            # 자동 채번이 꺼져 있으면 비워 두고 직접 입력받는다
+            "form": {"status": "ACTIVE", "emp_no": suggested or ""},
+            "auto_numbered": suggested is not None,
+        },
+    )
 
 
 @router.post("/new")
@@ -157,6 +167,8 @@ async def quick_create_employee(request: Request, db: DbSession, user: AdminUser
             "ok": True,
             "id": employee.id,
             "label": label,
+            # 이어서 또 등록할 때 쓰도록 다음 번호를 함께 준다
+            "next_emp_no": numbering.next_employee_no(db) or "",
             # 드롭다운 검색이 쓰는 값
             "search": " ".join(
                 filter(None, [employee.name, employee.emp_no,

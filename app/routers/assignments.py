@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app import excel, forms
+from app import excel, forms, numbering
 from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import ASSET_STATUSES, Asset, Assignment, Employee
 from app.routers.assets import _xlsx_response
@@ -95,8 +95,9 @@ def assign_form(request: Request, db: DbSession, user: AdminUser, asset_id: int 
             "assets": assets,
             "employees": employees,
             "selected_asset_id": asset_id,
-            # 직원 빠른 등록 팝업의 부서 자동완성 목록
+            # 직원 빠른 등록 팝업에 쓰는 값
             "modal_departments": departments(db),
+            "modal_next_emp_no": numbering.next_employee_no(db),
         },
     )
 

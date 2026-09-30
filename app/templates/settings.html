@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% set back_url = '/' %}
+{% set active = 'settings' %}
+{% block page_title %}채번 설정{% endblock %}
+{% block content %}
+
+{% macro rule_box(field, title, rule, preview, example) %}
+<div class="card">
+  <h2>{{ title }}</h2>
+  <div class="card-body">
+
+    <div class="field checkbox-field" style="margin-bottom:14px;">
+      <input type="checkbox" id="{{ field }}_auto" name="{{ field }}_auto" {{ 'checked' if rule.auto }}>
+      <label for="{{ field }}_auto" style="margin:0;">자동으로 채번하기</label>
+    </div>
+    <div class="hint" style="margin:-8px 0 16px 26px;">
+      끄면 등록할 때 번호를 직접 입력해야 합니다.
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="{{ field }}_prefix">접두사</label>
+        <input type="text" id="{{ field }}_prefix" name="{{ field }}_prefix"
+               value="{{ rule.prefix }}" maxlength="30" placeholder="(기존 번호를 따라감)">
+        <div class="hint">예: <code>{{ example }}</code> · 비워 두면 기존 번호에서 읽어옵니다.</div>
+      </div>
+      <div class="field">
+        <label for="{{ field }}_padding">숫자 자릿수</label>
+        <input type="number" id="{{ field }}_padding" name="{{ field }}_padding"
+               value="{{ rule.padding }}" min="1" max="{{ max_padding }}">
+        <div class="hint">4 로 두면 <code>0001</code> 처럼 채워집니다.</div>
+      </div>
+    </div>
+
+    <div class="alert info" style="margin:16px 0 0;">
+      {% if preview %}
+        다음에 등록하면 <strong class="mono">{{ preview }}</strong> 이(가) 매겨집니다.
+      {% else %}
+        자동 채번이 꺼져 있어 등록할 때 직접 입력합니다.
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+<div class="page-head">
+  <div class="muted">
+    자산번호와 사번을 <strong>기존에 쓰던 번호 다음으로</strong> 자동으로 매깁니다.
+    형식을 따로 정하고 싶을 때만 아래에서 바꾸세요.
+  </div>
+</div>
+
+<form method="post" action="/settings">
+  <div class="two-col">
+    {{ rule_box('asset', '자산번호', asset_rule, next_asset_no, 'IT-2026-') }}
+    {{ rule_box('employee', '사번', employee_rule, next_employee_no, 'E') }}
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="section-actions">
+        <button type="submit" class="btn primary">저장</button>
+        <a href="/" class="btn">취소</a>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="card">
+  <h2>기본 동작</h2>
+  <div class="card-body">
+    <p style="margin-top:0;">
+      아무것도 설정하지 않으면 <strong>이미 등록된 번호에서 규칙을 읽어 그다음 번호</strong>를 씁니다.
+      회사마다 번호 체계가 달라서, 형식을 미리 정해 두면 오히려 맞지 않기 때문입니다.
+    </p>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>기존 번호</th><th>다음에 매겨지는 번호</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">0121</td><td class="mono">0122</td></tr>
+          <tr><td class="mono">E0103</td><td class="mono">E0104</td></tr>
+          <tr><td class="mono">IT-2026-0015</td><td class="mono">IT-2026-0016</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="font-size:13px; margin-bottom:0;">
+      등록 화면에서 번호 칸은 자동으로 채워지되, 필요하면 직접 고쳐서 등록할 수 있습니다.
+      이미 쓰고 있는 번호와 겹치면 다음 빈 번호로 넘어갑니다.
+    </p>
+    <form method="post" action="/settings/reset" style="margin-top:14px;"
+          onsubmit="return confirm('직접 정한 형식을 지우고 기존 번호를 따라가도록 되돌릴까요?');">
+      <button type="submit" class="btn">기본값으로 되돌리기</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

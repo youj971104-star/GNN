@@ -21,7 +21,11 @@
           <input type="text" id="emp_no" name="emp_no"
                  value="{{ val('emp_no') if form is not none or not editing else employee.emp_no }}"
                  required maxlength="30">
-          {% if editing %}<div class="hint">바꾸면 이 직원의 사번이 갱신됩니다. 다른 직원과 겹칠 수 없습니다.</div>{% endif %}
+          {% if editing %}
+            <div class="hint">바꾸면 이 직원의 사번이 갱신됩니다. 다른 직원과 겹칠 수 없습니다.</div>
+          {% elif auto_numbered %}
+            <div class="hint">기존 사번 다음으로 자동으로 매겨졌습니다. 필요하면 고쳐도 됩니다.</div>
+          {% endif %}
         </div>
         <div class="field">
           <label for="name">이름<span class="req">*</span></label>
