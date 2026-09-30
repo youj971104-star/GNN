@@ -312,6 +312,34 @@ cmd_status() {
     fi
 }
 
+# 백업은 쌓이기만 하면 디스크를 채운다. 최근 것만 남긴다.
+BACKUP_KEEP_DEFAULT=30
+
+prune_backups() {
+    local keep total removed=0
+    keep=$(env_value ITAM_BACKUP_KEEP || true)
+    keep="${keep:-$BACKUP_KEEP_DEFAULT}"
+    case "$keep" in
+        ''|*[!0-9]*) keep=$BACKUP_KEEP_DEFAULT ;;
+    esac
+    if [ "$keep" -lt 1 ]; then
+        keep=1
+    fi
+
+    total=$(ls -1t backups/itam-*.db 2>/dev/null | wc -l)
+    if [ "$total" -le "$keep" ]; then
+        return 0
+    fi
+
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        rm -f "$file"
+        removed=$((removed + 1))
+    done < <(ls -1t backups/itam-*.db 2>/dev/null | tail -n +$((keep + 1)))
+
+    info "오래된 백업 ${removed}개를 정리했습니다 (최근 ${keep}개 보관)"
+}
+
 cmd_backup() {
     mkdir -p backups
     local name="itam-$(date '+%Y%m%d-%H%M%S').db"
@@ -323,7 +351,48 @@ cmd_backup() {
     $DC exec -T "$SERVICE" rm -f "/data/backups/${name}"
 
     ok "백업 완료: backups/${name}  ($(du -h "backups/${name}" | cut -f1))"
-    info "보관 중인 백업: $(ls -1 backups/*.db 2>/dev/null | wc -l)개"
+    prune_backups
+    info "보관 중인 백업: $(ls -1 backups/itam-*.db 2>/dev/null | wc -l)개"
+}
+
+cmd_autobackup() {
+    require_env
+
+    if [ "${1:-}" = "off" ]; then
+        if remove_cron_line "deploy.sh backup"; then
+            ok "자동 백업을 껐습니다."
+        else
+            fail "crontab 을 찾지 못했습니다."
+        fi
+        return 0
+    fi
+
+    # 기본 새벽 3시 17분. 정각은 다른 작업과 겹치기 쉬워 조금 비켜 둔다.
+    local when="${1:-03:17}" hour minute
+    if ! echo "$when" | grep -qE '^[0-2][0-9]:[0-5][0-9]$'; then
+        fail "시각은 HH:MM 형식으로 넣어 주세요.  예)  ./deploy.sh autobackup 03:17"
+        exit 1
+    fi
+    hour=${when%%:*}
+    minute=${when##*:}
+    if [ "$((10#$hour))" -gt 23 ]; then
+        fail "시각이 올바르지 않습니다: $when"
+        exit 1
+    fi
+
+    mkdir -p backups
+    if ! install_cron_line "deploy.sh backup" \
+        "$((10#$minute)) $((10#$hour)) * * * cd $PWD && ./deploy.sh backup >> backups/backup.log 2>&1"; then
+        fail "crontab 을 찾지 못해 자동 백업을 등록하지 못했습니다."
+        info "대신 './deploy.sh backup' 을 주기적으로 직접 실행해 주세요."
+        exit 1
+    fi
+
+    local keep; keep=$(env_value ITAM_BACKUP_KEEP || true)
+    ok "매일 ${when} 에 자동으로 백업합니다 (최근 ${keep:-$BACKUP_KEEP_DEFAULT}개 보관)"
+    info "기록: backups/backup.log · 끄려면 ./deploy.sh autobackup off"
+    info "백업 파일은 이 서버 안에 있습니다. 가끔 다른 곳으로도 내려받아 두세요:"
+    info "  scp -i <키파일> ubuntu@<서버IP>:$PWD/backups/*.db ."
 }
 
 cmd_restore() {
@@ -540,6 +609,31 @@ open_firewall_port() {
     fi
 }
 
+# 크론에 줄 하나를 넣는다. 같은 표시(marker)가 붙은 예전 줄은 지우고 새로 넣어,
+# 여러 번 실행해도 줄이 쌓이지 않는다.
+#
+# grep 은 걸러낼 줄이 하나도 없으면 실패로 끝난다. || true 를 빼면 크론이 비어
+# 있는 서버에서 등록이 조용히 건너뛰어진다.
+install_cron_line() {
+    local marker="$1" line="$2"
+    if ! command -v crontab >/dev/null 2>&1; then
+        return 1
+    fi
+    local current
+    current=$(crontab -l 2>/dev/null | grep -v "$marker" || true)
+    printf '%s\n%s\n' "$current" "$line" | grep -v '^$' | crontab -
+}
+
+remove_cron_line() {
+    local marker="$1"
+    if ! command -v crontab >/dev/null 2>&1; then
+        return 1
+    fi
+    local current
+    current=$(crontab -l 2>/dev/null | grep -v "$marker" || true)
+    printf '%s\n' "$current" | grep -v '^$' | crontab - 2>/dev/null || crontab -r 2>/dev/null || true
+}
+
 # .env 값 하나를 더하거나 고친다
 set_env_value() {
     local key="$1" value="$2"
@@ -735,13 +829,9 @@ cmd_duckdns() {
         exit 1
     fi
 
-    # 공인 IP 가 바뀌어도 주소가 따라오도록 5분마다 갱신한다.
-    # grep 은 걸러낼 줄이 하나도 없으면 실패로 끝나므로 || true 가 필요하다.
-    # 없으면 크론 등록이 조용히 건너뛰어진다.
-    if command -v crontab >/dev/null 2>&1; then
-        local line="*/5 * * * * cd $PWD && ./deploy/duckdns-update.sh >/dev/null 2>&1"
-        local current; current=$(crontab -l 2>/dev/null | grep -v 'duckdns-update.sh' || true)
-        printf '%s\n%s\n' "$current" "$line" | grep -v '^$' | crontab -
+    # 공인 IP 가 바뀌어도 주소가 따라오도록 5분마다 갱신한다
+    if install_cron_line "duckdns-update.sh" \
+        "*/5 * * * * cd $PWD && ./deploy/duckdns-update.sh >/dev/null 2>&1"; then
         ok "5분마다 주소를 자동으로 맞춥니다 (crontab 등록 완료)"
     else
         info "crontab 을 찾지 못해 자동 갱신은 등록하지 못했습니다."
@@ -768,6 +858,7 @@ case "${1:-}" in
     logs)       cmd_logs ;;
     status|ps)  cmd_status ;;
     backup)     cmd_backup ;;
+    autobackup) shift; cmd_autobackup "$@" ;;
     restore) shift; cmd_restore "$@" ;;
     demo)       cmd_demo ;;
     doctor|진단) cmd_doctor ;;
@@ -785,7 +876,8 @@ IT 자산관리 시스템 배포 도우미
   ./deploy.sh update           최신 코드로 다시 빌드하고 재시작
   ./deploy.sh logs             실행 로그 보기
   ./deploy.sh status           상태 확인
-  ./deploy.sh backup           데이터베이스 백업
+  ./deploy.sh backup           데이터베이스 백업 (지금 한 번)
+  ./deploy.sh autobackup [HH:MM]  매일 자동 백업 (기본 03:17, 끄기: autobackup off)
   ./deploy.sh restore <파일>   백업 파일로 되돌리기
   ./deploy.sh demo             샘플 데이터 넣기 (처음 둘러볼 때만)
   ./deploy.sh doctor           접속이 안 될 때 원인 진단

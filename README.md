@@ -224,11 +224,21 @@ cd GNN
 | 사내망 밖(집·외부)에서 접속하고 싶다 | 사내 VPN 을 통해 접속하거나, 사내 정책에 따라 별도 공개 설정이 필요합니다. 보안상 그냥 외부에 열어두는 것은 권장하지 않습니다. |
 | **폰으로 QR 을 찍을 때마다 새 창이 열리고 로그인해야 한다** | ① 예전 버전은 로그인을 12시간만 유지했습니다. `./deploy.sh update` 를 실행하면 `.env` 의 값을 30일로 올려 줍니다.<br>② 카카오톡·네이버 앱 안에서 찍으면 앱 전용 브라우저가 열리고 로그인이 저장되지 않습니다. **폰 기본 카메라 앱**으로 찍으세요.<br>③ 로그인 화면에서 `공용 PC 입니다` 를 체크하면 12시간만 유지되니, 본인 폰에서는 체크하지 마세요. |
 
-### 데이터는 어디에 있나요
+### 데이터는 어디에 있나요 · 서버를 껐다 켜면?
 
 자산·직원·이력 데이터는 `itam-data` 라는 **Docker 볼륨**에 저장됩니다.
-`./deploy.sh stop`, `docker compose down`, 컨테이너 삭제·재생성, 이미지 재빌드 어느 경우에도
-데이터는 그대로 남습니다.
+컨테이너 안이 아니라 서버 디스크에 따로 있으므로,
+`./deploy.sh stop`, `docker compose down`, 컨테이너 삭제·재생성, 이미지 재빌드,
+`./deploy.sh update` 어느 경우에도 데이터는 그대로 남습니다.
+
+| 상황 | 데이터 |
+| --- | --- |
+| `./deploy.sh stop` → `start` | 그대로 |
+| `./deploy.sh update` (코드 업데이트) | 그대로 |
+| 서버 재부팅 | 그대로. 서비스도 자동으로 다시 뜹니다(`restart: unless-stopped`) |
+| 갑작스러운 전원 차단 | 그대로. 저장이 끝난 내용은 디스크에 바로 기록됩니다(SQLite WAL + `synchronous=FULL`) |
+| `docker compose down -v` ← **주의** | 볼륨을 지우는 명령이라 **데이터가 사라집니다.** 쓰지 마세요 |
+| 디스크 고장·서버 분실 | 백업 파일이 있어야 복구됩니다 (아래) |
 
 ### 백업
 
@@ -240,11 +250,22 @@ cd GNN
 서비스를 멈추지 않고 안전하게 스냅샷을 뜹니다(SQLite 온라인 백업 API).
 파일 하나가 곧 전체 데이터이므로, 이 파일만 사내 파일서버나 백업 스토리지에 보관하면 됩니다.
 
-**매일 새벽 3시 자동 백업**을 걸고 싶다면 서버의 crontab 에 다음 한 줄을 추가하세요.
+**매일 자동 백업**은 명령 한 줄로 걸립니다.
 
-```cron
-0 3 * * * cd /opt/itam && ./deploy.sh backup >> /var/log/itam-backup.log 2>&1
+```bash
+./deploy.sh autobackup          # 매일 03:17 (시각을 정하려면: ./deploy.sh autobackup 02:30)
+./deploy.sh autobackup off      # 끄기
 ```
+
+오래된 백업은 자동으로 정리되어 **최근 30개**만 남습니다
+(`.env` 의 `ITAM_BACKUP_KEEP` 으로 조절). 기록은 `backups/backup.log` 에 쌓입니다.
+
+> 백업 파일도 같은 서버 안에 있습니다. 디스크가 고장 나면 함께 사라지므로,
+> 가끔 다른 곳으로 내려받아 두세요.
+>
+> ```bash
+> scp -i <키파일> ubuntu@<서버IP>:~/GNN/backups/*.db .
+> ```
 
 되돌릴 때는 백업 파일을 지정합니다. 실행 전에 확인 절차가 있고,
 되돌리기 직전의 상태도 자동으로 백업해 둡니다.
@@ -424,6 +445,7 @@ export ITAM_DATABASE_URL="postgresql+psycopg://itam:비밀번호@db-host:5432/it
 | `ITAM_HTTPS_ONLY` | `0` | `1` 이면 세션 쿠키를 HTTPS 로만 전송 (도메인+HTTPS 전환 시) |
 | `ITAM_DOMAIN` | (없음) | HTTPS 로 전환하면 기록됩니다. 이 값이 있으면 배포 명령이 HTTPS 설정을 함께 씁니다 |
 | `ITAM_DUCKDNS_NAME` / `ITAM_DUCKDNS_TOKEN` | (없음) | DuckDNS 무료 주소를 쓸 때의 이름과 토큰 |
+| `ITAM_BACKUP_KEEP` | `30` | 보관할 백업 파일 개수. 넘으면 오래된 것부터 지웁니다 |
 | `ITAM_MAX_FAILED_LOGINS` | `5` | 이 횟수만큼 틀리면 계정을 잠급니다 |
 | `ITAM_LOGIN_LOCK_SECONDS` | `600` | 계정이 잠기는 시간(초) |
 | `ITAM_WORKERS` | `2` | 워커 프로세스 수 (Docker 실행 시) |
