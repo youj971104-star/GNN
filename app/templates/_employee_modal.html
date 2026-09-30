@@ -1,0 +1,64 @@
+{#
+  자산 지급 화면에서 쓰는 '직원 빠른 등록' 팝업.
+
+  지급하려는데 그 직원이 아직 명부에 없을 때, 화면을 벗어나지 않고 바로 등록한다.
+  등록하면 옆의 직원 드롭다운에 추가되고 그대로 선택된다.
+
+  이 팝업은 자바스크립트로 동작한다. 꺼져 있으면 '직원 관리'에서 등록하면 된다.
+#}
+<div class="modal" id="employee-modal" hidden aria-hidden="true">
+  <div class="modal-backdrop" data-close-modal></div>
+
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="employee-modal-title">
+    <div class="modal-head">
+      <h2 id="employee-modal-title">직원 빠른 등록</h2>
+      <button type="button" class="modal-close" data-close-modal aria-label="닫기">×</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="muted" style="margin-top:0; font-size:13px;">
+        명부에 없는 직원을 여기서 바로 등록합니다. 등록하면 아래 지급 대상에 자동으로 선택됩니다.
+      </p>
+
+      <div class="alert error" id="employee-modal-error" hidden></div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="qe_emp_no">사번<span class="req">*</span></label>
+          <input type="text" id="qe_emp_no" name="emp_no" maxlength="30" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="qe_name">이름<span class="req">*</span></label>
+          <input type="text" id="qe_name" name="name" maxlength="50" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="qe_department">부서</label>
+          <input type="text" id="qe_department" name="department" maxlength="50"
+                 list="known-departments" autocomplete="off" placeholder="예: 개발팀">
+          <datalist id="known-departments">
+            {% for dept in modal_departments or [] %}<option value="{{ dept }}"></option>{% endfor %}
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="qe_position">직급</label>
+          <input type="text" id="qe_position" name="position" maxlength="50" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="qe_email">이메일</label>
+          <input type="email" id="qe_email" name="email" maxlength="120" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="qe_phone">연락처</label>
+          <input type="text" id="qe_phone" name="phone" maxlength="30" autocomplete="off"
+                 placeholder="010-0000-0000">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-foot">
+      <button type="button" class="btn primary" id="employee-modal-submit">등록하고 선택</button>
+      <button type="button" class="btn" data-close-modal>취소</button>
+      <a href="/employees/new" class="btn" style="margin-left:auto;">전체 항목 입력하기</a>
+    </div>
+  </div>
+</div>

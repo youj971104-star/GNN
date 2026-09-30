@@ -3,7 +3,7 @@
 from datetime import date
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -124,6 +124,46 @@ async def create_employee(request: Request, db: DbSession, user: AdminUser):
 def export_employees(request: Request, db: DbSession, user: CurrentUser):
     employees = list(db.scalars(_base_query(request).options(selectinload(Employee.assets))).all())
     return _xlsx_response(excel.export_employees(employees), f"직원목록_{date.today():%Y%m%d}.xlsx")
+
+
+@router.post("/quick")
+async def quick_create_employee(request: Request, db: DbSession, user: AdminUser):
+    """자산 지급 화면의 팝업에서 직원을 바로 등록한다.
+
+    화면 이동 없이 처리해야 해서 HTML 대신 JSON 으로 답한다.
+    등록 규칙은 일반 등록 화면과 같은 함수를 쓰므로 검증이 어긋나지 않는다.
+    """
+    data = dict(await request.form())
+    try:
+        values = _read_employee_form(data)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    if db.scalar(select(Employee).where(Employee.emp_no == values["emp_no"])):
+        return JSONResponse(
+            {"ok": False, "error": f"사번 '{values['emp_no']}'는 이미 등록되어 있습니다."},
+            status_code=400,
+        )
+
+    employee = Employee(**values)
+    db.add(employee)
+    db.commit()
+    db.refresh(employee)
+
+    label = f"{employee.name} ({employee.emp_no}"
+    label += f" · {employee.department})" if employee.department else ")"
+    return JSONResponse(
+        {
+            "ok": True,
+            "id": employee.id,
+            "label": label,
+            # 드롭다운 검색이 쓰는 값
+            "search": " ".join(
+                filter(None, [employee.name, employee.emp_no,
+                              employee.department, employee.position])
+            ),
+        }
+    )
 
 
 @router.get("/template")

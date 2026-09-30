@@ -409,3 +409,47 @@ body[data-label="l"] .label-qr svg { width: 26mm; height: 26mm; }
   .recovery-codes { grid-template-columns: repeat(2, 1fr); }
   .form-actions, .sidebar, .topbar { display: none !important; }
 }
+
+/* --- 뒤로 가기 --------------------------------------------------------------- */
+
+.topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.back-btn { padding: 5px 12px; font-size: 13px; flex: 0 0 auto; }
+.back-btn span { margin-right: 2px; }
+
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; gap: 8px; }
+  .topbar-left { width: 100%; }
+}
+
+/* --- 팝업(모달) -------------------------------------------------------------- */
+
+.modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.modal[hidden] { display: none; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(31, 39, 51, .45); }
+
+.modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .25);
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.modal-head h2 { margin: 0; font-size: 16px; }
+.modal-close {
+  border: none; background: none; cursor: pointer;
+  font-size: 24px; line-height: 1; color: var(--text-muted); padding: 0 4px;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 20px; }
+.modal-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding: 14px 20px; border-top: 1px solid var(--border); background: #f9fbfe;
+  border-radius: 0 0 10px 10px; flex-wrap: wrap;
+}

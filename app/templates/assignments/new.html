@@ -1,6 +1,9 @@
 {% extends "base.html" %}
+{% set back_url = '/assignments' %}
 {% set active = 'assignments' %}
-{% block page_title %}자산 지급{% endblock %}
+{% block page_title %}자산 지급{% include "_employee_modal.html" %}
+
+{% endblock %}
 {% block content %}
 
 <div class="breadcrumb"><a href="/assignments">지급 / 반납 이력</a> / 자산 지급</div>
@@ -27,7 +30,11 @@
           <div class="hint">지급 가능한(재고·수리중, 미지급) 자산만 표시됩니다.</div>
         </div>
         <div class="field full">
-          <label for="employee_id">지급받을 직원<span class="req">*</span></label>
+          <label for="employee_id">
+            지급받을 직원<span class="req">*</span>
+            <a href="/employees/new" data-open-employee-modal
+               style="font-weight:400; font-size:12px; margin-left:6px;">+ 직원이 없나요?</a>
+          </label>
           <select id="employee_id" name="employee_id" required
                   data-searchable="이름, 사번, 부서로 검색">
             <option value="">직원을 선택하세요</option>
@@ -59,5 +66,7 @@
     {% endif %}
   </div>
 </div>
+
+{% include "_employee_modal.html" %}
 
 {% endblock %}

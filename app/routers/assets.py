@@ -284,6 +284,8 @@ def asset_detail(request: Request, db: DbSession, user: CurrentUser, asset_id: i
             "maintenances": maintenances,
             "current": open_assignment(db, asset.id),
             "employees": _employee_choices(db),
+            # 직원 빠른 등록 팝업의 부서 자동완성 목록
+            "modal_departments": departments(db),
             "qr_svg": labels.qr_svg(base + labels.short_path(asset.asset_no), box_size=3),
             "qr_target": base + labels.short_path(asset.asset_no),
         },

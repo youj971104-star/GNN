@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set back_url = ('/assets/' ~ asset.id) if asset else '/assets' %}
 {% set active = 'assets' %}
 {% set editing = asset is not none %}
 {# form 이 있으면 방금 입력한 값(오류 재표시), 없으면 DB 값을 보여준다 #}

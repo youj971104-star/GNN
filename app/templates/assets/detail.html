@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% set back_url = '/assets' %}
 {% from "_macros.html" import asset_status %}
 {% set active = 'assets' %}
-{% block page_title %}자산 상세{% endblock %}
+{% block page_title %}자산 상세{% include "_employee_modal.html" %}
+
+{% endblock %}
 {% block content %}
 
 <div class="breadcrumb"><a href="/assets">자산 관리</a> / 상세</div>
@@ -144,7 +147,13 @@
         <input type="hidden" name="asset_id" value="{{ asset.id }}">
         <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
         <div class="field grow">
-          <label for="employee_id">지급 대상</label>
+          <label for="employee_id">
+            지급 대상
+            {# 명부에 없는 직원이면 여기서 바로 등록한다.
+               자바스크립트가 꺼져 있으면 직원 등록 화면으로 가는 평범한 링크가 된다. #}
+            <a href="/employees/new" data-open-employee-modal
+               style="font-weight:400; font-size:12px; margin-left:6px;">+ 직원이 없나요?</a>
+          </label>
           <select id="employee_id" name="employee_id" required
                   data-searchable="이름, 사번, 부서로 검색">
             <option value="">직원을 선택하세요</option>
@@ -302,5 +311,7 @@
     {% endif %}
   </div>
 </div>
+
+{% include "_employee_modal.html" %}
 
 {% endblock %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set back_url = ('/employees/' ~ employee.id) if employee else '/employees' %}
 {% set active = 'employees' %}
 {% set editing = employee is not none %}
 {% macro val(field) %}

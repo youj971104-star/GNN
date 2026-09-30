@@ -33,7 +33,16 @@
 
   <div class="main">
     <header class="topbar">
-      <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+      <div class="topbar-left">
+        {% if back_url %}
+          {# 브라우저 기록이 있으면 그쪽을 쓴다. 목록에서 걸어둔 검색 조건이 유지된다.
+             기록이 없거나 다른 사이트에서 왔으면 href 의 상위 화면으로 간다. #}
+          <a href="{{ back_url }}" class="btn back-btn" data-back title="이전 화면으로">
+            <span aria-hidden="true">←</span> 뒤로
+          </a>
+        {% endif %}
+        <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+      </div>
       <div class="user-box">
         {% if current_user %}
           <span><strong>{{ current_user.name }}</strong> 님</span>
@@ -55,6 +64,8 @@
     </main>
   </div>
 </div>
+<script src="/static/js/back-button.js" defer></script>
 <script src="/static/js/searchable-select.js" defer></script>
+<script src="/static/js/quick-employee.js" defer></script>
 </body>
 </html>

@@ -86,10 +86,18 @@ def assign_form(request: Request, db: DbSession, user: AdminUser, asset_id: int 
     employees = list(
         db.scalars(select(Employee).where(Employee.status != "RESIGNED").order_by(Employee.name)).all()
     )
+    from app.services import departments
+
     return render(
         request,
         "assignments/new.html",
-        {"assets": assets, "employees": employees, "selected_asset_id": asset_id},
+        {
+            "assets": assets,
+            "employees": employees,
+            "selected_asset_id": asset_id,
+            # 직원 빠른 등록 팝업의 부서 자동완성 목록
+            "modal_departments": departments(db),
+        },
     )
 
 
