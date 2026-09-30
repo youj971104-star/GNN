@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session
 from app.models import (
     ASSET_CATEGORIES,
     ASSET_STATUSES,
+    DEPRECIATION_METHODS,
     EMPLOYEE_STATUSES,
     Asset,
     Assignment,
     Employee,
+    Maintenance,
 )
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3B63")
@@ -43,6 +45,10 @@ ASSET_COLUMNS: list[tuple[str, str, int]] = [
     ("license_key", "라이선스키", 24),
     ("holder_emp_no", "사용자 사번", 14),
     ("holder_name", "사용자명", 12),
+    ("depreciation_method", "상각방법", 12),
+    ("useful_life_years", "내용연수", 10),
+    ("salvage_value", "잔존가치", 12),
+    ("book_value", "장부가액", 14),
     ("note", "비고", 30),
 ]
 
@@ -51,6 +57,7 @@ REQUIRED_UPLOAD_HEADERS = ("자산번호", "자산명")
 
 _CATEGORY_BY_LABEL = {label: code for code, label in ASSET_CATEGORIES.items()}
 _STATUS_BY_LABEL = {label: code for code, label in ASSET_STATUSES.items()}
+_DEPRECIATION_BY_LABEL = {label: code for code, label in DEPRECIATION_METHODS.items()}
 
 
 # --- 공통 유틸 ----------------------------------------------------------------
@@ -167,6 +174,10 @@ def export_assets(assets: list[Asset]) -> bytes:
                 asset.license_key,
                 asset.holder.emp_no if asset.holder else None,
                 asset.holder.name if asset.holder else None,
+                asset.depreciation_label,
+                asset.useful_life_years,
+                float(asset.salvage_value) if asset.salvage_value is not None else None,
+                asset.book_value(),
                 asset.note,
             ]
         )
@@ -175,6 +186,8 @@ def export_assets(assets: list[Asset]) -> bytes:
         row[10].number_format = "yyyy-mm-dd"  # 도입일
         row[11].number_format = "#,##0"       # 취득가액
         row[12].number_format = "yyyy-mm-dd"  # 보증만료일
+        row[18].number_format = "#,##0"       # 잔존가치
+        row[19].number_format = "#,##0"       # 장부가액
     return _to_bytes(wb)
 
 
@@ -188,7 +201,9 @@ def export_asset_template() -> bytes:
         [
             "IT-2026-0001", "개발팀 노트북", "노트북", "재고", "LG전자", "그램 16",
             "SN-EXAMPLE-001", "i7 / 32GB / 1TB", "본사 3층 창고", "테크상사",
-            "2026-01-15", 2150000, "2029-01-14", "", "", "", "예시 행입니다. 지우고 사용하세요.",
+            "2026-01-15", 2150000, "2029-01-14", "", "", "",
+            "정액법", 4, 0, "",
+            "예시 행입니다. 지우고 사용하세요.",
         ]
     )
 
@@ -208,6 +223,10 @@ def export_asset_template() -> bytes:
         ("취득가액", "숫자만 입력하세요. 쉼표는 넣어도 됩니다."),
         ("사용자 사번", "이미 등록된 직원의 사번을 넣으면 해당 직원에게 지급 처리되고 이력이 남습니다. 비우면 미지급 상태."),
         ("사용자명", "참고용입니다. 지급 대상은 '사용자 사번'으로 판단합니다."),
+        ("상각방법", f"{', '.join(DEPRECIATION_METHODS.values())} 중 하나. 비우면 '사용 안 함'."),
+        ("내용연수", "감가상각 기간(년). 예: 노트북 4, 서버 5"),
+        ("잔존가치", "내용연수가 끝난 뒤 남는 가치. 보통 0 입니다."),
+        ("장부가액", "시스템이 계산해서 내보내는 값입니다. 업로드할 때는 무시됩니다."),
     ]
     for row in rows:
         guide.append(row)
@@ -267,6 +286,37 @@ def export_assignments(assignments: list[Assignment]) -> bytes:
         )
     for row in ws.iter_rows(min_row=2):
         row[6].number_format = "yyyy-mm-dd"
+        row[7].number_format = "yyyy-mm-dd"
+    return _to_bytes(wb)
+
+
+def export_maintenance(items: list[Maintenance]) -> bytes:
+    """정비 이력을 엑셀 파일 바이트로."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "정비이력"
+    headers = [
+        "정비일", "자산번호", "자산명", "종류", "업체",
+        "작업 내용", "비용", "다음 점검일", "처리자",
+    ]
+    _style_header(ws, headers, [12, 16, 24, 12, 16, 40, 14, 12, 12])
+    for item in items:
+        ws.append(
+            [
+                item.maintained_at,
+                item.asset.asset_no,
+                item.asset.name,
+                item.kind_label,
+                item.vendor,
+                item.description,
+                float(item.cost) if item.cost is not None else None,
+                item.next_due,
+                item.created_by,
+            ]
+        )
+    for row in ws.iter_rows(min_row=2):
+        row[0].number_format = "yyyy-mm-dd"
+        row[6].number_format = "#,##0"
         row[7].number_format = "yyyy-mm-dd"
     return _to_bytes(wb)
 
@@ -383,6 +433,15 @@ def import_assets(db: Session, content: bytes, *, actor: str | None = None) -> I
             asset.warranty_until = _cell_date(value_of(row, "보증만료일"), "보증만료일")
             asset.license_key = _cell_text(value_of(row, "라이선스키"))
             asset.note = _cell_text(value_of(row, "비고"))
+
+            # 감가상각. '장부가액'은 시스템이 계산하는 값이라 읽지 않는다.
+            asset.depreciation_method = _cell_code(
+                value_of(row, "상각방법"), DEPRECIATION_METHODS,
+                _DEPRECIATION_BY_LABEL, "상각방법", "NONE",
+            )
+            useful_life = _cell_text(value_of(row, "내용연수"))
+            asset.useful_life_years = int(float(useful_life)) if useful_life else None
+            asset.salvage_value = _cell_money(value_of(row, "잔존가치"), "잔존가치")
 
             holder_emp_no = _cell_text(value_of(row, "사용자 사번"))
             db.flush()  # 신규 자산의 id 를 확보한다

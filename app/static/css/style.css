@@ -303,3 +303,62 @@ input:disabled, select:disabled { background: #f2f4f7; color: var(--text-muted);
   .content { padding: 16px 12px 40px; }
   dl.detail { grid-template-columns: 100px 1fr; }
 }
+
+/* --- QR 라벨 인쇄 ----------------------------------------------------------- */
+
+.label-sheet {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6mm;
+}
+body[data-label="s"] .label-sheet { grid-template-columns: repeat(4, 1fr); }
+body[data-label="l"] .label-sheet { grid-template-columns: repeat(2, 1fr); }
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  border: 1px dashed #c3c9d2;
+  border-radius: 2mm;
+  padding: 3mm;
+  min-height: 22mm;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.label-qr { flex: 0 0 auto; line-height: 0; }
+/* QR 한 칸이 0.5mm 아래로 내려가면 폰 카메라가 잘 못 읽는다.
+   주소 길이상 29칸짜리 QR 이 나오므로 16mm 를 최소로 잡는다. */
+.label-qr svg { width: 20mm; height: 20mm; display: block; }
+body[data-label="s"] .label-qr svg { width: 16mm; height: 16mm; }
+body[data-label="l"] .label-qr svg { width: 26mm; height: 26mm; }
+
+.label-text { min-width: 0; }
+.label-no { font-family: "D2Coding", Consolas, monospace; font-size: 10pt; font-weight: 700; }
+.label-name { font-size: 9pt; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.label-sub { font-size: 8pt; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media print {
+  /* 인쇄할 때는 라벨만 남기고 화면 요소를 모두 숨긴다 */
+  .sidebar, .topbar, .no-print, .alert { display: none !important; }
+  body { background: #fff; }
+  .content { padding: 0; }
+  .label-sheet { border: none; border-radius: 0; padding: 0; gap: 2mm; box-shadow: none; }
+  .label { border: 1px solid #999; }
+  @page { margin: 8mm; }
+}
+
+/* --- 감가상각 표시 ----------------------------------------------------------- */
+
+.depreciation-bar { background: #eef1f6; border-radius: 4px; height: 8px; overflow: hidden; margin-top: 6px; }
+.depreciation-bar > div { background: var(--warn); height: 100%; border-radius: 4px; }
+
+/* --- 자산 상세의 QR 박스 ------------------------------------------------------ */
+
+.qr-box { display: flex; align-items: center; gap: 14px; }
+.qr-box svg { width: 96px; height: 96px; display: block; }
+.qr-box .qr-help { font-size: 12px; color: var(--text-muted); }
+.qr-box .qr-help code { font-size: 11px; word-break: break-all; }

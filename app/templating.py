@@ -67,6 +67,8 @@ templates.env.globals.update(
     ASSIGNABLE_STATUSES=models.ASSIGNABLE_STATUSES,
     RETURN_STATUSES=models.RETURN_STATUSES,
     EMPLOYEE_STATUSES=models.EMPLOYEE_STATUSES,
+    DEPRECIATION_METHODS=models.DEPRECIATION_METHODS,
+    MAINTENANCE_KINDS=models.MAINTENANCE_KINDS,
     ROLES=models.ROLES,
     merge_query=merge_query,
     today=date.today,

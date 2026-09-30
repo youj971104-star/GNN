@@ -47,7 +47,13 @@ def get_db() -> Iterator[Session]:
 
 
 def init_db() -> None:
-    """테이블이 없으면 만든다."""
+    """테이블이 없으면 만들고, 기존 테이블에 빠진 컬럼이 있으면 덧붙인다."""
     from app import models  # noqa: F401  (모델 등록을 위해 임포트한다)
 
     Base.metadata.create_all(bind=engine)
+
+    # 이미 쓰고 있던 DB 에 새 컬럼이 생겼을 때를 위한 처리.
+    # 기존 데이터는 그대로 두고 컬럼만 추가한다.
+    from app.migrations import apply_pending_migrations
+
+    apply_pending_migrations(engine)

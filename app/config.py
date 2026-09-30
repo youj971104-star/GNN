@@ -37,3 +37,6 @@ HTTPS_ONLY = os.getenv("ITAM_HTTPS_ONLY", "0") == "1"
 
 # 컨테이너 헬스체크 등에서 인증 없이 호출하는 상태 확인 경로
 HEALTH_PATH = "/healthz"
+
+# 라벨 인쇄 한 번에 담을 최대 자산 수 (너무 많으면 브라우저가 느려진다)
+MAX_LABELS_PER_PRINT = int(os.getenv("ITAM_MAX_LABELS", "200"))

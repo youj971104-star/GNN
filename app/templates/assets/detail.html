@@ -66,6 +66,46 @@
         <dt>등록일</dt><dd>{{ asset.created_at | datetime }}</dd>
         <dt>최근 수정</dt><dd>{{ asset.updated_at | datetime }}</dd>
       </dl>
+
+      {% if asset.depreciates %}
+      {% set book = asset.book_value() %}
+      <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:baseline;">
+          <strong style="font-size:13px;">감가상각 · {{ asset.depreciation_label }}</strong>
+          <span class="muted" style="font-size:12px;">
+            내용연수 {{ asset.useful_life_years }}년 중 {{ asset.months_in_service() }}개월 경과
+          </span>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:8px;">
+          <span class="muted" style="font-size:13px;">현재 장부가액</span>
+          <strong style="font-size:17px;">{{ book | money }} 원</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-top:2px;">
+          <span class="muted" style="font-size:12px;">누계 상각액</span>
+          <span class="muted" style="font-size:12px;">{{ asset.accumulated_depreciation() | money }} 원</span>
+        </div>
+        <div class="depreciation-bar">
+          <div style="width: {{ asset.depreciation_progress() }}%"></div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>QR 라벨</h2>
+  <div class="card-body">
+    <div class="qr-box">
+      {{ qr_svg | safe }}
+      <div class="qr-help">
+        이 QR 을 출력해 자산에 붙이면, <strong>폰 기본 카메라로 찍는 것만으로</strong>
+        이 화면이 열립니다. 앱을 깔 필요가 없습니다.
+        <div style="margin-top:8px;"><code>{{ qr_target }}</code></div>
+        <div style="margin-top:10px;">
+          <a href="/assets/labels?q={{ asset.asset_no }}" class="btn small">라벨 인쇄 화면</a>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -130,6 +170,99 @@
   </div>
 </div>
 {% endif %}
+
+<div class="card">
+  <div class="card-head">
+    정비 이력 ({{ maintenances | length }}건)
+    <span class="muted" style="font-size:13px; font-weight:400;">
+      누적 비용 {{ asset.maintenance_total_cost | money }} 원
+    </span>
+  </div>
+  <div class="card-body tight">
+    {% if maintenances %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>정비일</th><th class="center">종류</th><th>업체</th><th>작업 내용</th>
+          <th class="num">비용</th><th>다음 점검</th>{% if current_user.is_admin %}<th class="center">관리</th>{% endif %}</tr></thead>
+        <tbody>
+        {% for item in maintenances %}
+          <tr>
+            <td class="nowrap">{{ item.maintained_at | date }}</td>
+            <td class="center"><span class="badge">{{ item.kind_label }}</span></td>
+            <td class="nowrap">{{ item.vendor or '-' }}</td>
+            <td>{{ item.description }}</td>
+            <td class="num nowrap">{{ item.cost | money }}</td>
+            <td class="nowrap">
+              {% if item.next_due %}
+                {% set left = item.days_until_due() %}
+                {{ item.next_due | date }}
+                {% if left is not none and left < 0 %}<span class="badge LOST">지남</span>
+                {% elif left is not none and left <= 30 %}<span class="badge REPAIR">{{ left }}일</span>{% endif %}
+              {% else %}<span class="muted">-</span>{% endif %}
+            </td>
+            {% if current_user.is_admin %}
+            <td class="center">
+              <form method="post" action="/maintenance/{{ item.id }}/delete" class="inline-form"
+                    onsubmit="return confirm('이 정비 이력을 삭제할까요?');">
+                <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
+                <button type="submit" class="btn small danger">삭제</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="empty">정비 이력이 없습니다.</p>
+    {% endif %}
+  </div>
+
+  {% if current_user.is_admin %}
+  <div class="card-body" style="border-top:1px solid var(--border);">
+    <form method="post" action="/maintenance/new" class="filter-form">
+      <input type="hidden" name="asset_id" value="{{ asset.id }}">
+      <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
+      <div class="field">
+        <label for="maintained_at">정비일</label>
+        <input type="date" id="maintained_at" name="maintained_at" value="{{ today() | input_date }}" required>
+      </div>
+      <div class="field">
+        <label for="kind">종류</label>
+        <select id="kind" name="kind">
+          {% for code, label in MAINTENANCE_KINDS.items() %}
+            <option value="{{ code }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="vendor">업체</label>
+        <input type="text" id="vendor" name="vendor" placeholder="예: LG전자 서비스센터">
+      </div>
+      <div class="field grow">
+        <label for="description">작업 내용<span class="req">*</span></label>
+        <input type="text" id="description" name="description" required placeholder="예: 키보드 교체, 팬 청소">
+      </div>
+      <div class="field">
+        <label for="cost">비용 (원)</label>
+        <input type="text" id="cost" name="cost" inputmode="numeric" placeholder="예: 85000">
+      </div>
+      <div class="field">
+        <label for="next_due">다음 점검 예정일</label>
+        <input type="date" id="next_due" name="next_due">
+      </div>
+      {% if not asset.holder_id and asset.status != 'REPAIR' %}
+      <div class="field checkbox-field" style="padding-bottom:8px;">
+        <input type="checkbox" id="set_repairing" name="set_repairing">
+        <label for="set_repairing" style="margin:0;">상태를 '수리중'으로</label>
+      </div>
+      {% endif %}
+      <div class="field"><button type="submit" class="btn primary">정비 등록</button></div>
+    </form>
+  </div>
+  {% endif %}
+</div>
 
 <div class="card">
   <div class="card-head">

@@ -13,7 +13,16 @@ from app import config
 from app.database import SessionLocal, init_db
 from app.deps import SESSION_USER_KEY, LoginRequired, login_redirect
 from app.models import User
-from app.routers import assets, assignments, auth, dashboard, employees, users
+from app.routers import (
+    assets,
+    assignments,
+    auth,
+    dashboard,
+    employees,
+    maintenance,
+    shortlink,
+    users,
+)
 from app.security import hash_password
 from app.templating import render
 
@@ -98,7 +107,9 @@ def create_app() -> FastAPI:
     app.include_router(assets.router)
     app.include_router(employees.router)
     app.include_router(assignments.router)
+    app.include_router(maintenance.router)
     app.include_router(users.router)
+    app.include_router(shortlink.router)
 
     @app.get(config.HEALTH_PATH, include_in_schema=False)
     def healthcheck():

@@ -8,6 +8,7 @@
   <div class="muted">사내 IT 자산 대장입니다. 자산번호·모델명·시리얼번호 등으로 검색할 수 있습니다.</div>
   <div class="section-actions">
     <a href="/assets/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
+    <a href="/assets/labels{{ merge_query(request, page=None) }}" class="btn">QR 라벨 인쇄</a>
     {% if current_user.is_admin %}
       <a href="/assets/import" class="btn">엑셀 일괄 등록</a>
       <a href="/assets/new" class="btn primary">+ 자산 등록</a>
