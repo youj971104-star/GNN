@@ -74,6 +74,56 @@ list_host_ips() {
     done
 }
 
+# 받은 값이 진짜 IPv4 주소인지 확인한다.
+# 프록시나 오류 페이지가 엉뚱한 문자열을 돌려줄 수 있어 형식을 꼭 검사한다.
+is_ipv4() {
+    local value="${1:-}" part
+    case "$value" in
+        *[!0-9.]*|"") return 1 ;;
+    esac
+    local IFS=.
+    # shellcheck disable=SC2086
+    set -- $value
+    [ "$#" -eq 4 ] || return 1
+    for part in "$@"; do
+        [ -n "$part" ] || return 1
+        [ "$part" -le 255 ] 2>/dev/null || return 1
+    done
+    return 0
+}
+
+# 클라우드 VM 의 공인 IP.
+#
+# 오라클·AWS 같은 클라우드는 공인 IP 를 랜카드에 직접 붙이지 않고 NAT 로 연결한다.
+# 그래서 서버 안에서는 사설 IP(10.0.0.x)만 보이고, 그 주소를 안내하면
+# 바깥에서 아무도 접속하지 못한다. 메타데이터 서비스에 직접 물어본다.
+# (메타데이터 주소는 클라우드 안에서만 응답하므로, 일반 서버에서는 조용히 넘어간다)
+cloud_public_ip() {
+    local ip="" token=""
+
+    # 메타데이터 주소는 절대 프록시를 거치면 안 된다.
+    # 사내 프록시가 설정된 서버에서는 프록시가 응답을 가로채 엉뚱한 값을 돌려준다.
+    local curl_opts=(-s --max-time 2 --noproxy '*')
+
+    # 오라클 클라우드
+    ip=$(curl "${curl_opts[@]}" -H "Authorization: Bearer Oracle" \
+            http://169.254.169.254/opc/v2/vnics/ 2>/dev/null \
+         | grep -oE '"publicIp"[[:space:]]*:[[:space:]]*"[0-9.]+"' \
+         | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1) || true
+    if is_ipv4 "$ip"; then echo "$ip"; return; fi
+
+    # AWS EC2 (IMDSv2)
+    token=$(curl "${curl_opts[@]}" -X PUT http://169.254.169.254/latest/api/token \
+                -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null) || true
+    if [ -n "$token" ]; then
+        ip=$(curl "${curl_opts[@]}" -H "X-aws-ec2-metadata-token: $token" \
+                http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null) || true
+        if is_ipv4 "$ip"; then echo "$ip"; return; fi
+    fi
+
+    echo ""
+}
+
 # 안내에 쓸 대표 주소 하나를 고른다.
 # 'hostname -I' 첫 값을 그냥 쓰면 도커 내부 주소를 알려주게 되는 일이 있어,
 # 바깥으로 나가는 경로에 실제로 쓰이는 주소를 우선한다.
@@ -166,9 +216,15 @@ cmd_start() {
             echo ""
             ok "정상적으로 시작되었습니다."
             echo ""
+            local public_ip; public_ip=$(cloud_public_ip)
             echo "  ── 접속 주소 ───────────────────────────────────"
             echo "     이 서버에서      : http://localhost:${port}"
-            echo "     다른 PC 에서     : http://$(guess_host_ip):${port}"
+            if [ -n "$public_ip" ]; then
+                echo "     바깥에서         : http://${public_ip}:${port}"
+                echo "     같은 사설망에서  : http://$(guess_host_ip):${port}"
+            else
+                echo "     다른 PC 에서     : http://$(guess_host_ip):${port}"
+            fi
             echo "  ────────────────────────────────────────────────"
             echo ""
             info "다른 PC 에서 접속이 안 되면 서버 방화벽에서 ${port} 번 포트를 열어야 합니다."
@@ -204,7 +260,8 @@ cmd_status() {
     echo ""
     local port; port=$(grep -E '^ITAM_PUBLIC_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo 8000)
     if curl -fsS "http://127.0.0.1:${port:-8000}/healthz" >/dev/null 2>&1; then
-        ok "서비스 정상 (http://$(guess_host_ip):${port:-8000})"
+        local public_ip; public_ip=$(cloud_public_ip)
+        ok "서비스 정상 (http://${public_ip:-$(guess_host_ip)}:${port:-8000})"
     else
         fail "서비스에 응답이 없습니다."
     fi
@@ -355,9 +412,15 @@ cmd_doctor() {
 
     # 7. 접속 주소 안내
     echo ""
+    local public_ip; public_ip=$(cloud_public_ip)
     echo "  ── 접속 주소 ───────────────────────────────────"
     echo "     이 서버에서      : http://localhost:${port}"
-    echo "     다른 PC 에서     : http://$(guess_host_ip):${port}"
+    if [ -n "$public_ip" ]; then
+        echo "     바깥에서         : http://${public_ip}:${port}"
+        echo "     같은 사설망에서  : http://$(guess_host_ip):${port}"
+    else
+        echo "     다른 PC 에서     : http://$(guess_host_ip):${port}"
+    fi
     local others
     others=$(list_host_ips | grep -v "^$(guess_host_ip)$" | tr '\\n' ' ')
     if [ -n "$others" ]; then

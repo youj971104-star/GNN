@@ -89,6 +89,22 @@ cd GNN
 
 ## 배포하기 (Docker · 권장)
 
+여러 직원이 함께 쓰려면 항상 켜져 있는 서버에 올려야 합니다. 두 가지 길이 있습니다.
+
+| 어디에 | 월 비용 | 접속 범위 | 안내 |
+| --- | --- | --- | --- |
+| **사내 서버·PC** | 0원 | 사내망 안에서만 | 아래 내용 그대로 |
+| **오라클 클라우드 무료 VM** | 0원 | 인터넷 어디서든 | [deploy/README-ORACLE.md](deploy/README-ORACLE.md) |
+
+오라클 무료 VM 은 신용카드 등록이 필요하고(청구는 되지 않습니다) 몇 가지 주의할 점이 있어
+별도 문서로 정리했습니다. 서버에서 아래 한 줄이면 설치가 끝납니다.
+
+```bash
+sudo bash deploy/oracle-setup.sh
+```
+
+### 사내 서버에 올리기
+
 서버에 Docker 만 설치되어 있으면 됩니다. Python 버전이나 패키지 충돌을 신경 쓸 필요가 없고,
 리눅스·윈도우·클라우드 어디서든 같은 명령으로 동작합니다.
 
@@ -338,7 +354,7 @@ deploy.sh          서버 배포·운영 명령 모음 (setup / start / backup /
 Dockerfile         운영용 이미지 정의
 docker-compose.yml 서비스 실행 설정 (+ HTTPS 프로파일)
 docker/            컨테이너 시작 스크립트
-deploy/            Nginx 설정과 HTTPS 전환 안내
+deploy/            오라클 클라우드 설치 스크립트·안내, Nginx 설정, HTTPS 전환 안내
 ```
 
 ## 테스트
