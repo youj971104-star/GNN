@@ -165,10 +165,15 @@ ITAM_ADMIN_PASSWORD=$admin_password
 # 워커 프로세스 수 (직원 100명 규모면 2개로 충분합니다)
 ITAM_WORKERS=2
 
-# 목록 한 페이지 행 수 / 로그인 유지 시간(초) / 엑셀 업로드 최대 크기(바이트)
+# 목록 한 페이지 행 수 / 엑셀 업로드 최대 크기(바이트)
 ITAM_PAGE_SIZE=20
-ITAM_SESSION_MAX_AGE=43200
 ITAM_MAX_UPLOAD_BYTES=10485760
+
+# 로그인 유지 시간(초). 마지막으로 쓴 시점부터 셉니다.
+# 기본 30일 - 폰으로 QR 라벨을 찍을 때마다 다시 로그인하지 않도록 넉넉히 둡니다.
+ITAM_SESSION_MAX_AGE=2592000
+# 로그인 화면에서 '공용 PC' 를 체크했을 때의 유지 시간(초). 기본 12시간.
+ITAM_SHORT_SESSION_MAX_AGE=43200
 
 # 도메인 + HTTPS 로 전환하면 1 로 바꾸세요 (deploy/README-HTTPS.md 참고)
 ITAM_HTTPS_ONLY=0
@@ -233,8 +238,22 @@ cmd_stop() {
 
 cmd_restart() { require_env; $DC restart "$SERVICE"; ok "재시작했습니다."; }
 
+# 예전 버전에서 만든 .env 를 새 설정에 맞춰 손봐 준다.
+# 이 값이 예전 기본값(12시간) 그대로면, 폰에서 QR 을 찍을 때마다 로그인하게 된다.
+migrate_env() {
+    if grep -qE '^ITAM_SESSION_MAX_AGE=43200$' "$ENV_FILE" 2>/dev/null; then
+        sed -i.bak 's/^ITAM_SESSION_MAX_AGE=43200$/ITAM_SESSION_MAX_AGE=2592000/' "$ENV_FILE"
+        rm -f "${ENV_FILE}.bak"
+        info "로그인 유지 시간을 12시간 → 30일로 바꿨습니다. (.env)"
+    fi
+    if ! grep -q '^ITAM_SHORT_SESSION_MAX_AGE=' "$ENV_FILE" 2>/dev/null; then
+        printf '\n# 로그인 화면에서 \x27공용 PC\x27 를 체크했을 때의 유지 시간(초)\nITAM_SHORT_SESSION_MAX_AGE=43200\n' >> "$ENV_FILE"
+    fi
+}
+
 cmd_update() {
     require_env
+    migrate_env
     info "최신 코드로 다시 빌드합니다..."
     $DC up -d --build
     ok "업데이트를 마쳤습니다."

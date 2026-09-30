@@ -11,7 +11,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app import config
 from app.database import SessionLocal, init_db
-from app.deps import SESSION_USER_KEY, LoginRequired, login_redirect
+from app.deps import LoginRequired, login_redirect, session_user_id
 from app.models import User
 from app.routers import (
     assets,
@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
     async def attach_current_user(request: Request, call_next):
         """템플릿에서 쓸 수 있도록 로그인 사용자를 request.state 에 담아 둔다."""
         request.state.user = None
-        user_id = request.session.get(SESSION_USER_KEY) if "session" in request.scope else None
+        user_id = session_user_id(request)
         if user_id:
             with SessionLocal() as db:
                 user = db.get(User, user_id)

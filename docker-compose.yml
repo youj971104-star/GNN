@@ -29,7 +29,10 @@ services:
       # --- 운영 옵션 ---
       ITAM_WORKERS: "${ITAM_WORKERS:-2}"
       ITAM_PAGE_SIZE: "${ITAM_PAGE_SIZE:-20}"
-      ITAM_SESSION_MAX_AGE: "${ITAM_SESSION_MAX_AGE:-43200}"
+      # 로그인 유지 시간(초). 기본 30일 - 폰으로 QR 을 찍을 때 다시 로그인하지 않도록.
+      ITAM_SESSION_MAX_AGE: "${ITAM_SESSION_MAX_AGE:-2592000}"
+      # 로그인 화면에서 '공용 PC' 를 체크했을 때의 유지 시간(초). 기본 12시간.
+      ITAM_SHORT_SESSION_MAX_AGE: "${ITAM_SHORT_SESSION_MAX_AGE:-43200}"
       ITAM_MAX_UPLOAD_BYTES: "${ITAM_MAX_UPLOAD_BYTES:-10485760}"
 
       # 도메인 + HTTPS 로 전환할 때 1 로 바꾸면 세션 쿠키가 HTTPS 로만 전송된다.

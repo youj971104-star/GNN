@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
-from app import config, models
+from app import config, models, useragent
 
 templates = Jinja2Templates(directory=str(config.BASE_DIR / "templates"))
 
@@ -93,5 +93,9 @@ def render(request: Request, template_name: str, context: dict[str, Any] | None 
     data: dict[str, Any] = {"request": request}
     data.update(context or {})
     data.setdefault("current_user", getattr(request.state, "user", None))
+    # 카카오톡·네이버 앱 안의 브라우저는 로그인이 저장되지 않을 수 있어 안내한다
+    data.setdefault(
+        "in_app_browser", useragent.in_app_browser(request.headers.get("user-agent"))
+    )
     data["flashes"] = pop_flashes(request)
     return templates.TemplateResponse(request, template_name, data, **kwargs)

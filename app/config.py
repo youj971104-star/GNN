@@ -25,8 +25,13 @@ DEFAULT_ADMIN_PASSWORD = os.getenv("ITAM_ADMIN_PASSWORD", "admin1234")
 # 목록 화면 한 페이지당 행 수
 PAGE_SIZE = int(os.getenv("ITAM_PAGE_SIZE", "20"))
 
-# 세션 유지 시간(초). 기본 12시간.
-SESSION_MAX_AGE = int(os.getenv("ITAM_SESSION_MAX_AGE", str(12 * 60 * 60)))
+# 로그인 유지 시간(초). 마지막으로 쓴 시점부터 세므로, 계속 쓰는 동안은 풀리지 않는다.
+# 기본 30일. 폰으로 QR 라벨을 찍을 때마다 로그인하지 않게 넉넉히 둔다.
+SESSION_MAX_AGE = int(os.getenv("ITAM_SESSION_MAX_AGE", str(30 * 24 * 60 * 60)))
+
+# 로그인 화면에서 '로그인 상태 유지' 를 끄고 들어왔을 때의 유지 시간(초). 기본 12시간.
+# 공용 PC 에서 잠깐 쓰고 나가는 경우를 위한 값이다.
+SHORT_SESSION_MAX_AGE = int(os.getenv("ITAM_SHORT_SESSION_MAX_AGE", str(12 * 60 * 60)))
 
 # 엑셀 업로드 최대 크기(바이트). 기본 10MB.
 MAX_UPLOAD_BYTES = int(os.getenv("ITAM_MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))

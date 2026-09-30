@@ -2,14 +2,14 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, Depends, Form, Request, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
-from app import config, labels, twofactor
-from app.deps import SESSION_USER_KEY, CurrentUser, DbSession, get_current_user_optional
+from app import config, labels, twofactor, useragent
+from app.deps import CurrentUser, DbSession, get_current_user_optional, start_session
 from app.models import User
 from app.security import hash_password, validate_password, verify_password
 from app.templating import flash, render
@@ -18,6 +18,8 @@ router = APIRouter(tags=["인증"])
 
 # 비밀번호는 맞았지만 아직 2단계 인증이 남은 상태를 세션에 잠시 담아 둔다
 PENDING_2FA_KEY = "pending_2fa_user_id"
+# 2단계 인증을 받는 동안 '공용 PC' 선택을 잃지 않도록 함께 담아 둔다
+PENDING_REMEMBER_KEY = "pending_remember"
 
 
 def _safe_next(next_url: str | None) -> str:
@@ -28,6 +30,18 @@ def _safe_next(next_url: str | None) -> str:
     if parsed.scheme or parsed.netloc or not next_url.startswith("/") or next_url.startswith("//"):
         return "/"
     return next_url
+
+
+def _reopen_link(request: Request, target: str) -> str | None:
+    """앱 안의 브라우저에서 열렸을 때, 같은 주소를 크롬으로 다시 여는 링크.
+
+    카카오톡 등에서 QR 을 찍으면 앱 전용 브라우저가 열리고 로그인이 저장되지 않는다.
+    안드로이드는 링크 한 번으로 크롬으로 넘길 수 있다.
+    """
+    agent = request.headers.get("user-agent")
+    if not useragent.in_app_browser(agent) or not useragent.is_android(agent):
+        return None
+    return useragent.chrome_intent_url(str(request.base_url).rstrip("/") + target)
 
 
 def _login_failed(db, user: User | None) -> None:
@@ -47,10 +61,12 @@ def _login_failed(db, user: User | None) -> None:
     db.commit()
 
 
-def _complete_login(request: Request, db, user: User, target: str) -> RedirectResponse:
+def _complete_login(
+    request: Request, db, user: User, target: str, *, remember: bool = True
+) -> RedirectResponse:
     """인증이 모두 끝났을 때 세션을 만들고 들여보낸다."""
     request.session.clear()
-    request.session[SESSION_USER_KEY] = user.id
+    start_session(request, user.id, remember=remember)
     user.last_login_at = datetime.now(timezone.utc)
     user.failed_logins = 0
     user.locked_until = None
@@ -68,7 +84,12 @@ def login_form(
 ):
     if user is not None:
         return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
-    return render(request, "login.html", {"next": _safe_next(next), "username": ""})
+    target = _safe_next(next)
+    return render(
+        request,
+        "login.html",
+        {"next": target, "username": "", "reopen_url": _reopen_link(request, target)},
+    )
 
 
 @router.post("/login")
@@ -78,15 +99,24 @@ def login(
     username: Annotated[str, Form()],
     password: Annotated[str, Form()],
     next: Annotated[str, Form()] = "/",
+    shared_device: Annotated[str | None, Form()] = None,
 ):
     target = _safe_next(next)
+    # 공용 PC 라고 표시했을 때만 짧게 유지한다. 기본은 이 기기에서 계속 로그인 유지.
+    remember = shared_device is None
     user = db.scalar(select(User).where(User.username == username.strip()))
 
     def deny(message: str, code: int):
         return render(
             request,
             "login.html",
-            {"error": message, "username": username, "next": target},
+            {
+                "error": message,
+                "username": username,
+                "next": target,
+                "reopen_url": _reopen_link(request, target),
+                "shared_device": shared_device is not None,
+            },
             status_code=code,
         )
 
@@ -109,11 +139,13 @@ def login(
         # 비밀번호까지만 통과. 인증 코드를 넣어야 들어갈 수 있다.
         request.session.clear()
         request.session[PENDING_2FA_KEY] = user.id
+        request.session[PENDING_REMEMBER_KEY] = remember
         return RedirectResponse(
-            f"/login/2fa?next={target}", status_code=status.HTTP_303_SEE_OTHER
+            f"/login/2fa?next={quote(target, safe='/?=&')}",
+            status_code=status.HTTP_303_SEE_OTHER,
         )
 
-    return _complete_login(request, db, user, target)
+    return _complete_login(request, db, user, target, remember=remember)
 
 
 @router.get("/login/2fa")
@@ -140,16 +172,17 @@ def two_factor_verify(
         return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
 
     target = _safe_next(next)
+    remember = bool(request.session.get(PENDING_REMEMBER_KEY, True))
 
     if twofactor.verify_code(user.totp_secret, code):
-        return _complete_login(request, db, user, target)
+        return _complete_login(request, db, user, target, remember=remember)
 
     # 인증 앱을 쓸 수 없을 때를 위한 복구 코드도 받아 준다
     remaining = twofactor.use_recovery_code(user.recovery_codes, code)
     if remaining is not None:
         user.recovery_codes = remaining
         db.commit()
-        response = _complete_login(request, db, user, target)
+        response = _complete_login(request, db, user, target, remember=remember)
         left = twofactor.recovery_codes_left(remaining)
         message = f"복구 코드로 로그인했습니다. 남은 복구 코드는 {left}개입니다."
         if left <= 2:
