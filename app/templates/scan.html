@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% set back_url = '/assets' %}
+{% set active = 'scan' %}
+{% block page_title %}QR 스캔{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <div class="muted">
+    카메라로 라벨을 비추면 자산이 바로 나옵니다. 창을 옮기지 않고 계속 찍을 수 있습니다.
+  </div>
+</div>
+
+{# 카메라는 HTTPS 에서만 열린다. http 로 들어왔으면 미리 알려 준다. #}
+<div class="alert error" id="scan-insecure" hidden>
+  이 주소(<span id="scan-origin" class="mono"></span>)에서는 브라우저가 카메라를 열어 주지 않습니다.
+  <strong>https:// 주소</strong>로 접속해 주세요. 아래에서 자산번호를 직접 입력할 수는 있습니다.
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <h2>카메라</h2>
+    <div class="card-body">
+      <div class="scan-stage">
+        <video id="scan-video" playsinline muted></video>
+        <div class="scan-frame" aria-hidden="true"></div>
+        <div class="scan-placeholder" id="scan-placeholder">
+          <div>
+            <div style="font-size:40px; line-height:1;">▣</div>
+            <p style="margin:10px 0 0;">카메라를 켜고 라벨을 비추세요</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-actions" style="margin-top:12px;">
+        <button type="button" class="btn primary" id="scan-start">카메라 켜기</button>
+        <button type="button" class="btn" id="scan-stop" hidden>멈추기</button>
+        <button type="button" class="btn" id="scan-torch" hidden>불빛 켜기</button>
+      </div>
+
+      <div class="alert error" id="scan-error" hidden></div>
+      <div class="hint" id="scan-state" style="margin-top:10px;">
+        폰에서는 뒷면 카메라가 켜집니다. 처음 한 번은 카메라 사용을 허용해 주세요.
+      </div>
+
+      <div class="field" style="margin-top:16px;">
+        <label for="scan-manual">자산번호 직접 입력</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="scan-manual" maxlength="50" autocomplete="off"
+                 placeholder="예: 0121" style="flex:1;">
+          <button type="button" class="btn" id="scan-manual-go">찾기</button>
+        </div>
+        <div class="hint">카메라가 안 되거나 라벨이 지워졌을 때 쓰세요.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>찾은 자산</h2>
+    <div class="card-body">
+      <div id="scan-result" class="scan-result-empty">
+        아직 찍은 자산이 없습니다.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>이번에 찍은 목록 <span class="muted" id="scan-count">0건</span></h2>
+  <div class="card-body">
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>시각</th><th>자산번호</th><th>자산명</th><th>상태</th><th>사용자</th><th></th></tr>
+        </thead>
+        <tbody id="scan-history">
+          <tr class="empty"><td colspan="6">라벨을 찍으면 여기에 쌓입니다.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="hint" style="margin-top:10px;">
+      같은 자산을 두 번 찍으면 시각만 갱신됩니다. 화면을 벗어나면 목록은 사라집니다.
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/vendor/jsQR.js"></script>
+<script src="/static/js/scanner.js"></script>
+
+{% endblock %}

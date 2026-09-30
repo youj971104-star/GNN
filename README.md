@@ -55,6 +55,11 @@
   이 브라우저는 로그인을 저장하지 않아 찍을 때마다 로그인하게 됩니다. 그런 경우를 알아채면
   로그인 화면에서 안내하고, 안드로이드에서는 `크롬으로 열기` 버튼을 함께 보여줍니다.
   로그인이 풀린 상태로 QR 을 찍었더라도, 로그인하면 찍은 그 자산 화면으로 바로 이어집니다.
+- **사이트 안 QR 스캔**: 좌측 메뉴 `QR 스캔` 에서 카메라를 켜고 라벨을 비추면,
+  화면을 벗어나지 않고 자산이 바로 나옵니다. **여러 대를 이어서 확인할 때** 쓰세요.
+  찍은 목록이 쌓이고, 지급·반납으로 바로 넘어갈 수 있습니다.
+  브라우저가 카메라를 열어 주려면 HTTPS 여야 합니다(아래 *도메인 + HTTPS* 참고).
+  카메라를 못 쓰는 환경에서는 자산번호를 직접 입력해 같은 화면을 볼 수 있습니다.
 - **정비 이력**: 수리·점검·부품교체 내역을 자산별로 쌓습니다.
   정비일·업체·작업 내용·비용·다음 점검 예정일을 남기고, 누적 정비 비용을 함께 보여줍니다.
 - **감가상각**: 정액법·정률법으로 현재 장부가액과 누계 상각액을 계산합니다.
@@ -441,17 +446,20 @@ app/
   services.py      검색·페이지네이션·지급/반납 규칙·대시보드 집계
   excel.py         엑셀 업로드/다운로드
   templating.py    Jinja2 설정, 화면용 필터, 안내 메시지
-  routers/         화면별 라우터 (auth, dashboard, assets, employees, assignments, users, settings)
+  routers/         화면별 라우터 (auth, dashboard, assets, employees, assignments, users, settings, scan)
   templates/       HTML 템플릿
   static/css/      스타일시트
+  static/js/       화면 보조 스크립트 (검색 드롭다운, 뒤로 가기, 빠른 등록, QR 스캔)
+  static/js/vendor/  jsQR (QR 해독기, Apache-2.0). 사내망에서도 쓰도록 함께 넣어 둠
   backup.py        데이터베이스 백업 (python -m app.backup)
   labels.py        자산 QR 코드 생성
+  scanning.py      찍은 QR·바코드 값에서 자산번호 읽어내기
   twofactor.py     2단계 인증(TOTP)과 복구 코드
   useragent.py     카카오톡 등 '앱 안의 브라우저' 판별 (QR 스캔 안내용)
   migrations.py    기존 DB 에 새 컬럼을 덧붙이는 스키마 이전
   numbering.py     자산번호·사번 자동 채번 (기존 번호에서 형식 읽기)
   settings_store.py  DB 에 저장하는 설정값 (재시작 없이 바뀝니다)
-tests/             pytest 테스트 (302개)
+tests/             pytest 테스트 (331개)
 run.py             개발용 실행 스크립트
 seed_demo.py       샘플 데이터 생성 스크립트
 tools/             AssetTiger 등 다른 서비스에서 옮겨오는 변환 도구
@@ -474,7 +482,8 @@ docker-compose.https.yml  도메인+HTTPS 로 쓸 때 함께 적용되는 설정
 
 로그인·권한, 자산 CRUD, 지급/반납 업무 규칙, 엑셀 업로드/다운로드, 대시보드 집계,
 데이터베이스 백업, 감가상각 계산, 정비 이력, QR 라벨, 2단계 인증, 자동 채번,
-로그인 유지와 QR 스캔 흐름, 스키마 이전, 전 화면 렌더링까지 302개 테스트로 확인합니다.
+로그인 유지와 QR 스캔 흐름, 스캔 값 해석, 스키마 이전, 전 화면 렌더링까지
+331개 테스트로 확인합니다.
 
 ## 데이터 모델 요약
 

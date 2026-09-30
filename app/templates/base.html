@@ -21,6 +21,7 @@
       <a href="/employees" class="{{ 'active' if active == 'employees' }}">직원 관리</a>
       <a href="/assignments" class="{{ 'active' if active == 'assignments' }}">지급 / 반납 이력</a>
       <a href="/maintenance" class="{{ 'active' if active == 'maintenance' }}">정비 이력</a>
+      <a href="/scan" class="{{ 'active' if active == 'scan' }}">QR 스캔</a>
       {% if current_user and current_user.is_admin %}
       <div class="nav-section">관리자</div>
       <a href="/assets/import" class="{{ 'active' if active == 'import' }}">자산 일괄 등록</a>

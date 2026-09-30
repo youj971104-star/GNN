@@ -114,7 +114,8 @@
 </div>
 
 {% if current_user.is_admin %}
-<div class="card">
+{# 스캔 화면에서 이 칸으로 바로 올 수 있게 id 를 둔다 (/assets/12#assign) #}
+<div class="card" id="assign">
   <h2>{{ '반납 처리' if current else '지급 처리' }}</h2>
   <div class="card-body">
     {% if current %}
