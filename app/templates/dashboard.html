@@ -25,7 +25,7 @@
     <div class="label">분실 / 폐기</div>
     <div class="value">{{ '{:,}'.format(stats.status_counts.LOST + stats.status_counts.DISPOSED) }}<small>건</small></div>
   </div>
-  <div class="stat">
+  <div class="stat wide">
     <div class="label">총 취득가액</div>
     <div class="value">{{ stats.total_amount | money }}<small>원</small></div>
   </div>

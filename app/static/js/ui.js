@@ -66,7 +66,33 @@
     });
   }
 
+  /* 목록에서 줄 아무 곳이나 눌러도 상세로 간다.
+     줄 안의 링크·버튼을 누르거나 글자를 고르는 중이면 건드리지 않는다.
+     Ctrl(⌘)·가운데 단추로 누르면 새 탭으로 연다. */
+  function bindRowLinks() {
+    document.addEventListener("click", function (event) {
+      var row = event.target.closest && event.target.closest("tr[data-href]");
+      if (!row) return;
+      if (event.target.closest("a, button, input, select, textarea, label")) return;
+      if (window.getSelection && String(window.getSelection())) return;
+
+      var href = row.getAttribute("data-href");
+      if (event.ctrlKey || event.metaKey) {
+        window.open(href, "_blank");
+      } else {
+        window.location.href = href;
+      }
+    });
+    document.addEventListener("auxclick", function (event) {
+      var row = event.target.closest && event.target.closest("tr[data-href]");
+      if (row && event.button === 1 && !event.target.closest("a")) {
+        window.open(row.getAttribute("data-href"), "_blank");
+      }
+    });
+  }
+
   function init() {
+    bindRowLinks();
     bindPrint();
     bindLabelSize();
     bindCopyCodes();

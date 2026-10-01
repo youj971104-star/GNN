@@ -80,9 +80,8 @@
         <thead>
           <tr>
             <th>자산번호</th>
-            <th>자산명</th>
+            <th>자산명 · 모델</th>
             <th>분류</th>
-            <th>모델 / 시리얼</th>
             <th class="center">상태</th>
             <th>사용자</th>
             <th>보관위치</th>
@@ -92,14 +91,19 @@
         </thead>
         <tbody>
         {% for asset in page_obj.items %}
-          <tr>
+          <tr data-href="/assets/{{ asset.id }}">
             <td class="mono nowrap"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
-            <td>{{ asset.name }}</td>
-            <td class="nowrap">{{ asset.category_label }}</td>
             <td>
-              {{ asset.model_name or '-' }}
-              {% if asset.serial_no %}<div class="muted mono" style="font-size:11px;">{{ asset.serial_no }}</div>{% endif %}
+              <div class="cell-title">{{ asset.name }}</div>
+              {% if asset.model_name or asset.serial_no %}
+              <div class="cell-sub">
+                {{ asset.model_name or '' }}
+                {%- if asset.model_name and asset.serial_no %} · {% endif -%}
+                {% if asset.serial_no %}<span class="mono">{{ asset.serial_no }}</span>{% endif %}
+              </div>
+              {% endif %}
             </td>
+            <td class="nowrap">{{ asset.category_label }}</td>
             <td class="center">{{ asset_status(asset) }}</td>
             <td class="nowrap">{{ holder_link(asset) }}</td>
             <td class="nowrap">{{ asset.location or '-' }}</td>
@@ -107,7 +111,7 @@
             <td class="num nowrap">{{ asset.purchase_price | money }}</td>
           </tr>
         {% else %}
-          <tr><td colspan="9" class="empty">
+          <tr><td colspan="8" class="empty">
             {% if filters.is_active %}검색 조건에 맞는 자산이 없습니다.{% else %}등록된 자산이 없습니다.{% endif %}
           </td></tr>
         {% endfor %}

@@ -9,6 +9,10 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>💻</text></svg>">
 </head>
 <body>
+{# 화면마다 본문 폭을 정한다. 넓은 모니터에서 표와 입력칸이 끝없이 늘어나
+   시선이 흩어지지 않도록, 가운데 일정한 폭 안에 모아 둔다.
+     normal (기본) 목록·대시보드  /  narrow 입력 화면  /  wide 칸이 아주 많은 표 #}
+{%- set width_class = 'page-' ~ (page_width | default('normal')) %}
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">
@@ -35,6 +39,7 @@
 
   <div class="main">
     <header class="topbar">
+      <div class="topbar-inner page {{ width_class }}">
       <div class="topbar-left">
         {% if back_url %}
           {# 브라우저 기록이 있으면 그쪽을 쓴다. 목록에서 걸어둔 검색 조건이 유지된다.
@@ -55,14 +60,17 @@
           </form>
         {% endif %}
       </div>
+      </div>
     </header>
 
     <main class="content">
+      <div class="page {{ width_class }}">
       {% for item in flashes %}
         <div class="alert {{ item.category }}">{{ item.message }}</div>
       {% endfor %}
       {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
       {% block content %}{% endblock %}
+      </div>
     </main>
   </div>
 </div>

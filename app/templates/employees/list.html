@@ -59,7 +59,7 @@
         </thead>
         <tbody>
         {% for emp in page_obj.items %}
-          <tr>
+          <tr data-href="/employees/{{ emp.id }}">
             <td class="mono nowrap"><a href="/employees/{{ emp.id }}">{{ emp.emp_no }}</a></td>
             <td>{{ emp.name }}</td>
             <td>{{ emp.department or '-' }}</td>

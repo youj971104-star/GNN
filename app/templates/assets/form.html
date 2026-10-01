@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% set back_url = ('/assets/' ~ asset.id) if asset else '/assets' %}
 {% set active = 'assets' %}
+{% set page_width = 'narrow' %}
 {% set editing = asset is not none %}
 {# form 이 있으면 방금 입력한 값(오류 재표시), 없으면 DB 값을 보여준다 #}
 {% macro val(field, fallback='') %}
@@ -27,6 +28,7 @@
   <div class="card-body">
     <form method="post" action="{{ '/assets/' ~ asset.id ~ '/edit' if editing else '/assets/new' }}">
       <div class="form-grid">
+        <div class="form-section-title">기본 정보</div>
         <div class="field">
           <label for="asset_no">자산번호<span class="req">*</span></label>
           {% if editing %}
@@ -87,6 +89,7 @@
           <input type="text" id="spec" name="spec" value="{{ val('spec') }}" placeholder="예: i7-1360P / 32GB / SSD 1TB">
         </div>
 
+        <div class="form-section-title">도입 · 보증</div>
         <div class="field">
           <label for="purchase_date">도입일</label>
           <input type="date" id="purchase_date" name="purchase_date" value="{{ dateval('purchase_date') }}">
@@ -105,6 +108,7 @@
           <input type="text" id="supplier" name="supplier" value="{{ val('supplier') }}" maxlength="80">
         </div>
 
+        <div class="form-section-title">기타</div>
         <div class="field full">
           <label for="license_key">라이선스 키 / 계약번호</label>
           <input type="text" id="license_key" name="license_key" value="{{ val('license_key') }}" maxlength="255">
@@ -116,9 +120,9 @@
           <textarea id="note" name="note">{{ val('note') }}</textarea>
         </div>
 
-        <div class="field full" style="border-top:1px solid var(--border); padding-top:14px; margin-top:4px;">
-          <strong style="font-size:13px;">감가상각</strong>
-          <div class="hint" style="margin-top:2px;">
+        <div class="form-section-title">
+          감가상각 <span class="muted" style="font-weight:400;">(선택)</span>
+          <div class="hint">
             설정하면 현재 장부가액이 자동으로 계산되고, 엑셀 내보내기에도 함께 나옵니다.
             취득가액과 도입일이 있어야 계산됩니다.
           </div>
@@ -146,7 +150,7 @@
         </div>
       </div>
 
-      <div class="form-actions">
+      <div class="form-actions sticky">
         <button type="submit" class="btn primary">{{ '수정 저장' if editing else '등록' }}</button>
         <a href="{{ '/assets/' ~ asset.id if editing else '/assets' }}" class="btn">취소</a>
       </div>
