@@ -846,3 +846,16 @@ table.data th.sorted .sort-mark { opacity: 1; }
     color-scheme: light;
   }
 }
+
+/* ── 폰에 앱 설치 (PWA) ───────────────────────────────────── */
+.install-hero .card-body { display: flex; align-items: center; gap: 14px; }
+.install-hero .card-body > div { flex: 1; }
+.install-hero img { border-radius: 12px; flex: none; }
+.install-steps h3 { font-size: 14px; margin: 4px 0 6px; }
+.install-steps h3 + ol { margin-top: 0; }
+.install-steps ol, .install-points { padding-left: 20px; line-height: 1.8; margin: 0 0 14px; }
+.offline-card { text-align: center; }
+.offline-card img { border-radius: 14px; margin-bottom: 12px; }
+.offline-card .sub { line-height: 1.7; }
+/* 앱으로 열었으면 '설치' 메뉴는 필요 없다 */
+@media (display-mode: standalone) { .nav-install { display: none !important; } }

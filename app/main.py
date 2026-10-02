@@ -20,6 +20,7 @@ from app.routers import (
     dashboard,
     employees,
     maintenance,
+    pwa,
     scan,
     settings as settings_router,
     shortlink,
@@ -159,6 +160,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_router.router)
     app.include_router(scan.router)
     app.include_router(shortlink.router)
+    app.include_router(pwa.router)
 
     @app.get(config.HEALTH_PATH, include_in_schema=False)
     def healthcheck():

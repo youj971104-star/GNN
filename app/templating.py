@@ -89,9 +89,11 @@ templates.env.globals.update(
 
 def flash(request: Request, message: str, category: str = "success") -> None:
     """다음 화면에 한 번만 보여줄 안내 메시지를 세션에 담는다."""
-    request.session.setdefault(FLASH_KEY, []).append(
-        {"message": message, "category": category}
-    )
+    # 목록을 새로 만들어 다시 넣어야 한다. 이미 있는 목록에 append 만 하면
+    # 세션이 '바뀌었다'는 것을 몰라서, 앞서 쌓인 문구가 있을 때 새 문구가 사라진다.
+    messages = list(request.session.get(FLASH_KEY, []))
+    messages.append({"message": message, "category": category})
+    request.session[FLASH_KEY] = messages
 
 
 def pop_flashes(request: Request) -> list[dict[str, str]]:
