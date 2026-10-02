@@ -12,6 +12,7 @@ from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import EMPLOYEE_STATUSES, Asset, Assignment, Employee
 from app.routers.assets import _xlsx_response
 from app.services import paginate
+from app.sorting import SortColumn, by_code_order, read_sort
 from app.templating import flash, render
 
 router = APIRouter(prefix="/employees", tags=["직원"])
@@ -41,6 +42,27 @@ def _read_employee_form(data: dict, *, emp_no_required: bool = True) -> dict:
     return values
 
 
+# 칸 제목을 눌러 정렬할 수 있는 칸들
+_ASSET_COUNT = (
+    select(func.count(Asset.id)).where(Asset.holder_id == Employee.id)
+    .correlate(Employee).scalar_subquery()
+)
+SORT_COLUMNS = {
+    "emp_no": SortColumn((Employee.emp_no,)),
+    "name": SortColumn((Employee.name,)),
+    "department": SortColumn((Employee.department,)),
+    "position": SortColumn((Employee.position,)),
+    "email": SortColumn((Employee.email,)),
+    "phone": SortColumn((Employee.phone,)),
+    "status": SortColumn((by_code_order(Employee.status, EMPLOYEE_STATUSES),)),
+    "assets": SortColumn((_ASSET_COUNT,), default_desc=True),
+}
+
+
+def _sort(request: Request):
+    return read_sort(request.query_params, SORT_COLUMNS, "name")
+
+
 def _base_query(request: Request):
     """검색 조건이 적용된 직원 조회 쿼리."""
     params = request.query_params
@@ -63,7 +85,7 @@ def _base_query(request: Request):
     emp_status = params.get("status")
     if emp_status:
         stmt = stmt.where(Employee.status == emp_status)
-    return stmt.order_by(Employee.name, Employee.id)
+    return _sort(request).order(stmt, Employee.name, Employee.id)
 
 
 @router.get("")
@@ -82,7 +104,12 @@ def list_employees(request: Request, db: DbSession, user: CurrentUser, page: int
     return render(
         request,
         "employees/list.html",
-        {"page_obj": result, "departments": departments, "params": dict(request.query_params)},
+        {
+            "page_obj": result,
+            "departments": departments,
+            "params": dict(request.query_params),
+            "sort": _sort(request),
+        },
     )
 
 

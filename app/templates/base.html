@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="{{ theme }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   {%- set page_name = self.page_title() %}
   <title>{{ (page_name ~ ' · ') if page_name }}{{ APP_NAME }}</title>
   <link rel="stylesheet" href="/static/css/style.css">
@@ -54,6 +55,11 @@
         {% if current_user %}
           <span><strong>{{ current_user.name }}</strong> 님</span>
           <span class="badge {{ current_user.role }}">{{ current_user.role_label }}</span>
+          {# 누를 때마다 자동 → 다크 → 라이트 → 자동. 자바스크립트가 없으면 보이지 않는다. #}
+          <button type="button" class="btn small theme-toggle" data-theme-toggle hidden
+                  title="화면 밝기 바꾸기 (자동은 컴퓨터·폰 설정을 따릅니다)">
+            화면: <span data-theme-label>{{ THEMES[theme] }}</span>
+          </button>
           <a href="/me/security" class="btn small">보안 설정</a>
           <form method="post" action="/logout" class="inline-form">
             <button type="submit" class="btn small">로그아웃</button>

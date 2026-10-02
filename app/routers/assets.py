@@ -47,6 +47,7 @@ def _filter_from_query(request: Request) -> AssetFilter:
         holder_id=forms.parse_int(params.get("holder_id")),
         unassigned=params.get("unassigned") == "1",
         sort=params.get("sort") or "asset_no",
+        direction=params.get("dir"),
     )
 
 

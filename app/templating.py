@@ -13,6 +13,16 @@ templates = Jinja2Templates(directory=str(config.BASE_DIR / "templates"))
 
 FLASH_KEY = "_flash"
 
+# 화면 밝기. auto 는 컴퓨터·폰 설정을 따른다.
+THEME_COOKIE = "theme"
+THEMES = {"auto": "자동", "dark": "다크", "light": "라이트"}
+
+
+def current_theme(request: Request) -> str:
+    """쿠키에 적어 둔 화면 밝기. 처음이거나 값이 이상하면 auto."""
+    value = request.cookies.get(THEME_COOKIE, "auto")
+    return value if value in THEMES else "auto"
+
 
 # --- 필터 ---------------------------------------------------------------------
 
@@ -97,5 +107,8 @@ def render(request: Request, template_name: str, context: dict[str, Any] | None 
     data.setdefault(
         "in_app_browser", useragent.in_app_browser(request.headers.get("user-agent"))
     )
+    # 서버가 처음부터 맞는 밝기로 그려 보내야, 새로 고칠 때 화면이 번쩍이지 않는다
+    data.setdefault("theme", current_theme(request))
+    data.setdefault("THEMES", THEMES)
     data["flashes"] = pop_flashes(request)
     return templates.TemplateResponse(request, template_name, data, **kwargs)

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set back_url = '/' %}
-{% from "_macros.html" import pagination %}
+{% from "_macros.html" import pagination, sort_th, keep_sort %}
 {% set active = 'maintenance' %}
 {% block page_title %}정비 이력{% endblock %}
 {% block content %}
@@ -26,6 +26,7 @@
 <div class="card">
   <div class="card-body">
     <form method="get" action="/maintenance" class="filter-form">
+      {{ keep_sort(sort) }}
       <div class="field grow">
         <label for="q">검색어</label>
         <input type="text" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="자산번호, 자산명, 업체, 작업 내용">
@@ -51,8 +52,14 @@
       <table class="data">
         <thead>
           <tr>
-            <th>정비일</th><th>자산번호</th><th>자산명</th><th class="center">종류</th>
-            <th>업체</th><th>작업 내용</th><th class="num">비용</th><th>다음 점검</th>
+            {{ sort_th(request, sort, 'maintained_at', '정비일') }}
+            {{ sort_th(request, sort, 'asset_no', '자산번호') }}
+            {{ sort_th(request, sort, 'asset_name', '자산명') }}
+            {{ sort_th(request, sort, 'kind', '종류', 'center') }}
+            {{ sort_th(request, sort, 'vendor', '업체') }}
+            {{ sort_th(request, sort, 'description', '작업 내용') }}
+            {{ sort_th(request, sort, 'cost', '비용', 'num') }}
+            {{ sort_th(request, sort, 'next_due', '다음 점검') }}
           </tr>
         </thead>
         <tbody>

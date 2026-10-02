@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set back_url = '/' %}
-{% from "_macros.html" import pagination %}
+{% from "_macros.html" import pagination, sort_th, keep_sort %}
 {% set active = 'employees' %}
 {% block page_title %}직원 관리{% endblock %}
 {% block content %}
@@ -19,6 +19,7 @@
 <div class="card">
   <div class="card-body">
     <form method="get" action="/employees" class="filter-form">
+      {{ keep_sort(sort) }}
       <div class="field grow">
         <label for="q">검색어</label>
         <input type="text" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="이름, 사번, 부서, 직급, 이메일">
@@ -53,8 +54,14 @@
       <table class="data">
         <thead>
           <tr>
-            <th>사번</th><th>이름</th><th>부서</th><th>직급</th>
-            <th>이메일</th><th>연락처</th><th class="center">재직상태</th><th class="num">보유 자산</th>
+            {{ sort_th(request, sort, 'emp_no', '사번') }}
+            {{ sort_th(request, sort, 'name', '이름') }}
+            {{ sort_th(request, sort, 'department', '부서') }}
+            {{ sort_th(request, sort, 'position', '직급') }}
+            {{ sort_th(request, sort, 'email', '이메일') }}
+            {{ sort_th(request, sort, 'phone', '연락처') }}
+            {{ sort_th(request, sort, 'status', '재직상태', 'center') }}
+            {{ sort_th(request, sort, 'assets', '보유 자산', 'num') }}
           </tr>
         </thead>
         <tbody>

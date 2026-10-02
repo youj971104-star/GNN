@@ -12,9 +12,32 @@ from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import MAINTENANCE_KINDS, Asset, Maintenance
 from app.routers.assets import _xlsx_response
 from app.services import paginate
+from app.sorting import SortColumn, by_code_order, read_sort
 from app.templating import flash, render
 
 router = APIRouter(prefix="/maintenance", tags=["정비"])
+
+
+def _asset_field(column):
+    return select(column).where(Asset.id == Maintenance.asset_id).correlate(Maintenance).scalar_subquery()
+
+
+# 칸 제목을 눌러 정렬할 수 있는 칸들
+SORT_COLUMNS = {
+    "maintained_at": SortColumn((Maintenance.maintained_at,), default_desc=True),
+    "asset_no": SortColumn((_asset_field(Asset.asset_no),)),
+    "asset_name": SortColumn((_asset_field(Asset.name),)),
+    "kind": SortColumn((by_code_order(Maintenance.kind, MAINTENANCE_KINDS),)),
+    "vendor": SortColumn((Maintenance.vendor,)),
+    "description": SortColumn((Maintenance.description,)),
+    "cost": SortColumn((Maintenance.cost,), default_desc=True),
+    "next_due": SortColumn((Maintenance.next_due,)),
+}
+
+
+def _sort(request: Request):
+    # 기본은 예전과 같이 최근 정비가 위
+    return read_sort(request.query_params, SORT_COLUMNS, "maintained_at", default_desc=True)
 
 
 def _history_query(request: Request):
@@ -44,7 +67,7 @@ def _history_query(request: Request):
         # 다음 점검 예정일이 지났거나 30일 안에 돌아오는 건
         stmt = stmt.where(Maintenance.next_due.is_not(None))
 
-    return stmt.order_by(Maintenance.maintained_at.desc(), Maintenance.id.desc())
+    return _sort(request).order(stmt, Maintenance.maintained_at.desc(), Maintenance.id.desc())
 
 
 def _read_form(data: dict) -> dict:
@@ -76,6 +99,7 @@ def list_maintenance(request: Request, db: DbSession, user: CurrentUser, page: i
             "page_obj": result,
             "params": dict(request.query_params),
             "total_cost": float(total_cost),
+            "sort": _sort(request),
         },
     )
 

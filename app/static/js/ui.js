@@ -91,7 +91,31 @@
     });
   }
 
+  /* 화면 밝기: 자동 → 다크 → 라이트 → 자동.
+     고른 값은 쿠키에 1년 동안 남겨, 다음에 열 때 서버가 처음부터 그 밝기로 그린다. */
+  var THEME_ORDER = ["auto", "dark", "light"];
+  var THEME_LABEL = { auto: "자동", dark: "다크", light: "라이트" };
+
+  function bindThemeToggle() {
+    var button = document.querySelector("[data-theme-toggle]");
+    if (!button) return;
+    var label = button.querySelector("[data-theme-label]");
+    button.hidden = false;
+
+    button.addEventListener("click", function () {
+      var root = document.documentElement;
+      var now = THEME_ORDER.indexOf(root.getAttribute("data-theme"));
+      var next = THEME_ORDER[(now + 1) % THEME_ORDER.length];
+
+      root.setAttribute("data-theme", next);
+      if (label) label.textContent = THEME_LABEL[next];
+      document.cookie = "theme=" + next + "; path=/; max-age=31536000; samesite=lax" +
+        (location.protocol === "https:" ? "; secure" : "");
+    });
+  }
+
   function init() {
+    bindThemeToggle();
     bindRowLinks();
     bindPrint();
     bindLabelSize();

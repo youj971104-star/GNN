@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% set back_url = '/' %}
-{% from "_macros.html" import pagination, asset_status, holder_link %}
+{% from "_macros.html" import pagination, asset_status, holder_link, sort_th, keep_sort %}
+{% set sort = filters.sorting %}
 {% set active = 'assets' %}
 {% block page_title %}자산 관리{% endblock %}
 {% block content %}
@@ -51,14 +52,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="field">
-        <label for="sort">정렬</label>
-        <select id="sort" name="sort">
-          {% for code, label in filters.SORTS.items() %}
-            <option value="{{ code }}" {{ 'selected' if filters.sort == code }}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {{ keep_sort(sort) }}
       <div class="field checkbox-field" style="padding-bottom:8px;">
         <input type="checkbox" id="unassigned" name="unassigned" value="1" {{ 'checked' if filters.unassigned }}>
         <label for="unassigned" style="margin:0;">미지급만</label>
@@ -79,14 +73,14 @@
       <table class="data">
         <thead>
           <tr>
-            <th>자산번호</th>
-            <th>자산명 · 모델</th>
-            <th>분류</th>
-            <th class="center">상태</th>
-            <th>사용자</th>
-            <th>보관위치</th>
-            <th>도입일</th>
-            <th class="num">취득가액</th>
+            {{ sort_th(request, sort, 'asset_no', '자산번호') }}
+            {{ sort_th(request, sort, 'name', '자산명 · 모델') }}
+            {{ sort_th(request, sort, 'category', '분류') }}
+            {{ sort_th(request, sort, 'status', '상태', 'center') }}
+            {{ sort_th(request, sort, 'holder', '사용자') }}
+            {{ sort_th(request, sort, 'location', '보관위치') }}
+            {{ sort_th(request, sort, 'purchase_date', '도입일') }}
+            {{ sort_th(request, sort, 'purchase_price', '취득가액', 'num') }}
           </tr>
         </thead>
         <tbody>

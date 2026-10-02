@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set back_url = '/' %}
-{% from "_macros.html" import pagination %}
+{% from "_macros.html" import pagination, sort_th, keep_sort %}
 {% set active = 'assignments' %}
 {% block page_title %}지급 / 반납 이력{% endblock %}
 {% block content %}
@@ -16,6 +16,7 @@
 <div class="card">
   <div class="card-body">
     <form method="get" action="/assignments" class="filter-form">
+      {{ keep_sort(sort) }}
       <div class="field grow">
         <label for="q">검색어</label>
         <input type="text" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="자산번호, 자산명, 직원명, 사번">
@@ -52,9 +53,15 @@
       <table class="data">
         <thead>
           <tr>
-            <th>자산번호</th><th>자산명</th><th>대상자</th><th>부서</th>
-            <th>지급일</th><th>반납일</th><th class="num">보유일수</th>
-            <th class="center">상태</th><th>메모</th><th class="center">처리</th>
+            {{ sort_th(request, sort, 'asset_no', '자산번호') }}
+            {{ sort_th(request, sort, 'asset_name', '자산명') }}
+            {{ sort_th(request, sort, 'employee', '대상자') }}
+            {{ sort_th(request, sort, 'department', '부서') }}
+            {{ sort_th(request, sort, 'assigned_at', '지급일') }}
+            {{ sort_th(request, sort, 'returned_at', '반납일') }}
+            {{ sort_th(request, sort, 'days', '보유일수', 'num') }}
+            {{ sort_th(request, sort, 'state', '상태', 'center') }}
+            <th>메모</th><th class="center">처리</th>
           </tr>
         </thead>
         <tbody>
