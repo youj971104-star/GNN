@@ -13,16 +13,16 @@ from app.services import assign_asset
     "code,expected",
     [
         # 라벨 QR 에 들어 있는 주소
-        ("https://gnsvce.duckdns.org/a/0121", "0121"),
-        ("http://168.110.38.57:8000/a/0121", "0121"),
-        ("https://gnsvce.duckdns.org/a/IT-2026-0007", "IT-2026-0007"),
+        ("https://ourcompany.duckdns.org/a/0121", "0121"),
+        ("http://203.0.113.10:8000/a/0121", "0121"),
+        ("https://ourcompany.duckdns.org/a/IT-2026-0007", "IT-2026-0007"),
         ("/a/0121", "0121"),
-        ("https://gnsvce.duckdns.org/a/0121/", "0121"),
+        ("https://ourcompany.duckdns.org/a/0121/", "0121"),
         # 장비에 원래 붙어 있던 바코드처럼 번호만 있는 경우
         ("0121", "0121"),
         ("IT-2026-0007", "IT-2026-0007"),
         # 알아볼 수 없는 값
-        ("https://gnsvce.duckdns.org/assets/12", None),
+        ("https://ourcompany.duckdns.org/assets/12", None),
         ("https://example.com/", None),
         ("사내 게시판 주소입니다", None),
         ("", None),
@@ -41,9 +41,9 @@ def test_너무_긴_값은_잘못_읽은_것으로_본다():
 @pytest.mark.parametrize(
     "code,expected",
     [
-        ("https://gnsvce.duckdns.org/assets/12", 12),
+        ("https://ourcompany.duckdns.org/assets/12", 12),
         ("/assets/3/", 3),
-        ("https://gnsvce.duckdns.org/a/0121", None),
+        ("https://ourcompany.duckdns.org/a/0121", None),
         ("0121", None),
     ],
 )
@@ -92,7 +92,7 @@ def test_라벨_주소를_찍으면_자산을_찾는다(admin_client, db):
     db.commit()
 
     body = admin_client.get(
-        "/scan/lookup", params={"code": "https://gnsvce.duckdns.org/a/0121"}
+        "/scan/lookup", params={"code": "https://ourcompany.duckdns.org/a/0121"}
     ).json()
 
     assert body["ok"] is True
@@ -133,7 +133,7 @@ def test_지급되지_않은_자산은_지급하기를_권한다(admin_client, d
 
 def test_자산_상세_주소를_찍어도_찾아진다(admin_client, db, asset):
     body = admin_client.get(
-        "/scan/lookup", params={"code": f"https://gnsvce.duckdns.org/assets/{asset.id}"}
+        "/scan/lookup", params={"code": f"https://ourcompany.duckdns.org/assets/{asset.id}"}
     ).json()
     assert body["ok"] is True
     assert body["id"] == asset.id
