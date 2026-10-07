@@ -2,16 +2,17 @@
 
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
-from app import excel, forms
+from app import config, excel, forms, numbering
 from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import EMPLOYEE_STATUSES, Asset, Assignment, Employee
 from app.routers.assets import _xlsx_response
 from app.services import paginate
+from app.sorting import SortColumn, by_code_order, read_sort
 from app.templating import flash, render
 
 router = APIRouter(prefix="/employees", tags=["직원"])
@@ -41,6 +42,27 @@ def _read_employee_form(data: dict, *, emp_no_required: bool = True) -> dict:
     return values
 
 
+# 칸 제목을 눌러 정렬할 수 있는 칸들
+_ASSET_COUNT = (
+    select(func.count(Asset.id)).where(Asset.holder_id == Employee.id)
+    .correlate(Employee).scalar_subquery()
+)
+SORT_COLUMNS = {
+    "emp_no": SortColumn((Employee.emp_no,)),
+    "name": SortColumn((Employee.name,)),
+    "department": SortColumn((Employee.department,)),
+    "position": SortColumn((Employee.position,)),
+    "email": SortColumn((Employee.email,)),
+    "phone": SortColumn((Employee.phone,)),
+    "status": SortColumn((by_code_order(Employee.status, EMPLOYEE_STATUSES),)),
+    "assets": SortColumn((_ASSET_COUNT,), default_desc=True),
+}
+
+
+def _sort(request: Request):
+    return read_sort(request.query_params, SORT_COLUMNS, "name")
+
+
 def _base_query(request: Request):
     """검색 조건이 적용된 직원 조회 쿼리."""
     params = request.query_params
@@ -63,7 +85,7 @@ def _base_query(request: Request):
     emp_status = params.get("status")
     if emp_status:
         stmt = stmt.where(Employee.status == emp_status)
-    return stmt.order_by(Employee.name, Employee.id)
+    return _sort(request).order(stmt, Employee.name, Employee.id)
 
 
 @router.get("")
@@ -82,13 +104,28 @@ def list_employees(request: Request, db: DbSession, user: CurrentUser, page: int
     return render(
         request,
         "employees/list.html",
-        {"page_obj": result, "departments": departments, "params": dict(request.query_params)},
+        {
+            "page_obj": result,
+            "departments": departments,
+            "params": dict(request.query_params),
+            "sort": _sort(request),
+        },
     )
 
 
 @router.get("/new")
-def new_employee_form(request: Request, user: AdminUser):
-    return render(request, "employees/form.html", {"employee": None, "form": {"status": "ACTIVE"}})
+def new_employee_form(request: Request, db: DbSession, user: AdminUser):
+    suggested = numbering.next_employee_no(db)
+    return render(
+        request,
+        "employees/form.html",
+        {
+            "employee": None,
+            # 자동 채번이 꺼져 있으면 비워 두고 직접 입력받는다
+            "form": {"status": "ACTIVE", "emp_no": suggested or ""},
+            "auto_numbered": suggested is not None,
+        },
+    )
 
 
 @router.post("/new")
@@ -126,6 +163,85 @@ def export_employees(request: Request, db: DbSession, user: CurrentUser):
     return _xlsx_response(excel.export_employees(employees), f"직원목록_{date.today():%Y%m%d}.xlsx")
 
 
+@router.post("/quick")
+async def quick_create_employee(request: Request, db: DbSession, user: AdminUser):
+    """자산 지급 화면의 팝업에서 직원을 바로 등록한다.
+
+    화면 이동 없이 처리해야 해서 HTML 대신 JSON 으로 답한다.
+    등록 규칙은 일반 등록 화면과 같은 함수를 쓰므로 검증이 어긋나지 않는다.
+    """
+    data = dict(await request.form())
+    try:
+        values = _read_employee_form(data)
+    except ValueError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
+
+    if db.scalar(select(Employee).where(Employee.emp_no == values["emp_no"])):
+        return JSONResponse(
+            {"ok": False, "error": f"사번 '{values['emp_no']}'는 이미 등록되어 있습니다."},
+            status_code=400,
+        )
+
+    employee = Employee(**values)
+    db.add(employee)
+    db.commit()
+    db.refresh(employee)
+
+    label = f"{employee.name} ({employee.emp_no}"
+    label += f" · {employee.department})" if employee.department else ")"
+    return JSONResponse(
+        {
+            "ok": True,
+            "id": employee.id,
+            "label": label,
+            # 이어서 또 등록할 때 쓰도록 다음 번호를 함께 준다
+            "next_emp_no": numbering.next_employee_no(db) or "",
+            # 드롭다운 검색이 쓰는 값
+            "search": " ".join(
+                filter(None, [employee.name, employee.emp_no,
+                              employee.department, employee.position])
+            ),
+        }
+    )
+
+
+@router.get("/template")
+def download_employee_template(request: Request, user: AdminUser):
+    return _xlsx_response(excel.export_employee_template(), "직원등록_양식.xlsx")
+
+
+@router.get("/import")
+def import_employee_form(request: Request, user: AdminUser):
+    return render(request, "employees/import.html", {"result": None})
+
+
+@router.post("/import")
+async def import_employees(request: Request, db: DbSession, user: AdminUser, file: UploadFile):
+    if not (file.filename or "").lower().endswith((".xlsx", ".xlsm")):
+        return render(
+            request,
+            "employees/import.html",
+            {"result": None, "error": "엑셀 파일(.xlsx)만 올릴 수 있습니다."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    content = await file.read()
+    if len(content) > config.MAX_UPLOAD_BYTES:
+        limit_mb = config.MAX_UPLOAD_BYTES // (1024 * 1024)
+        return render(
+            request,
+            "employees/import.html",
+            {"result": None, "error": f"파일이 너무 큽니다. {limit_mb}MB 이하로 올려 주세요."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    result = excel.import_employees(db, content)
+    if result.total_processed and not result.has_errors:
+        flash(request, result.summary())
+        return RedirectResponse("/employees", status_code=status.HTTP_303_SEE_OTHER)
+    return render(request, "employees/import.html", {"result": result})
+
+
 @router.get("/{employee_id}")
 def employee_detail(request: Request, db: DbSession, user: CurrentUser, employee_id: int):
     employee = _get_employee(db, employee_id)
@@ -158,7 +274,12 @@ async def update_employee(request: Request, db: DbSession, user: AdminUser, empl
     employee = _get_employee(db, employee_id)
     data = dict(await request.form())
     try:
-        values = _read_employee_form(data, emp_no_required=False)
+        values = _read_employee_form(data)
+        # 사번을 바꿀 때는 다른 직원과 겹치지 않아야 한다
+        if values["emp_no"] != employee.emp_no:
+            clash = db.scalar(select(Employee).where(Employee.emp_no == values["emp_no"]))
+            if clash is not None:
+                raise ValueError(f"사번 '{values['emp_no']}'는 이미 다른 직원이 쓰고 있습니다.")
     except ValueError as exc:
         return render(
             request,

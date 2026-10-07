@@ -1,5 +1,7 @@
 {% extends "base.html" %}
+{% set back_url = ('/assets/' ~ asset.id) if asset else '/assets' %}
 {% set active = 'assets' %}
+{% set page_width = 'narrow' %}
 {% set editing = asset is not none %}
 {# form 이 있으면 방금 입력한 값(오류 재표시), 없으면 DB 값을 보여준다 #}
 {% macro val(field, fallback='') %}
@@ -26,6 +28,7 @@
   <div class="card-body">
     <form method="post" action="{{ '/assets/' ~ asset.id ~ '/edit' if editing else '/assets/new' }}">
       <div class="form-grid">
+        <div class="form-section-title">기본 정보</div>
         <div class="field">
           <label for="asset_no">자산번호<span class="req">*</span></label>
           {% if editing %}
@@ -33,7 +36,11 @@
             <div class="hint">자산번호는 변경할 수 없습니다.</div>
           {% else %}
             <input type="text" id="asset_no" name="asset_no" value="{{ val('asset_no') }}" required maxlength="50">
-            <div class="hint">사내 자산 라벨과 동일하게 입력하세요. 예: IT-2026-0001</div>
+            {% if auto_numbered %}
+              <div class="hint">기존 번호 다음으로 자동으로 매겨졌습니다. 필요하면 고쳐도 됩니다.</div>
+            {% else %}
+              <div class="hint">사내 자산 라벨과 동일하게 입력하세요.</div>
+            {% endif %}
           {% endif %}
         </div>
         <div class="field">
@@ -82,6 +89,7 @@
           <input type="text" id="spec" name="spec" value="{{ val('spec') }}" placeholder="예: i7-1360P / 32GB / SSD 1TB">
         </div>
 
+        <div class="form-section-title">도입 · 보증</div>
         <div class="field">
           <label for="purchase_date">도입일</label>
           <input type="date" id="purchase_date" name="purchase_date" value="{{ dateval('purchase_date') }}">
@@ -100,6 +108,7 @@
           <input type="text" id="supplier" name="supplier" value="{{ val('supplier') }}" maxlength="80">
         </div>
 
+        <div class="form-section-title">기타</div>
         <div class="field full">
           <label for="license_key">라이선스 키 / 계약번호</label>
           <input type="text" id="license_key" name="license_key" value="{{ val('license_key') }}" maxlength="255">
@@ -110,9 +119,38 @@
           <label for="note">비고</label>
           <textarea id="note" name="note">{{ val('note') }}</textarea>
         </div>
+
+        <div class="form-section-title">
+          감가상각 <span class="muted" style="font-weight:400;">(선택)</span>
+          <div class="hint">
+            설정하면 현재 장부가액이 자동으로 계산되고, 엑셀 내보내기에도 함께 나옵니다.
+            취득가액과 도입일이 있어야 계산됩니다.
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="depreciation_method">상각방법</label>
+          <select id="depreciation_method" name="depreciation_method">
+            {% for code, label in DEPRECIATION_METHODS.items() %}
+              <option value="{{ code }}" {{ selected('depreciation_method', code, 'NONE') }}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">보통 정액법을 씁니다.</div>
+        </div>
+        <div class="field">
+          <label for="useful_life_years">내용연수 (년)</label>
+          <input type="number" id="useful_life_years" name="useful_life_years" min="1" max="50"
+                 value="{{ val('useful_life_years') }}" placeholder="예: 노트북 4, 서버 5">
+        </div>
+        <div class="field">
+          <label for="salvage_value">잔존가치 (원)</label>
+          <input type="text" id="salvage_value" name="salvage_value" inputmode="numeric"
+                 value="{{ val('salvage_value') }}" placeholder="보통 0">
+          <div class="hint">내용연수가 끝난 뒤 남는 가치입니다.</div>
+        </div>
       </div>
 
-      <div class="form-actions">
+      <div class="form-actions sticky">
         <button type="submit" class="btn primary">{{ '수정 저장' if editing else '등록' }}</button>
         <a href="{{ '/assets/' ~ asset.id if editing else '/assets' }}" class="btn">취소</a>
       </div>

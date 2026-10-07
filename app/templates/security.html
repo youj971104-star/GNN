@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set page_width = 'narrow' %}
+{% set back_url = '/' %}
+{% block page_title %}보안 설정{% endblock %}
+{% block content %}
+
+<div class="card" style="max-width:720px;">
+  <h2>2단계 인증</h2>
+  <div class="card-body">
+    {% if current_user.totp_enabled %}
+      <div class="alert success" style="margin-top:0;">
+        <strong>2단계 인증이 켜져 있습니다.</strong>
+        로그인할 때 비밀번호에 더해 인증 앱의 6자리 코드를 입력해야 합니다.
+      </div>
+
+      <dl class="detail" style="grid-template-columns:150px 1fr;">
+        <dt>남은 복구 코드</dt>
+        <dd>
+          {{ codes_left }}개
+          {% if codes_left <= 2 %}<span class="badge LOST">부족</span>{% endif %}
+        </dd>
+      </dl>
+
+      <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+        <strong style="font-size:13px;">복구 코드 새로 발급</strong>
+        <p class="muted" style="font-size:12px; margin:4px 0 10px;">
+          새로 발급하면 기존 복구 코드는 모두 쓸 수 없게 됩니다.
+        </p>
+        <form method="post" action="/me/security/recovery-codes" class="filter-form">
+          <div class="field grow">
+            <label for="rc_password">비밀번호 확인</label>
+            <input type="password" id="rc_password" name="password" autocomplete="current-password" required>
+          </div>
+          <div class="field"><button type="submit" class="btn">새로 발급</button></div>
+        </form>
+      </div>
+
+      <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+        <strong style="font-size:13px; color:var(--danger);">2단계 인증 끄기</strong>
+        <p class="muted" style="font-size:12px; margin:4px 0 10px;">
+          끄면 비밀번호만으로 로그인할 수 있게 됩니다. 인터넷에 열린 서버라면 권하지 않습니다.
+        </p>
+        <form method="post" action="/me/security/2fa/disable" class="filter-form"
+              data-confirm="2단계 인증을 끌까요? 비밀번호만으로 로그인할 수 있게 됩니다.">
+          <div class="field grow">
+            <label for="off_password">비밀번호 확인</label>
+            <input type="password" id="off_password" name="password" autocomplete="current-password" required>
+          </div>
+          <div class="field"><button type="submit" class="btn danger">2단계 인증 끄기</button></div>
+        </form>
+      </div>
+
+    {% else %}
+      <p style="margin-top:0;">
+        비밀번호에 더해 <strong>휴대폰 인증 앱의 6자리 코드</strong>를 한 번 더 확인합니다.
+        비밀번호가 새어 나가더라도 본인의 휴대폰이 없으면 로그인할 수 없습니다.
+      </p>
+      <p class="muted" style="font-size:13px;">
+        사무실 밖에서도 접속해야 한다면 켜 두시길 권합니다.
+        인증 앱은 Google Authenticator, Microsoft Authenticator 등 아무거나 괜찮습니다.
+      </p>
+      <div class="form-actions" style="border-top:none; padding-top:0; margin-top:10px;">
+        <a href="/me/security/2fa" class="btn primary">2단계 인증 켜기</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="max-width:720px;">
+  <h2>비밀번호</h2>
+  <div class="card-body">
+    <p class="muted" style="margin-top:0;">마지막 로그인: {{ current_user.last_login_at | datetime('기록 없음') }}</p>
+    <a href="/me/password" class="btn">비밀번호 변경</a>
+  </div>
+</div>
+
+{% endblock %}

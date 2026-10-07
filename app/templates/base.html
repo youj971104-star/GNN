@@ -1,14 +1,19 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="{{ theme }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   {%- set page_name = self.page_title() %}
   <title>{{ (page_name ~ ' · ') if page_name }}{{ APP_NAME }}</title>
   <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>💻</text></svg>">
+  {% include '_pwa_head.html' %}
 </head>
 <body>
+{# 화면마다 본문 폭을 정한다. 넓은 모니터에서 표와 입력칸이 끝없이 늘어나
+   시선이 흩어지지 않도록, 가운데 일정한 폭 안에 모아 둔다.
+     normal (기본) 목록·대시보드  /  narrow 입력 화면  /  wide 칸이 아주 많은 표 #}
+{%- set width_class = 'page-' ~ (page_width | default('normal')) %}
 <div class="layout">
   <aside class="sidebar">
     <div class="brand">
@@ -20,10 +25,15 @@
       <a href="/assets" class="{{ 'active' if active == 'assets' }}">자산 관리</a>
       <a href="/employees" class="{{ 'active' if active == 'employees' }}">직원 관리</a>
       <a href="/assignments" class="{{ 'active' if active == 'assignments' }}">지급 / 반납 이력</a>
+      <a href="/maintenance" class="{{ 'active' if active == 'maintenance' }}">정비 이력</a>
+      <a href="/scan" class="{{ 'active' if active == 'scan' }}">QR 스캔</a>
+      <a href="/install" class="nav-install {{ 'active' if active == 'install' }}">폰에 앱 설치</a>
       {% if current_user and current_user.is_admin %}
       <div class="nav-section">관리자</div>
-      <a href="/assets/import" class="{{ 'active' if active == 'import' }}">엑셀 일괄 등록</a>
+      <a href="/assets/import" class="{{ 'active' if active == 'import' }}">자산 일괄 등록</a>
+      <a href="/employees/import" class="{{ 'active' if active == 'emp_import' }}">직원 일괄 등록</a>
       <a href="/users" class="{{ 'active' if active == 'users' }}">계정 관리</a>
+      <a href="/settings" class="{{ 'active' if active == 'settings' }}">채번 설정</a>
       {% endif %}
     </nav>
     <div class="sidebar-foot">v{{ APP_VERSION }}</div>
@@ -31,27 +41,50 @@
 
   <div class="main">
     <header class="topbar">
-      <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+      <div class="topbar-inner page {{ width_class }}">
+      <div class="topbar-left">
+        {% if back_url %}
+          {# 브라우저 기록이 있으면 그쪽을 쓴다. 목록에서 걸어둔 검색 조건이 유지된다.
+             기록이 없거나 다른 사이트에서 왔으면 href 의 상위 화면으로 간다. #}
+          <a href="{{ back_url }}" class="btn back-btn" data-back title="이전 화면으로">
+            <span aria-hidden="true">←</span> 뒤로
+          </a>
+        {% endif %}
+        <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
+      </div>
       <div class="user-box">
         {% if current_user %}
           <span><strong>{{ current_user.name }}</strong> 님</span>
           <span class="badge {{ current_user.role }}">{{ current_user.role_label }}</span>
-          <a href="/me/password" class="btn small">비밀번호 변경</a>
+          {# 누를 때마다 자동 → 다크 → 라이트 → 자동. 자바스크립트가 없으면 보이지 않는다. #}
+          <button type="button" class="btn small theme-toggle" data-theme-toggle hidden
+                  title="화면 밝기 바꾸기 (자동은 컴퓨터·폰 설정을 따릅니다)">
+            화면: <span data-theme-label>{{ THEMES[theme] }}</span>
+          </button>
+          <a href="/me/security" class="btn small">보안 설정</a>
           <form method="post" action="/logout" class="inline-form">
             <button type="submit" class="btn small">로그아웃</button>
           </form>
         {% endif %}
       </div>
+      </div>
     </header>
 
     <main class="content">
+      <div class="page {{ width_class }}">
       {% for item in flashes %}
         <div class="alert {{ item.category }}">{{ item.message }}</div>
       {% endfor %}
       {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
       {% block content %}{% endblock %}
+      </div>
     </main>
   </div>
 </div>
+<script src="/static/js/back-button.js" defer></script>
+<script src="/static/js/confirm.js" defer></script>
+<script src="/static/js/ui.js" defer></script>
+<script src="/static/js/searchable-select.js" defer></script>
+<script src="/static/js/quick-employee.js" defer></script>
 </body>
 </html>

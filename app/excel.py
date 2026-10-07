@@ -16,10 +16,12 @@ from sqlalchemy.orm import Session
 from app.models import (
     ASSET_CATEGORIES,
     ASSET_STATUSES,
+    DEPRECIATION_METHODS,
     EMPLOYEE_STATUSES,
     Asset,
     Assignment,
     Employee,
+    Maintenance,
 )
 
 HEADER_FILL = PatternFill("solid", fgColor="1F3B63")
@@ -43,14 +45,34 @@ ASSET_COLUMNS: list[tuple[str, str, int]] = [
     ("license_key", "라이선스키", 24),
     ("holder_emp_no", "사용자 사번", 14),
     ("holder_name", "사용자명", 12),
+    ("depreciation_method", "상각방법", 12),
+    ("useful_life_years", "내용연수", 10),
+    ("salvage_value", "잔존가치", 12),
+    ("book_value", "장부가액", 14),
     ("note", "비고", 30),
 ]
 
 # 업로드 파일에서 필수인 열
 REQUIRED_UPLOAD_HEADERS = ("자산번호", "자산명")
 
+# 직원 업로드 열
+EMPLOYEE_COLUMNS: list[tuple[str, int]] = [
+    ("사번", 14),
+    ("이름", 12),
+    ("부서", 16),
+    ("직급", 12),
+    ("이메일", 26),
+    ("연락처", 16),
+    ("재직상태", 10),
+    ("비고", 30),
+]
+REQUIRED_EMPLOYEE_HEADERS = ("사번", "이름")
+
+_EMPLOYEE_STATUS_BY_LABEL = {label: code for code, label in EMPLOYEE_STATUSES.items()}
+
 _CATEGORY_BY_LABEL = {label: code for code, label in ASSET_CATEGORIES.items()}
 _STATUS_BY_LABEL = {label: code for code, label in ASSET_STATUSES.items()}
+_DEPRECIATION_BY_LABEL = {label: code for code, label in DEPRECIATION_METHODS.items()}
 
 
 # --- 공통 유틸 ----------------------------------------------------------------
@@ -167,6 +189,10 @@ def export_assets(assets: list[Asset]) -> bytes:
                 asset.license_key,
                 asset.holder.emp_no if asset.holder else None,
                 asset.holder.name if asset.holder else None,
+                asset.depreciation_label,
+                asset.useful_life_years,
+                float(asset.salvage_value) if asset.salvage_value is not None else None,
+                asset.book_value(),
                 asset.note,
             ]
         )
@@ -175,6 +201,8 @@ def export_assets(assets: list[Asset]) -> bytes:
         row[10].number_format = "yyyy-mm-dd"  # 도입일
         row[11].number_format = "#,##0"       # 취득가액
         row[12].number_format = "yyyy-mm-dd"  # 보증만료일
+        row[18].number_format = "#,##0"       # 잔존가치
+        row[19].number_format = "#,##0"       # 장부가액
     return _to_bytes(wb)
 
 
@@ -188,7 +216,9 @@ def export_asset_template() -> bytes:
         [
             "IT-2026-0001", "개발팀 노트북", "노트북", "재고", "LG전자", "그램 16",
             "SN-EXAMPLE-001", "i7 / 32GB / 1TB", "본사 3층 창고", "테크상사",
-            "2026-01-15", 2150000, "2029-01-14", "", "", "", "예시 행입니다. 지우고 사용하세요.",
+            "2026-01-15", 2150000, "2029-01-14", "", "", "",
+            "정액법", 4, 0, "",
+            "예시 행입니다. 지우고 사용하세요.",
         ]
     )
 
@@ -208,6 +238,10 @@ def export_asset_template() -> bytes:
         ("취득가액", "숫자만 입력하세요. 쉼표는 넣어도 됩니다."),
         ("사용자 사번", "이미 등록된 직원의 사번을 넣으면 해당 직원에게 지급 처리되고 이력이 남습니다. 비우면 미지급 상태."),
         ("사용자명", "참고용입니다. 지급 대상은 '사용자 사번'으로 판단합니다."),
+        ("상각방법", f"{', '.join(DEPRECIATION_METHODS.values())} 중 하나. 비우면 '사용 안 함'."),
+        ("내용연수", "감가상각 기간(년). 예: 노트북 4, 서버 5"),
+        ("잔존가치", "내용연수가 끝난 뒤 남는 가치. 보통 0 입니다."),
+        ("장부가액", "시스템이 계산해서 내보내는 값입니다. 업로드할 때는 무시됩니다."),
     ]
     for row in rows:
         guide.append(row)
@@ -267,6 +301,37 @@ def export_assignments(assignments: list[Assignment]) -> bytes:
         )
     for row in ws.iter_rows(min_row=2):
         row[6].number_format = "yyyy-mm-dd"
+        row[7].number_format = "yyyy-mm-dd"
+    return _to_bytes(wb)
+
+
+def export_maintenance(items: list[Maintenance]) -> bytes:
+    """정비 이력을 엑셀 파일 바이트로."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "정비이력"
+    headers = [
+        "정비일", "자산번호", "자산명", "종류", "업체",
+        "작업 내용", "비용", "다음 점검일", "처리자",
+    ]
+    _style_header(ws, headers, [12, 16, 24, 12, 16, 40, 14, 12, 12])
+    for item in items:
+        ws.append(
+            [
+                item.maintained_at,
+                item.asset.asset_no,
+                item.asset.name,
+                item.kind_label,
+                item.vendor,
+                item.description,
+                float(item.cost) if item.cost is not None else None,
+                item.next_due,
+                item.created_by,
+            ]
+        )
+    for row in ws.iter_rows(min_row=2):
+        row[0].number_format = "yyyy-mm-dd"
+        row[6].number_format = "#,##0"
         row[7].number_format = "yyyy-mm-dd"
     return _to_bytes(wb)
 
@@ -384,6 +449,15 @@ def import_assets(db: Session, content: bytes, *, actor: str | None = None) -> I
             asset.license_key = _cell_text(value_of(row, "라이선스키"))
             asset.note = _cell_text(value_of(row, "비고"))
 
+            # 감가상각. '장부가액'은 시스템이 계산하는 값이라 읽지 않는다.
+            asset.depreciation_method = _cell_code(
+                value_of(row, "상각방법"), DEPRECIATION_METHODS,
+                _DEPRECIATION_BY_LABEL, "상각방법", "NONE",
+            )
+            useful_life = _cell_text(value_of(row, "내용연수"))
+            asset.useful_life_years = int(float(useful_life)) if useful_life else None
+            asset.salvage_value = _cell_money(value_of(row, "잔존가치"), "잔존가치")
+
             holder_emp_no = _cell_text(value_of(row, "사용자 사번"))
             db.flush()  # 신규 자산의 id 를 확보한다
 
@@ -414,6 +488,125 @@ def import_assets(db: Session, content: bytes, *, actor: str | None = None) -> I
     wb.close()
     if result.skipped > MAX_REPORTED_ERRORS:
         result.errors.append(f"... 그 외 {result.skipped - MAX_REPORTED_ERRORS}건의 오류가 더 있습니다.")
+    return result
+
+
+def export_employee_template() -> bytes:
+    """직원 일괄 등록용 빈 양식."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "직원등록양식"
+    _style_header(ws, [name for name, _ in EMPLOYEE_COLUMNS], [w for _, w in EMPLOYEE_COLUMNS])
+    ws.append(["2026001", "홍길동", "개발팀", "선임", "gildong@example.com",
+               "010-1234-5678", "재직", "예시 행입니다. 지우고 사용하세요."])
+
+    guide = wb.create_sheet("작성안내")
+    guide.column_dimensions["A"].width = 16
+    guide.column_dimensions["B"].width = 80
+    guide.append(["항목", "설명"])
+    for cell in guide[1]:
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+    for row in [
+        ("사번", "필수. 직원을 구분하는 고유 번호입니다. 이미 있는 사번이면 정보가 갱신됩니다."),
+        ("이름", "필수."),
+        ("부서", "자산 현황을 부서별로 집계할 때 쓰입니다."),
+        ("재직상태", f"다음 중 하나: {', '.join(EMPLOYEE_STATUSES.values())} (비우면 '재직')"),
+        ("이메일", "@ 가 들어간 형식이어야 합니다. 비워도 됩니다."),
+    ]:
+        guide.append(row)
+        guide.cell(row=guide.max_row, column=2).alignment = Alignment(wrap_text=True, vertical="top")
+    return _to_bytes(wb)
+
+
+def import_employees(db: Session, content: bytes) -> ImportResult:
+    """엑셀 파일을 읽어 직원을 등록/갱신한다.
+
+    사번이 이미 있으면 갱신, 없으면 새로 등록한다.
+    자산 업로드와 마찬가지로, 잘못된 행은 건너뛰고 나머지는 그대로 반영한다.
+    """
+    result = ImportResult()
+
+    try:
+        wb = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    except Exception as exc:
+        result.errors.append(f"엑셀 파일을 열 수 없습니다: {exc}")
+        result.skipped = 1
+        return result
+
+    ws = wb.worksheets[0]
+    rows = ws.iter_rows(values_only=True)
+    try:
+        header_row = next(rows)
+    except StopIteration:
+        result.errors.append("빈 파일입니다. 데이터가 있는 엑셀을 올려 주세요.")
+        return result
+
+    headers = [(_cell_text(c) or "") for c in header_row]
+    index = {header: pos for pos, header in enumerate(headers) if header}
+    missing = [h for h in REQUIRED_EMPLOYEE_HEADERS if h not in index]
+    if missing:
+        result.errors.append(
+            f"필수 열이 없습니다: {', '.join(missing)}. '양식 다운로드'로 받은 파일을 사용해 주세요."
+        )
+        return result
+
+    def value_of(row: tuple, header: str):
+        pos = index.get(header)
+        if pos is None or pos >= len(row):
+            return None
+        return row[pos]
+
+    seen: set[str] = set()
+    for row_no, row in enumerate(rows, start=2):
+        if row is None or all(cell is None or str(cell).strip() == "" for cell in row):
+            continue
+
+        try:
+            emp_no = _cell_text(value_of(row, "사번"))
+            if not emp_no:
+                raise ValueError("사번이 비어 있습니다.")
+            if emp_no in seen:
+                raise ValueError(f"같은 파일 안에 사번 '{emp_no}'가 중복으로 있습니다.")
+            seen.add(emp_no)
+
+            name = _cell_text(value_of(row, "이름"))
+            if not name:
+                raise ValueError("이름이 비어 있습니다.")
+
+            email = _cell_text(value_of(row, "이메일"))
+            if email and "@" not in email:
+                raise ValueError(f"이메일 형식이 올바르지 않습니다: '{email}'")
+
+            employee = db.scalar(select(Employee).where(Employee.emp_no == emp_no))
+            is_new = employee is None
+            if is_new:
+                employee = Employee(emp_no=emp_no)
+                db.add(employee)
+
+            employee.name = name
+            employee.department = _cell_text(value_of(row, "부서"))
+            employee.position = _cell_text(value_of(row, "직급"))
+            employee.email = email
+            employee.phone = _cell_text(value_of(row, "연락처"))
+            employee.status = _cell_code(
+                value_of(row, "재직상태"), EMPLOYEE_STATUSES,
+                _EMPLOYEE_STATUS_BY_LABEL, "재직상태", "ACTIVE",
+            )
+            employee.note = _cell_text(value_of(row, "비고"))
+
+            result.created += int(is_new)
+            result.updated += int(not is_new)
+        except Exception as exc:
+            db.rollback()
+            result.skipped += 1
+            if len(result.errors) < MAX_REPORTED_ERRORS:
+                result.errors.append(f"{row_no}행: {exc}")
+            continue
+        else:
+            db.commit()
+
+    wb.close()
     return result
 
 

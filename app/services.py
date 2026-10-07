@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app import config
+from app.sorting import Sort, SortColumn, by_code_order, read_sort
 from app.models import (
     ASSET_CATEGORIES,
     ASSET_STATUSES,
@@ -21,6 +22,24 @@ from app.models import (
 
 class BusinessError(Exception):
     """사용자에게 그대로 보여줄 수 있는 업무 규칙 위반."""
+
+
+# 자산 목록에서 칸 제목을 눌러 정렬할 수 있는 칸들
+_HOLDER_NAME = (
+    select(Employee.name).where(Employee.id == Asset.holder_id).correlate(Asset).scalar_subquery()
+)
+ASSET_SORT_COLUMNS: dict[str, SortColumn] = {
+    "asset_no": SortColumn((Asset.asset_no,)),
+    "name": SortColumn((Asset.name, Asset.model_name)),
+    "category": SortColumn((by_code_order(Asset.category, ASSET_CATEGORIES),)),
+    "status": SortColumn((by_code_order(Asset.status, ASSET_STATUSES),)),
+    "holder": SortColumn((_HOLDER_NAME,)),
+    "location": SortColumn((Asset.location,)),
+    # 예전 주소(?sort=purchase_date)는 방향 없이 '최신·큰 값이 위'였다. 그대로 지킨다.
+    "purchase_date": SortColumn((Asset.purchase_date,), default_desc=True),
+    "purchase_price": SortColumn((Asset.purchase_price,), default_desc=True),
+    "updated_at": SortColumn((Asset.updated_at,), default_desc=True),
+}
 
 
 # --- 자산 검색 ----------------------------------------------------------------
@@ -36,21 +55,28 @@ class AssetFilter:
     holder_id: int | None = None
     unassigned: bool = False
     sort: str = "asset_no"
+    direction: str | None = None
 
-    SORTS: dict[str, str] = field(
-        default_factory=lambda: {
-            "asset_no": "자산번호",
-            "name": "자산명",
-            "purchase_date": "도입일",
-            "purchase_price": "취득가액",
-            "updated_at": "최근 수정일",
-        },
-        repr=False,
-    )
+    @property
+    def sorting(self) -> Sort:
+        return read_sort(
+            {"sort": self.sort, "dir": self.direction}, ASSET_SORT_COLUMNS, "asset_no"
+        )
 
     def apply(self, stmt: Select) -> Select:
         if self.q:
             keyword = f"%{self.q.strip()}%"
+            # 자산 자체의 정보뿐 아니라, 그 자산을 쓰고 있는 직원으로도 찾을 수 있게 한다.
+            # "김서준이 뭘 들고 있지?" 를 자산 목록에서 바로 확인하는 쪽이 자연스럽다.
+            holder_match = Asset.holder_id.in_(
+                select(Employee.id).where(
+                    or_(
+                        Employee.name.ilike(keyword),
+                        Employee.emp_no.ilike(keyword),
+                        Employee.department.ilike(keyword),
+                    )
+                )
+            )
             stmt = stmt.where(
                 or_(
                     Asset.asset_no.ilike(keyword),
@@ -60,6 +86,7 @@ class AssetFilter:
                     Asset.manufacturer.ilike(keyword),
                     Asset.location.ilike(keyword),
                     Asset.note.ilike(keyword),
+                    holder_match,
                 )
             )
         if self.category:
@@ -79,17 +106,8 @@ class AssetFilter:
         return stmt
 
     def order(self, stmt: Select) -> Select:
-        column = {
-            "asset_no": Asset.asset_no,
-            "name": Asset.name,
-            "purchase_date": Asset.purchase_date,
-            "purchase_price": Asset.purchase_price,
-            "updated_at": Asset.updated_at,
-        }.get(self.sort, Asset.asset_no)
-        # 도입일/취득가액/수정일은 최신·큰 값이 위로 오는 편이 자연스럽다.
-        if self.sort in ("purchase_date", "purchase_price", "updated_at"):
-            return stmt.order_by(column.desc().nullslast(), Asset.asset_no)
-        return stmt.order_by(column, Asset.id)
+        # 같은 값끼리는 자산번호 순서로 늘어놓는다
+        return self.sorting.order(stmt, Asset.asset_no, Asset.id)
 
     @property
     def is_active(self) -> bool:

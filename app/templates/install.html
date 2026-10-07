@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% set page_width = 'narrow' %}
+{% set back_url = '/' %}
+{% set active = 'install' %}
+{% block page_title %}폰에 앱 설치{% endblock %}
+{% block content %}
+
+{# 지금 상태에 맞는 안내만 보인다 (static/js/pwa.js). 자바스크립트가 없으면 전부 보인다. #}
+<div class="alert success" data-install-state="installed" hidden>
+  이미 앱으로 설치되어 있습니다. 홈 화면의 <strong>자산관리</strong> 아이콘으로 여세요.
+</div>
+<div class="alert warn" data-install-state="insecure" hidden>
+  지금은 <strong>https://</strong> 주소가 아니어서 앱으로 설치할 수 없습니다.
+  도메인 주소(https://…)로 접속한 뒤 이 화면을 다시 열어 주세요.
+</div>
+
+<div class="card install-hero" data-install-state="ready" hidden>
+  <div class="card-body">
+    <img src="/static/icons/icon-192.png" alt="" width="56" height="56">
+    <div>
+      <strong>이 폰에 바로 설치할 수 있습니다</strong>
+      <div class="hint">아이콘이 홈 화면에 생기고, 주소창 없이 앱처럼 열립니다.</div>
+    </div>
+    <button type="button" class="btn primary" data-install-app>앱 설치</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>갤럭시 · 안드로이드</h2>
+  <div class="card-body install-steps">
+    <h3>크롬 (권장)</h3>
+    <ol>
+      <li>크롬으로 이 사이트에 접속해 로그인합니다.</li>
+      <li>오른쪽 위 <strong>⋮</strong> 메뉴 → <strong>홈 화면에 추가</strong> (또는 <strong>앱 설치</strong>)</li>
+      <li><strong>설치</strong>를 누르면 홈 화면에 <strong>자산관리</strong> 아이콘이 생깁니다.</li>
+    </ol>
+    <h3>삼성 인터넷</h3>
+    <ol>
+      <li>삼성 인터넷으로 접속해 로그인합니다.</li>
+      <li>주소창의 <strong>설치 아이콘(↓)</strong>을 누르거나,
+          아래쪽 <strong>≡</strong> 메뉴 → <strong>현재 페이지 추가</strong> → <strong>홈 화면</strong></li>
+    </ol>
+    <p class="hint">
+      로그인은 <strong>설치할 때 쓴 브라우저</strong>와 함께 기억됩니다.
+      앱 안의 <strong>QR 스캔</strong> 메뉴로 라벨을 찍으면 다시 로그인할 일이 없습니다.
+      폰 기본 카메라로 찍을 때도 같은 브라우저로 열리게 하려면
+      설정 → 애플리케이션 → 기본 앱 선택 → <strong>브라우저 앱</strong>을 설치한 브라우저로 맞춰 두세요.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>아이폰</h2>
+  <div class="card-body install-steps">
+    <ol>
+      <li><strong>사파리</strong>로 이 사이트에 접속합니다. (크롬 앱에서는 설치가 안 될 수 있습니다)</li>
+      <li>아래쪽 <strong>공유 버튼(□↑)</strong> → <strong>홈 화면에 추가</strong> → <strong>추가</strong></li>
+      <li>홈 화면의 <strong>자산관리</strong> 아이콘으로 열고, 처음 한 번 로그인합니다.</li>
+    </ol>
+    <p class="hint">아이폰은 앱과 사파리가 로그인을 따로 기억해서, 앱에서 한 번 더 로그인해야 합니다.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>설치하면</h2>
+  <div class="card-body">
+    <ul class="install-points">
+      <li>홈 화면 아이콘으로 바로 열리고, 주소창 없이 화면을 넓게 씁니다.</li>
+      <li>아이콘을 길게 누르면 <strong>QR 스캔</strong>·<strong>자산 관리</strong>로 바로 갈 수 있습니다. (안드로이드)</li>
+      <li>내용은 언제나 서버의 최신 정보입니다. 프로그램이 바뀌어도 앱을 다시 설치할 필요가 없습니다.</li>
+      <li>인터넷이 끊기면 안내 화면이 나옵니다. 연결 없이 보거나 입력할 수는 없습니다.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

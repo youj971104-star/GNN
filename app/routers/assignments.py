@@ -4,10 +4,10 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import joinedload
 
-from app import excel, forms
+from app import config, excel, forms, numbering
 from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import ASSET_STATUSES, Asset, Assignment, Employee
 from app.routers.assets import _xlsx_response
@@ -19,9 +19,48 @@ from app.services import (
     paginate,
     return_asset,
 )
+from app.sorting import SortColumn, read_sort
 from app.templating import flash, render
 
 router = APIRouter(prefix="/assignments", tags=["지급/반납"])
+
+
+def _asset_field(column):
+    return select(column).where(Asset.id == Assignment.asset_id).correlate(Assignment).scalar_subquery()
+
+
+def _employee_field(column):
+    return (
+        select(column).where(Employee.id == Assignment.employee_id)
+        .correlate(Assignment).scalar_subquery()
+    )
+
+
+def _days_held():
+    """보유일수: 반납했으면 반납일까지, 아니면 오늘까지."""
+    end = func.coalesce(Assignment.returned_at, func.current_date())
+    if config.DATABASE_URL.startswith("sqlite"):
+        return func.julianday(end) - func.julianday(Assignment.assigned_at)
+    return end - Assignment.assigned_at
+
+
+# 칸 제목을 눌러 정렬할 수 있는 칸들
+SORT_COLUMNS = {
+    "asset_no": SortColumn((_asset_field(Asset.asset_no),)),
+    "asset_name": SortColumn((_asset_field(Asset.name),)),
+    "employee": SortColumn((_employee_field(Employee.name),)),
+    "department": SortColumn((_employee_field(Employee.department),)),
+    "assigned_at": SortColumn((Assignment.assigned_at,), default_desc=True),
+    "returned_at": SortColumn((Assignment.returned_at,), default_desc=True),
+    "days": SortColumn((_days_held(),), default_desc=True),
+    # 오름차순이면 지급중이 먼저
+    "state": SortColumn((case((Assignment.returned_at.is_(None), 0), else_=1),)),
+}
+
+
+def _sort(request: Request):
+    # 기본은 예전과 같이 최근 지급이 위
+    return read_sort(request.query_params, SORT_COLUMNS, "assigned_at", default_desc=True)
 
 
 def _history_query(request: Request):
@@ -54,7 +93,7 @@ def _history_query(request: Request):
                 select(Employee.id).where(Employee.name.ilike(like) | Employee.emp_no.ilike(like))
             )
         )
-    return stmt.order_by(Assignment.assigned_at.desc(), Assignment.id.desc())
+    return _sort(request).order(stmt, Assignment.assigned_at.desc(), Assignment.id.desc())
 
 
 @router.get("")
@@ -64,7 +103,12 @@ def list_assignments(request: Request, db: DbSession, user: CurrentUser, page: i
     return render(
         request,
         "assignments/list.html",
-        {"page_obj": result, "employees": employees, "params": dict(request.query_params)},
+        {
+            "page_obj": result,
+            "employees": employees,
+            "params": dict(request.query_params),
+            "sort": _sort(request),
+        },
     )
 
 
@@ -86,10 +130,19 @@ def assign_form(request: Request, db: DbSession, user: AdminUser, asset_id: int 
     employees = list(
         db.scalars(select(Employee).where(Employee.status != "RESIGNED").order_by(Employee.name)).all()
     )
+    from app.services import departments
+
     return render(
         request,
         "assignments/new.html",
-        {"assets": assets, "employees": employees, "selected_asset_id": asset_id},
+        {
+            "assets": assets,
+            "employees": employees,
+            "selected_asset_id": asset_id,
+            # 직원 빠른 등록 팝업에 쓰는 값
+            "modal_departments": departments(db),
+            "modal_next_emp_no": numbering.next_employee_no(db),
+        },
     )
 
 

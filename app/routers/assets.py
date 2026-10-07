@@ -9,9 +9,18 @@ from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from app import config, excel, forms
+from app import config, excel, forms, labels, numbering
 from app.deps import AdminUser, CurrentUser, DbSession
-from app.models import ASSET_CATEGORIES, ASSET_STATUSES, Asset, Assignment, Employee
+from app.models import (
+    ASSET_CATEGORIES,
+    ASSET_STATUSES,
+    DEFAULT_USEFUL_LIFE,
+    DEPRECIATION_METHODS,
+    Asset,
+    Assignment,
+    Employee,
+    Maintenance,
+)
 from app.services import AssetFilter, all_matching_assets, departments, open_assignment, search_assets
 from app.templating import flash, render
 
@@ -38,6 +47,7 @@ def _filter_from_query(request: Request) -> AssetFilter:
         holder_id=forms.parse_int(params.get("holder_id")),
         unassigned=params.get("unassigned") == "1",
         sort=params.get("sort") or "asset_no",
+        direction=params.get("dir"),
     )
 
 
@@ -73,6 +83,11 @@ def _read_asset_form(data: dict, *, asset_no_required: bool = True) -> dict:
         "warranty_until": forms.parse_date(data.get("warranty_until"), "보증만료일"),
         "license_key": forms.clean_str(data.get("license_key"), 255),
         "note": forms.clean_str(data.get("note")),
+        "depreciation_method": forms.parse_choice(
+            data.get("depreciation_method"), DEPRECIATION_METHODS, "상각방법", "NONE"
+        ),
+        "useful_life_years": forms.parse_int(data.get("useful_life_years")),
+        "salvage_value": forms.parse_money(data.get("salvage_value"), "잔존가치"),
     }
     if asset_no_required:
         values["asset_no"] = forms.required_str(data.get("asset_no"), "자산번호", 50)
@@ -82,24 +97,18 @@ def _read_asset_form(data: dict, *, asset_no_required: bool = True) -> dict:
             raise ValueError("보증만료일은 도입일보다 빠를 수 없습니다.")
     if values["purchase_date"] and values["purchase_date"] > date.today():
         raise ValueError("도입일은 오늘 이후 날짜로 지정할 수 없습니다.")
+
+    if values["depreciation_method"] != "NONE":
+        if not values["useful_life_years"] or values["useful_life_years"] <= 0:
+            raise ValueError("감가상각을 쓰려면 내용연수를 1년 이상으로 입력해 주세요.")
+        if not values["purchase_price"]:
+            raise ValueError("감가상각을 쓰려면 취득가액이 필요합니다.")
+        if not values["purchase_date"]:
+            raise ValueError("감가상각을 쓰려면 도입일이 필요합니다.")
+        if values["salvage_value"] and values["salvage_value"] > values["purchase_price"]:
+            raise ValueError("잔존가치는 취득가액보다 클 수 없습니다.")
     return values
 
-
-def _next_asset_no(db: DbSession) -> str:
-    """IT-2026-0001 형태의 다음 자산번호를 추천한다."""
-    prefix = f"IT-{date.today().year}-"
-    last = db.scalar(
-        select(Asset.asset_no)
-        .where(Asset.asset_no.like(f"{prefix}%"))
-        .order_by(Asset.asset_no.desc())
-        .limit(1)
-    )
-    seq = 1
-    if last:
-        tail = last[len(prefix):]
-        if tail.isdigit():
-            seq = int(tail) + 1
-    return f"{prefix}{seq:04d}"
 
 
 # --- 목록 / 상세 ---------------------------------------------------------------
@@ -122,12 +131,20 @@ def list_assets(request: Request, db: DbSession, user: CurrentUser, page: int = 
 
 @router.get("/new")
 def new_asset_form(request: Request, db: DbSession, user: AdminUser):
+    suggested = numbering.next_asset_no(db)
     return render(
         request,
         "assets/form.html",
         {
             "asset": None,
-            "form": {"asset_no": _next_asset_no(db), "status": "IN_STOCK", "category": "NOTEBOOK"},
+            # 자동 채번이 꺼져 있으면 비워 두고 직접 입력받는다
+            "form": {
+                "asset_no": suggested or "",
+                "status": "IN_STOCK",
+                "category": "NOTEBOOK",
+            },
+            "auto_numbered": suggested is not None,
+            "default_useful_life": DEFAULT_USEFUL_LIFE,
         },
     )
 
@@ -207,6 +224,30 @@ async def import_assets(request: Request, db: DbSession, user: AdminUser, file: 
     return render(request, "assets/import.html", {"result": result})
 
 
+@router.get("/labels")
+def print_labels(request: Request, db: DbSession, user: CurrentUser):
+    """현재 검색 조건에 맞는 자산들의 QR 라벨 인쇄 화면."""
+    filters = _filter_from_query(request)
+    assets = all_matching_assets(db, filters)
+
+    # QR 에는 이 서버의 주소를 그대로 담는다. 폰으로 찍으면 바로 열린다.
+    base = str(request.base_url).rstrip("/")
+    items = [
+        {"asset": asset, "qr": labels.qr_svg(base + labels.short_path(asset.asset_no))}
+        for asset in assets[: config.MAX_LABELS_PER_PRINT]
+    ]
+    return render(
+        request,
+        "assets/labels.html",
+        {
+            "items": items,
+            "filters": filters,
+            "total": len(assets),
+            "limit": config.MAX_LABELS_PER_PRINT,
+        },
+    )
+
+
 @router.get("/{asset_id}")
 def asset_detail(request: Request, db: DbSession, user: CurrentUser, asset_id: int):
     asset = _get_asset(db, asset_id)
@@ -218,14 +259,28 @@ def asset_detail(request: Request, db: DbSession, user: CurrentUser, asset_id: i
             .order_by(Assignment.assigned_at.desc(), Assignment.id.desc())
         ).all()
     )
+    maintenances = list(
+        db.scalars(
+            select(Maintenance)
+            .where(Maintenance.asset_id == asset.id)
+            .order_by(Maintenance.maintained_at.desc(), Maintenance.id.desc())
+        ).all()
+    )
+    base = str(request.base_url).rstrip("/")
     return render(
         request,
         "assets/detail.html",
         {
             "asset": asset,
             "history": history,
+            "maintenances": maintenances,
             "current": open_assignment(db, asset.id),
             "employees": _employee_choices(db),
+            # 직원 빠른 등록 팝업에 쓰는 값
+            "modal_departments": departments(db),
+            "modal_next_emp_no": numbering.next_employee_no(db),
+            "qr_svg": labels.qr_svg(base + labels.short_path(asset.asset_no), box_size=3),
+            "qr_target": base + labels.short_path(asset.asset_no),
         },
     )
 

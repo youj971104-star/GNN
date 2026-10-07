@@ -1,5 +1,7 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pagination, asset_status, holder_link %}
+{% set back_url = '/' %}
+{% from "_macros.html" import pagination, asset_status, holder_link, sort_th, keep_sort %}
+{% set sort = filters.sorting %}
 {% set active = 'assets' %}
 {% block page_title %}자산 관리{% endblock %}
 {% block content %}
@@ -8,6 +10,7 @@
   <div class="muted">사내 IT 자산 대장입니다. 자산번호·모델명·시리얼번호 등으로 검색할 수 있습니다.</div>
   <div class="section-actions">
     <a href="/assets/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
+    <a href="/assets/labels{{ merge_query(request, page=None) }}" class="btn">QR 라벨 인쇄</a>
     {% if current_user.is_admin %}
       <a href="/assets/import" class="btn">엑셀 일괄 등록</a>
       <a href="/assets/new" class="btn primary">+ 자산 등록</a>
@@ -20,7 +23,7 @@
     <form method="get" action="/assets" class="filter-form">
       <div class="field grow">
         <label for="q">검색어</label>
-        <input type="text" id="q" name="q" value="{{ filters.q or '' }}" placeholder="자산번호, 자산명, 모델명, 시리얼번호, 보관위치…">
+        <input type="text" id="q" name="q" value="{{ filters.q or '' }}" placeholder="자산번호, 자산명, 모델명, 시리얼번호, 보관위치, 사용자 이름·사번·부서…">
       </div>
       <div class="field">
         <label for="category">분류</label>
@@ -49,14 +52,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="field">
-        <label for="sort">정렬</label>
-        <select id="sort" name="sort">
-          {% for code, label in filters.SORTS.items() %}
-            <option value="{{ code }}" {{ 'selected' if filters.sort == code }}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {{ keep_sort(sort) }}
       <div class="field checkbox-field" style="padding-bottom:8px;">
         <input type="checkbox" id="unassigned" name="unassigned" value="1" {{ 'checked' if filters.unassigned }}>
         <label for="unassigned" style="margin:0;">미지급만</label>
@@ -77,27 +73,31 @@
       <table class="data">
         <thead>
           <tr>
-            <th>자산번호</th>
-            <th>자산명</th>
-            <th>분류</th>
-            <th>모델 / 시리얼</th>
-            <th class="center">상태</th>
-            <th>사용자</th>
-            <th>보관위치</th>
-            <th>도입일</th>
-            <th class="num">취득가액</th>
+            {{ sort_th(request, sort, 'asset_no', '자산번호') }}
+            {{ sort_th(request, sort, 'name', '자산명 · 모델') }}
+            {{ sort_th(request, sort, 'category', '분류') }}
+            {{ sort_th(request, sort, 'status', '상태', 'center') }}
+            {{ sort_th(request, sort, 'holder', '사용자') }}
+            {{ sort_th(request, sort, 'location', '보관위치') }}
+            {{ sort_th(request, sort, 'purchase_date', '도입일') }}
+            {{ sort_th(request, sort, 'purchase_price', '취득가액', 'num') }}
           </tr>
         </thead>
         <tbody>
         {% for asset in page_obj.items %}
-          <tr>
+          <tr data-href="/assets/{{ asset.id }}">
             <td class="mono nowrap"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
-            <td>{{ asset.name }}</td>
-            <td class="nowrap">{{ asset.category_label }}</td>
             <td>
-              {{ asset.model_name or '-' }}
-              {% if asset.serial_no %}<div class="muted mono" style="font-size:11px;">{{ asset.serial_no }}</div>{% endif %}
+              <div class="cell-title">{{ asset.name }}</div>
+              {% if asset.model_name or asset.serial_no %}
+              <div class="cell-sub">
+                {{ asset.model_name or '' }}
+                {%- if asset.model_name and asset.serial_no %} · {% endif -%}
+                {% if asset.serial_no %}<span class="mono">{{ asset.serial_no }}</span>{% endif %}
+              </div>
+              {% endif %}
             </td>
+            <td class="nowrap">{{ asset.category_label }}</td>
             <td class="center">{{ asset_status(asset) }}</td>
             <td class="nowrap">{{ holder_link(asset) }}</td>
             <td class="nowrap">{{ asset.location or '-' }}</td>
@@ -105,7 +105,7 @@
             <td class="num nowrap">{{ asset.purchase_price | money }}</td>
           </tr>
         {% else %}
-          <tr><td colspan="9" class="empty">
+          <tr><td colspan="8" class="empty">
             {% if filters.is_active %}검색 조건에 맞는 자산이 없습니다.{% else %}등록된 자산이 없습니다.{% endif %}
           </td></tr>
         {% endfor %}

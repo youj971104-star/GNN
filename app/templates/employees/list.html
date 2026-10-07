@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pagination %}
+{% set back_url = '/' %}
+{% from "_macros.html" import pagination, sort_th, keep_sort %}
 {% set active = 'employees' %}
 {% block page_title %}직원 관리{% endblock %}
 {% block content %}
@@ -8,13 +9,17 @@
   <div class="muted">자산을 지급받는 임직원 명부입니다.</div>
   <div class="section-actions">
     <a href="/employees/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
-    {% if current_user.is_admin %}<a href="/employees/new" class="btn primary">+ 직원 등록</a>{% endif %}
+    {% if current_user.is_admin %}
+      <a href="/employees/import" class="btn">엑셀 일괄 등록</a>
+      <a href="/employees/new" class="btn primary">+ 직원 등록</a>
+    {% endif %}
   </div>
 </div>
 
 <div class="card">
   <div class="card-body">
     <form method="get" action="/employees" class="filter-form">
+      {{ keep_sort(sort) }}
       <div class="field grow">
         <label for="q">검색어</label>
         <input type="text" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="이름, 사번, 부서, 직급, 이메일">
@@ -49,13 +54,19 @@
       <table class="data">
         <thead>
           <tr>
-            <th>사번</th><th>이름</th><th>부서</th><th>직급</th>
-            <th>이메일</th><th>연락처</th><th class="center">재직상태</th><th class="num">보유 자산</th>
+            {{ sort_th(request, sort, 'emp_no', '사번') }}
+            {{ sort_th(request, sort, 'name', '이름') }}
+            {{ sort_th(request, sort, 'department', '부서') }}
+            {{ sort_th(request, sort, 'position', '직급') }}
+            {{ sort_th(request, sort, 'email', '이메일') }}
+            {{ sort_th(request, sort, 'phone', '연락처') }}
+            {{ sort_th(request, sort, 'status', '재직상태', 'center') }}
+            {{ sort_th(request, sort, 'assets', '보유 자산', 'num') }}
           </tr>
         </thead>
         <tbody>
         {% for emp in page_obj.items %}
-          <tr>
+          <tr data-href="/employees/{{ emp.id }}">
             <td class="mono nowrap"><a href="/employees/{{ emp.id }}">{{ emp.emp_no }}</a></td>
             <td>{{ emp.name }}</td>
             <td>{{ emp.department or '-' }}</td>

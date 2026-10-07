@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>연결 없음 · {{ APP_NAME }}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" type="image/png" href="/static/icons/icon-192.png">
+  <meta name="theme-color" content="#1f3b63">
+</head>
+<body>
+{# 앱이 인터넷에 연결되지 않았을 때 서비스 워커가 대신 보여 주는 화면 #}
+<div class="login-page">
+  <div class="login-card offline-card">
+    <img src="/static/icons/icon-192.png" alt="" width="64" height="64">
+    <h1>인터넷에 연결되어 있지 않습니다</h1>
+    <p class="sub">
+      와이파이나 모바일 데이터를 확인한 뒤 다시 열어 주세요.<br>
+      자산 정보는 서버에 있어서, 연결이 없는 동안에는 보거나 고칠 수 없습니다.
+    </p>
+    <a class="btn primary" href="/">다시 시도</a>
+  </div>
+</div>
+</body>
+</html>

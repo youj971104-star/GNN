@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko" data-theme="{{ theme }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>로그인 · {{ APP_NAME }}</title>
   <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>💻</text></svg>">
+  {% include '_pwa_head.html' %}
 </head>
 <body>
 <div class="login-page">
@@ -18,6 +19,20 @@
     {% endfor %}
     {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
 
+    {% if in_app_browser %}
+      {# 앱 전용 브라우저는 쿠키를 따로 보관해, 찍을 때마다 다시 로그인하게 된다 #}
+      <div class="alert warn" style="text-align:left; line-height:1.6;">
+        지금 <strong>{{ in_app_browser }} 앱 안의 브라우저</strong>로 열렸습니다.
+        이 브라우저는 로그인이 저장되지 않아 QR 을 찍을 때마다 로그인을 다시 하게 됩니다.<br>
+        <strong>폰 기본 카메라 앱</strong>으로 QR 을 찍으면 한 번만 로그인하면 됩니다.
+        {% if reopen_url %}
+          <div style="margin-top:10px;">
+            <a class="btn" href="{{ reopen_url }}">크롬으로 열기</a>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
     <form method="post" action="/login">
       <input type="hidden" name="next" value="{{ next }}">
       <div class="field">
@@ -28,6 +43,16 @@
         <label for="password">비밀번호</label>
         <input type="password" id="password" name="password" autocomplete="current-password" required>
       </div>
+      <div class="field checkbox-field" style="margin:4px 0 14px;">
+        <input type="checkbox" id="shared_device" name="shared_device" value="1"
+               {{ 'checked' if shared_device }}>
+        <label for="shared_device" style="margin:0;">여러 사람이 쓰는 공용 PC 입니다</label>
+      </div>
+      <div class="hint" style="margin:-10px 0 16px 26px;">
+        체크하면 12시간 뒤 자동 로그아웃됩니다.
+        체크하지 않으면 이 기기에서 로그인이 유지되어, 폰으로 QR 을 찍을 때 다시 로그인하지 않습니다.
+      </div>
+
       <button type="submit" class="btn primary">로그인</button>
     </form>
 

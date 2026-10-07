@@ -7,11 +7,21 @@ from urllib.parse import urlencode
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
-from app import config, models
+from app import config, models, useragent
 
 templates = Jinja2Templates(directory=str(config.BASE_DIR / "templates"))
 
 FLASH_KEY = "_flash"
+
+# 화면 밝기. auto 는 컴퓨터·폰 설정을 따른다.
+THEME_COOKIE = "theme"
+THEMES = {"auto": "자동", "dark": "다크", "light": "라이트"}
+
+
+def current_theme(request: Request) -> str:
+    """쿠키에 적어 둔 화면 밝기. 처음이거나 값이 이상하면 auto."""
+    value = request.cookies.get(THEME_COOKIE, "auto")
+    return value if value in THEMES else "auto"
 
 
 # --- 필터 ---------------------------------------------------------------------
@@ -67,6 +77,8 @@ templates.env.globals.update(
     ASSIGNABLE_STATUSES=models.ASSIGNABLE_STATUSES,
     RETURN_STATUSES=models.RETURN_STATUSES,
     EMPLOYEE_STATUSES=models.EMPLOYEE_STATUSES,
+    DEPRECIATION_METHODS=models.DEPRECIATION_METHODS,
+    MAINTENANCE_KINDS=models.MAINTENANCE_KINDS,
     ROLES=models.ROLES,
     merge_query=merge_query,
     today=date.today,
@@ -77,9 +89,11 @@ templates.env.globals.update(
 
 def flash(request: Request, message: str, category: str = "success") -> None:
     """다음 화면에 한 번만 보여줄 안내 메시지를 세션에 담는다."""
-    request.session.setdefault(FLASH_KEY, []).append(
-        {"message": message, "category": category}
-    )
+    # 목록을 새로 만들어 다시 넣어야 한다. 이미 있는 목록에 append 만 하면
+    # 세션이 '바뀌었다'는 것을 몰라서, 앞서 쌓인 문구가 있을 때 새 문구가 사라진다.
+    messages = list(request.session.get(FLASH_KEY, []))
+    messages.append({"message": message, "category": category})
+    request.session[FLASH_KEY] = messages
 
 
 def pop_flashes(request: Request) -> list[dict[str, str]]:
@@ -91,5 +105,12 @@ def render(request: Request, template_name: str, context: dict[str, Any] | None 
     data: dict[str, Any] = {"request": request}
     data.update(context or {})
     data.setdefault("current_user", getattr(request.state, "user", None))
+    # 카카오톡·네이버 앱 안의 브라우저는 로그인이 저장되지 않을 수 있어 안내한다
+    data.setdefault(
+        "in_app_browser", useragent.in_app_browser(request.headers.get("user-agent"))
+    )
+    # 서버가 처음부터 맞는 밝기로 그려 보내야, 새로 고칠 때 화면이 번쩍이지 않는다
+    data.setdefault("theme", current_theme(request))
+    data.setdefault("THEMES", THEMES)
     data["flashes"] = pop_flashes(request)
     return templates.TemplateResponse(request, template_name, data, **kwargs)

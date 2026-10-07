@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set back_url = '/assets' %}
 {% from "_macros.html" import asset_status %}
 {% set active = 'assets' %}
 {% block page_title %}자산 상세{% endblock %}
@@ -6,166 +7,353 @@
 
 <div class="breadcrumb"><a href="/assets">자산 관리</a> / 상세</div>
 
-<div class="page-head">
+<div class="detail-head">
   <div>
-    <h2 style="margin:0 0 4px; font-size:19px;">{{ asset.name }} {{ asset_status(asset) }}</h2>
-    <div class="muted mono">{{ asset.asset_no }}</div>
+    <h2>{{ asset.name }} {{ asset_status(asset) }}</h2>
+    <div class="sub">
+      <span class="mono">{{ asset.asset_no }}</span> · {{ asset.category_label }}
+      {%- if asset.manufacturer or asset.model_name %} · {{ asset.manufacturer or '' }} {{ asset.model_name or '' }}{% endif %}
+    </div>
   </div>
   {% if current_user.is_admin %}
   <div class="section-actions">
     <a href="/assets/{{ asset.id }}/edit" class="btn">수정</a>
     <form method="post" action="/assets/{{ asset.id }}/delete" class="inline-form"
-          onsubmit="return confirm('자산 [{{ asset.asset_no }}] 을(를) 삭제할까요?\n지급 이력도 함께 삭제되며 되돌릴 수 없습니다.');">
+          data-confirm="자산 [{{ asset.asset_no }}] 을(를) 삭제할까요?&#10;지급 이력도 함께 삭제되며 되돌릴 수 없습니다.">
       <button type="submit" class="btn danger">삭제</button>
     </form>
   </div>
   {% endif %}
 </div>
 
-<div class="two-col">
-  <div class="card">
-    <h2>기본 정보</h2>
-    <div class="card-body">
-      <dl class="detail">
-        <dt>분류</dt><dd>{{ asset.category_label }}</dd>
-        <dt>제조사</dt><dd>{{ asset.manufacturer or '-' }}</dd>
-        <dt>모델명</dt><dd>{{ asset.model_name or '-' }}</dd>
-        <dt>시리얼번호</dt><dd class="mono">{{ asset.serial_no or '-' }}</dd>
-        <dt>사양</dt><dd>{{ asset.spec or '-' }}</dd>
-        <dt>보관위치</dt><dd>{{ asset.location or '-' }}</dd>
-        <dt>라이선스 키</dt><dd class="mono">{{ asset.license_key or '-' }}</dd>
-        <dt>비고</dt><dd>{{ asset.note or '-' }}</dd>
-      </dl>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>도입 / 보증</h2>
-    <div class="card-body">
-      <dl class="detail">
-        <dt>도입일</dt><dd>{{ asset.purchase_date | date }}</dd>
-        <dt>취득가액</dt><dd>{{ asset.purchase_price | money }}{% if asset.purchase_price %} 원{% endif %}</dd>
-        <dt>공급업체</dt><dd>{{ asset.supplier or '-' }}</dd>
-        <dt>보증만료일</dt>
-        <dd>
-          {{ asset.warranty_until | date }}
-          {% set days = asset.warranty_days_left() %}
-          {% if days is not none %}
-            {% if days < 0 %}<span class="badge LOST">만료됨</span>
-            {% elif days <= 90 %}<span class="badge REPAIR">{{ days }}일 남음</span>
-            {% else %}<span class="badge IN_STOCK">{{ days }}일 남음</span>{% endif %}
-          {% endif %}
-        </dd>
-        <dt>현재 사용자</dt>
-        <dd>
-          {% if asset.holder %}
-            <a href="/employees/{{ asset.holder.id }}">{{ asset.holder.name }}</a>
-            <span class="muted">{{ asset.holder.emp_no }}{% if asset.holder.department %} · {{ asset.holder.department }}{% endif %}</span>
-          {% else %}<span class="muted">미지급</span>{% endif %}
-        </dd>
-        <dt>등록일</dt><dd>{{ asset.created_at | datetime }}</dd>
-        <dt>최근 수정</dt><dd>{{ asset.updated_at | datetime }}</dd>
-      </dl>
-    </div>
-  </div>
-</div>
-
-{% if current_user.is_admin %}
-<div class="card">
-  <h2>{{ '반납 처리' if current else '지급 처리' }}</h2>
-  <div class="card-body">
-    {% if current %}
-      <p class="muted" style="margin-top:0;">
-        <strong>{{ current.employee.name }}</strong> 님에게 {{ current.assigned_at | date }} 지급되어
-        {{ '{:,}'.format(current.days_held) }}일째 사용 중입니다.
-      </p>
-      <form method="post" action="/assignments/{{ current.id }}/return" class="filter-form">
-        <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
-        <div class="field">
-          <label for="returned_at">반납일</label>
-          <input type="date" id="returned_at" name="returned_at" value="{{ today() | input_date }}" required>
-        </div>
-        <div class="field">
-          <label for="new_status">반납 후 상태</label>
-          <select id="new_status" name="new_status">
-            {% for code in RETURN_STATUSES %}
-              <option value="{{ code }}">{{ ASSET_STATUSES[code] }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="field grow">
-          <label for="return_note">반납 메모</label>
-          <input type="text" id="return_note" name="return_note" placeholder="예: 액정 흠집 있음, 초기화 완료">
-        </div>
-        <div class="field"><button type="submit" class="btn primary">반납 처리</button></div>
-      </form>
-    {% elif asset.status in ASSIGNABLE_STATUSES %}
-      <form method="post" action="/assignments/new" class="filter-form">
-        <input type="hidden" name="asset_id" value="{{ asset.id }}">
-        <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
-        <div class="field grow">
-          <label for="employee_id">지급 대상</label>
-          <select id="employee_id" name="employee_id" required>
-            <option value="">직원을 선택하세요</option>
-            {% for emp in employees %}
-              <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.emp_no }}{% if emp.department %} · {{ emp.department }}{% endif %})</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="field">
-          <label for="assigned_at">지급일</label>
-          <input type="date" id="assigned_at" name="assigned_at" value="{{ today() | input_date }}" required>
-        </div>
-        <div class="field grow">
-          <label for="assigned_note">지급 메모</label>
-          <input type="text" id="assigned_note" name="assigned_note" placeholder="예: 신규 입사자 지급">
-        </div>
-        <div class="field"><button type="submit" class="btn primary">지급 처리</button></div>
-      </form>
+{# 이 자산에 대해 가장 먼저 알고 싶은 네 가지 #}
+{% set days = asset.warranty_days_left() %}
+<div class="fact-strip">
+  <div class="fact">
+    <div class="fact-label">현재 사용자</div>
+    {% if asset.holder %}
+      <div class="fact-value"><a href="/employees/{{ asset.holder.id }}">{{ asset.holder.name }}</a></div>
+      <div class="fact-note">
+        {{ asset.holder.department or asset.holder.emp_no }}
+        {%- if current %} · {{ '{:,}'.format(current.days_held) }}일째 사용{% endif %}
+      </div>
     {% else %}
-      <p class="muted" style="margin:0;">
-        '{{ asset.status_label }}' 상태의 자산은 지급할 수 없습니다. 상태를 '재고'로 변경한 뒤 지급해 주세요.
-      </p>
+      <div class="fact-value muted">미지급</div>
+      <div class="fact-note">{{ '지급할 수 있습니다' if asset.status in ASSIGNABLE_STATUSES else asset.status_label }}</div>
+    {% endif %}
+  </div>
+  <div class="fact">
+    <div class="fact-label">보관위치</div>
+    <div class="fact-value">{{ asset.location or '-' }}</div>
+    <div class="fact-note">{{ asset.spec or '' }}</div>
+  </div>
+  <div class="fact">
+    <div class="fact-label">보증</div>
+    {% if days is none %}
+      <div class="fact-value muted">-</div>
+      <div class="fact-note">보증만료일 미입력</div>
+    {% else %}
+      <div class="fact-value">
+        {% if days < 0 %}<span class="text-danger">만료됨</span>
+        {% else %}{{ '{:,}'.format(days) }}일 남음{% endif %}
+      </div>
+      <div class="fact-note">{{ asset.warranty_until | date }} 까지</div>
+    {% endif %}
+  </div>
+  <div class="fact">
+    {% if asset.depreciates %}
+      <div class="fact-label">현재 장부가액</div>
+      <div class="fact-value">{{ asset.book_value() | money }} 원</div>
+      <div class="fact-note">취득 {{ asset.purchase_price | money }} 원 · {{ asset.depreciation_label }}</div>
+    {% else %}
+      <div class="fact-label">취득가액</div>
+      <div class="fact-value">{% if asset.purchase_price %}{{ asset.purchase_price | money }} 원{% else %}-{% endif %}</div>
+      <div class="fact-note">{% if asset.purchase_date %}{{ asset.purchase_date | date }} 도입{% endif %}</div>
     {% endif %}
   </div>
 </div>
-{% endif %}
 
-<div class="card">
-  <div class="card-head">
-    지급 / 반납 이력 ({{ history | length }}건)
-    <a href="/assignments?asset_id={{ asset.id }}" class="btn small">이력 화면에서 보기</a>
-  </div>
-  <div class="card-body tight">
-    {% if history %}
-    <div class="table-wrap">
-      <table class="data">
-        <thead><tr><th>대상자</th><th>부서</th><th>지급일</th><th>반납일</th><th class="num">보유일수</th><th class="center">상태</th><th>메모</th></tr></thead>
-        <tbody>
-        {% for item in history %}
-          <tr>
-            <td><a href="/employees/{{ item.employee.id }}">{{ item.employee.name }}</a>
-                <span class="muted">{{ item.employee.emp_no }}</span></td>
-            <td>{{ item.employee.department or '-' }}</td>
-            <td class="nowrap">{{ item.assigned_at | date }}</td>
-            <td class="nowrap">{{ item.returned_at | date }}</td>
-            <td class="num">{{ '{:,}'.format(item.days_held) }}일</td>
-            <td class="center">
-              {% if item.is_open %}<span class="badge open">지급중</span>{% else %}<span class="badge returned">반납완료</span>{% endif %}
-            </td>
-            <td class="muted">
-              {{ item.assigned_note or '' }}
-              {% if item.return_note %}<div>↩ {{ item.return_note }}</div>{% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
+<div class="detail-layout">
+
+  {# ── 왼쪽: 정보와 이력 ── #}
+  <div class="detail-main">
+
+    <div class="card">
+      <h2>자산 정보</h2>
+      <div class="card-body">
+        <dl class="detail cols-2">
+          <dt>분류</dt><dd>{{ asset.category_label }}</dd>
+          <dt>제조사</dt><dd>{{ asset.manufacturer or '-' }}</dd>
+          <dt>모델명</dt><dd>{{ asset.model_name or '-' }}</dd>
+          <dt>시리얼번호</dt><dd class="mono">{{ asset.serial_no or '-' }}</dd>
+          <dt>도입일</dt><dd>{{ asset.purchase_date | date }}</dd>
+          <dt>취득가액</dt><dd>{{ asset.purchase_price | money }}{% if asset.purchase_price %} 원{% endif %}</dd>
+          <dt>공급업체</dt><dd>{{ asset.supplier or '-' }}</dd>
+          <dt>보증만료일</dt>
+          <dd>
+            {{ asset.warranty_until | date }}
+            {% if days is not none %}
+              {% if days < 0 %}<span class="badge LOST">만료됨</span>
+              {% elif days <= 90 %}<span class="badge REPAIR">{{ days }}일 남음</span>
+              {% else %}<span class="badge IN_STOCK">{{ days }}일 남음</span>{% endif %}
+            {% endif %}
+          </dd>
+          <dt>등록일</dt><dd>{{ asset.created_at | datetime }}</dd>
+          <dt>최근 수정</dt><dd>{{ asset.updated_at | datetime }}</dd>
+          <dt>사양</dt><dd class="full-row">{{ asset.spec or '-' }}</dd>
+          <dt>라이선스 키</dt><dd class="full-row mono">{{ asset.license_key or '-' }}</dd>
+          <dt>비고</dt><dd class="full-row">{{ asset.note or '-' }}</dd>
+        </dl>
+
+        {% if asset.depreciates %}
+        {% set book = asset.book_value() %}
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+            <strong style="font-size:13px;">감가상각 · {{ asset.depreciation_label }}</strong>
+            <span class="muted" style="font-size:12px;">
+              내용연수 {{ asset.useful_life_years }}년 중 {{ asset.months_in_service() }}개월 경과
+              · 누계 상각액 {{ asset.accumulated_depreciation() | money }} 원
+            </span>
+          </div>
+          <div class="depreciation-bar">
+            <div style="width: {{ asset.depreciation_progress() }}%"></div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
     </div>
-    {% else %}
-      <p class="empty">아직 지급 이력이 없습니다.</p>
-    {% endif %}
+
+    <div class="card">
+      <div class="card-head">
+        지급 / 반납 이력 ({{ history | length }}건)
+        <a href="/assignments?asset_id={{ asset.id }}" class="btn small">이력 화면에서 보기</a>
+      </div>
+      <div class="card-body tight">
+        {% if history %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>대상자</th><th>지급일</th><th>반납일</th><th class="num">보유일수</th><th class="center">상태</th><th>메모</th></tr></thead>
+            <tbody>
+            {% for item in history %}
+              <tr>
+                <td>
+                  <a href="/employees/{{ item.employee.id }}">{{ item.employee.name }}</a>
+                  <div class="cell-sub">{{ item.employee.emp_no }}{% if item.employee.department %} · {{ item.employee.department }}{% endif %}</div>
+                </td>
+                <td class="nowrap">{{ item.assigned_at | date }}</td>
+                <td class="nowrap">{{ item.returned_at | date }}</td>
+                <td class="num">{{ '{:,}'.format(item.days_held) }}일</td>
+                <td class="center">
+                  {% if item.is_open %}<span class="badge open">지급중</span>{% else %}<span class="badge returned">반납완료</span>{% endif %}
+                </td>
+                <td class="muted">
+                  {{ item.assigned_note or '' }}
+                  {% if item.return_note %}<div>↩ {{ item.return_note }}</div>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <p class="empty">아직 지급 이력이 없습니다.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        정비 이력 ({{ maintenances | length }}건)
+        <span class="muted" style="font-size:13px; font-weight:400;">
+          누적 비용 {{ asset.maintenance_total_cost | money }} 원
+        </span>
+      </div>
+      <div class="card-body tight">
+        {% if maintenances %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>정비일</th><th class="center">종류</th><th>업체 · 작업 내용</th>
+              <th class="num">비용</th><th>다음 점검</th>{% if current_user.is_admin %}<th class="center">관리</th>{% endif %}</tr></thead>
+            <tbody>
+            {% for item in maintenances %}
+              <tr>
+                <td class="nowrap">{{ item.maintained_at | date }}</td>
+                <td class="center"><span class="badge">{{ item.kind_label }}</span></td>
+                <td>
+                  {{ item.description }}
+                  {% if item.vendor %}<div class="cell-sub">{{ item.vendor }}</div>{% endif %}
+                </td>
+                <td class="num nowrap">{{ item.cost | money }}</td>
+                <td class="nowrap">
+                  {% if item.next_due %}
+                    {% set left = item.days_until_due() %}
+                    {{ item.next_due | date }}
+                    {% if left is not none and left < 0 %}<span class="badge LOST">지남</span>
+                    {% elif left is not none and left <= 30 %}<span class="badge REPAIR">{{ left }}일</span>{% endif %}
+                  {% else %}<span class="muted">-</span>{% endif %}
+                </td>
+                {% if current_user.is_admin %}
+                <td class="center">
+                  <form method="post" action="/maintenance/{{ item.id }}/delete" class="inline-form"
+                        data-confirm="이 정비 이력을 삭제할까요?">
+                    <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
+                    <button type="submit" class="btn small danger">삭제</button>
+                  </form>
+                </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <p class="empty">정비 이력이 없습니다.</p>
+        {% endif %}
+      </div>
+
+      {% if current_user.is_admin %}
+      {# 정비 기록은 가끔만 넣는다. 평소에는 접어 두어 화면을 가볍게 한다. #}
+      <details class="add-panel">
+        <summary>+ 정비 기록 추가</summary>
+        <div class="card-body">
+          <form method="post" action="/maintenance/new" class="form-grid">
+            <input type="hidden" name="asset_id" value="{{ asset.id }}">
+            <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
+            <div class="field">
+              <label for="maintained_at">정비일</label>
+              <input type="date" id="maintained_at" name="maintained_at" value="{{ today() | input_date }}" required>
+            </div>
+            <div class="field">
+              <label for="kind">종류</label>
+              <select id="kind" name="kind">
+                {% for code, label in MAINTENANCE_KINDS.items() %}
+                  <option value="{{ code }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field full">
+              <label for="description">작업 내용<span class="req">*</span></label>
+              <input type="text" id="description" name="description" required placeholder="예: 키보드 교체, 팬 청소">
+            </div>
+            <div class="field">
+              <label for="vendor">업체</label>
+              <input type="text" id="vendor" name="vendor" placeholder="예: LG전자 서비스센터">
+            </div>
+            <div class="field">
+              <label for="cost">비용 (원)</label>
+              <input type="text" id="cost" name="cost" inputmode="numeric" placeholder="예: 85000">
+            </div>
+            <div class="field">
+              <label for="next_due">다음 점검 예정일</label>
+              <input type="date" id="next_due" name="next_due">
+            </div>
+            {% if not asset.holder_id and asset.status != 'REPAIR' %}
+            <div class="field checkbox-field" style="align-self:end; padding-bottom:8px;">
+              <input type="checkbox" id="set_repairing" name="set_repairing">
+              <label for="set_repairing" style="margin:0;">상태를 '수리중'으로</label>
+            </div>
+            {% endif %}
+            <div class="field full"><button type="submit" class="btn primary">정비 등록</button></div>
+          </form>
+        </div>
+      </details>
+      {% endif %}
+    </div>
+
   </div>
+
+  {# ── 오른쪽: 이 자산으로 바로 할 일. 스크롤해도 따라온다. ── #}
+  <aside class="detail-aside">
+
+    {% if current_user.is_admin %}
+    {# 스캔 화면에서 이 칸으로 바로 올 수 있게 id 를 둔다 (/assets/12#assign) #}
+    <div class="card" id="assign">
+      <h2>{{ '반납 처리' if current else '지급 처리' }}</h2>
+      <div class="card-body">
+        {% if current %}
+          <p class="lead muted" style="font-size:13px; margin:0 0 12px;">
+            <strong style="color:var(--text);">{{ current.employee.name }}</strong> 님에게
+            {{ current.assigned_at | date }} 지급되어 {{ '{:,}'.format(current.days_held) }}일째 사용 중입니다.
+          </p>
+          <form method="post" action="/assignments/{{ current.id }}/return" class="stack-form">
+            <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
+            <div class="field">
+              <label for="returned_at">반납일</label>
+              <input type="date" id="returned_at" name="returned_at" value="{{ today() | input_date }}" required>
+            </div>
+            <div class="field">
+              <label for="new_status">반납 후 상태</label>
+              <select id="new_status" name="new_status">
+                {% for code in RETURN_STATUSES %}
+                  <option value="{{ code }}">{{ ASSET_STATUSES[code] }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label for="return_note">반납 메모</label>
+              <input type="text" id="return_note" name="return_note" placeholder="예: 액정 흠집 있음, 초기화 완료">
+            </div>
+            <button type="submit" class="btn primary">반납 처리</button>
+          </form>
+        {% elif asset.status in ASSIGNABLE_STATUSES %}
+          <form method="post" action="/assignments/new" class="stack-form">
+            <input type="hidden" name="asset_id" value="{{ asset.id }}">
+            <input type="hidden" name="back_url" value="/assets/{{ asset.id }}">
+            <div class="field">
+              <label for="employee_id">
+                지급 대상
+                {# 명부에 없는 직원이면 여기서 바로 등록한다.
+                   자바스크립트가 꺼져 있으면 직원 등록 화면으로 가는 평범한 링크가 된다. #}
+                <a href="/employees/new" data-open-employee-modal
+                   style="font-weight:400; font-size:12px; margin-left:6px;">+ 직원이 없나요?</a>
+              </label>
+              <select id="employee_id" name="employee_id" required
+                      data-searchable="이름, 사번, 부서로 검색">
+                <option value="">직원을 선택하세요</option>
+                {% for emp in employees %}
+                  <option value="{{ emp.id }}"
+                          data-search="{{ emp.name }} {{ emp.emp_no }} {{ emp.department or '' }} {{ emp.position or '' }}">{{ emp.name }} ({{ emp.emp_no }}{% if emp.department %} · {{ emp.department }}{% endif %})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="field">
+              <label for="assigned_at">지급일</label>
+              <input type="date" id="assigned_at" name="assigned_at" value="{{ today() | input_date }}" required>
+            </div>
+            <div class="field">
+              <label for="assigned_note">지급 메모</label>
+              <input type="text" id="assigned_note" name="assigned_note" placeholder="예: 신규 입사자 지급">
+            </div>
+            <button type="submit" class="btn primary">지급 처리</button>
+          </form>
+        {% else %}
+          <p class="muted" style="margin:0; font-size:13px;">
+            '{{ asset.status_label }}' 상태의 자산은 지급할 수 없습니다. 상태를 '재고'로 변경한 뒤 지급해 주세요.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <h2>QR 라벨</h2>
+      <div class="card-body">
+        <div class="qr-compact">
+          {{ qr_svg | safe }}
+          <div>
+            <div class="muted" style="font-size:12px; line-height:1.5;">
+              붙여 두면 <strong>폰 카메라로 찍기만 해도</strong> 이 화면이 열립니다.
+            </div>
+            <a href="/assets/labels?q={{ asset.asset_no }}" class="btn small" style="margin-top:8px;">라벨 인쇄</a>
+          </div>
+        </div>
+        <div style="margin-top:10px;"><code class="mono" style="font-size:11px; word-break:break-all; color:var(--text-muted);">{{ qr_target }}</code></div>
+      </div>
+    </div>
+
+  </aside>
 </div>
+
+{% include "_employee_modal.html" %}
 
 {% endblock %}

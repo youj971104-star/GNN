@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% set page_width = 'narrow' %}
+{% set back_url = '/assignments' %}
 {% set active = 'assignments' %}
 {% block page_title %}자산 지급{% endblock %}
 {% block content %}
@@ -14,10 +16,12 @@
       <div class="form-grid">
         <div class="field full">
           <label for="asset_id">지급할 자산<span class="req">*</span></label>
-          <select id="asset_id" name="asset_id" required>
+          <select id="asset_id" name="asset_id" required
+                  data-searchable="자산번호, 자산명, 모델명으로 검색">
             <option value="">자산을 선택하세요</option>
             {% for asset in assets %}
-              <option value="{{ asset.id }}" {{ 'selected' if selected_asset_id == asset.id }}>
+              <option value="{{ asset.id }}" {{ 'selected' if selected_asset_id == asset.id }}
+                      data-search="{{ asset.asset_no }} {{ asset.name }} {{ asset.category_label }} {{ asset.model_name or '' }} {{ asset.serial_no or '' }}">
                 [{{ asset.asset_no }}] {{ asset.name }} · {{ asset.category_label }}{% if asset.model_name %} · {{ asset.model_name }}{% endif %}
               </option>
             {% endfor %}
@@ -25,11 +29,17 @@
           <div class="hint">지급 가능한(재고·수리중, 미지급) 자산만 표시됩니다.</div>
         </div>
         <div class="field full">
-          <label for="employee_id">지급받을 직원<span class="req">*</span></label>
-          <select id="employee_id" name="employee_id" required>
+          <label for="employee_id">
+            지급받을 직원<span class="req">*</span>
+            <a href="/employees/new" data-open-employee-modal
+               style="font-weight:400; font-size:12px; margin-left:6px;">+ 직원이 없나요?</a>
+          </label>
+          <select id="employee_id" name="employee_id" required
+                  data-searchable="이름, 사번, 부서로 검색">
             <option value="">직원을 선택하세요</option>
             {% for emp in employees %}
-              <option value="{{ emp.id }}">{{ emp.name }} ({{ emp.emp_no }}{% if emp.department %} · {{ emp.department }}{% endif %})</option>
+              <option value="{{ emp.id }}"
+                      data-search="{{ emp.name }} {{ emp.emp_no }} {{ emp.department or '' }} {{ emp.position or '' }}">{{ emp.name }} ({{ emp.emp_no }}{% if emp.department %} · {{ emp.department }}{% endif %})</option>
             {% endfor %}
           </select>
         </div>
@@ -55,5 +65,7 @@
     {% endif %}
   </div>
 </div>
+
+{% include "_employee_modal.html" %}
 
 {% endblock %}

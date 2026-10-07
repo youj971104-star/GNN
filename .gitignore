@@ -8,14 +8,32 @@ venv/
 
 # 애플리케이션 데이터
 *.db
+*.db-wal
+*.db-shm
 *.db-journal
 data/
 uploads/
+backups/
 
-# 환경설정
+# 환경설정 (세션 키·관리자 비밀번호가 들어 있습니다)
 .env
+
+# 인증서 (deploy/README-HTTPS.md 참고)
+deploy/certs/*
+!deploy/certs/.gitkeep
+
+# 서버마다 도메인이 달라 자동 생성한다 ('./deploy.sh https <도메인>')
+deploy/nginx.conf
+deploy/certbot-webroot/
 
 # OS / 에디터
 .DS_Store
 .idea/
 .vscode/
+
+# 로컬 실행용 세션 키
+.local-secret
+
+# 이관 작업 산출물 (실제 직원 이름·자산 정보가 들어 있어 저장소에 올리지 않는다)
+이관파일/
+변환결과/
