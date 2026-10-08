@@ -63,8 +63,8 @@ def _sort(request: Request):
     return read_sort(request.query_params, SORT_COLUMNS, "name")
 
 
-def _base_query(request: Request):
-    """검색 조건이 적용된 직원 조회 쿼리."""
+def _filtered(request: Request, *, with_status: bool = True):
+    """검색 조건이 적용된 직원 조회 쿼리 (정렬 전)."""
     params = request.query_params
     stmt = select(Employee)
     keyword = (params.get("q") or "").strip()
@@ -83,9 +83,23 @@ def _base_query(request: Request):
     if department:
         stmt = stmt.where(Employee.department == department)
     emp_status = params.get("status")
-    if emp_status:
+    if with_status and emp_status:
         stmt = stmt.where(Employee.status == emp_status)
-    return _sort(request).order(stmt, Employee.name, Employee.id)
+    return stmt
+
+
+def _base_query(request: Request):
+    """검색 조건이 적용된 직원 조회 쿼리."""
+    return _sort(request).order(_filtered(request), Employee.name, Employee.id)
+
+
+def _status_counts(db, request: Request) -> dict[str, int]:
+    """목록 위 재직상태 탭의 건수 (재직상태만 빼고 나머지 조건은 그대로)."""
+    sub = _filtered(request, with_status=False).subquery()
+    counts = {code: 0 for code in EMPLOYEE_STATUSES}
+    for code, count in db.execute(select(sub.c.status, func.count()).group_by(sub.c.status)).all():
+        counts[code] = count
+    return counts
 
 
 @router.get("")
@@ -109,6 +123,7 @@ def list_employees(request: Request, db: DbSession, user: CurrentUser, page: int
             "departments": departments,
             "params": dict(request.query_params),
             "sort": _sort(request),
+            "status_counts": _status_counts(db, request),
         },
     )
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 from sqlalchemy import Select, func, or_, select
@@ -44,6 +44,10 @@ ASSET_SORT_COLUMNS: dict[str, SortColumn] = {
 
 # --- 자산 검색 ----------------------------------------------------------------
 
+# 보증이 이 날수 안에 끝나면 '곧 만료'로 본다 (대시보드·자산 목록 공통)
+WARRANTY_SOON_DAYS = 90
+WARRANTY_FILTERS = {"soon": f"보증 {WARRANTY_SOON_DAYS}일 안에 만료", "expired": "보증 만료됨"}
+
 @dataclass
 class AssetFilter:
     """자산 목록 화면의 검색 조건."""
@@ -54,6 +58,7 @@ class AssetFilter:
     department: str | None = None
     holder_id: int | None = None
     unassigned: bool = False
+    warranty: str | None = None          # "soon" 90일 안에 끝남 / "expired" 이미 끝남
     sort: str = "asset_no"
     direction: str | None = None
 
@@ -103,6 +108,19 @@ class AssetFilter:
                     select(Employee.id).where(Employee.department == self.department)
                 )
             )
+        if self.warranty in WARRANTY_FILTERS:
+            # 대시보드의 '보증 만료' 칸과 같은 기준 (폐기·분실은 챙길 필요가 없다)
+            today = date.today()
+            stmt = stmt.where(
+                Asset.warranty_until.is_not(None), Asset.status.not_in(("DISPOSED", "LOST"))
+            )
+            if self.warranty == "soon":
+                stmt = stmt.where(
+                    Asset.warranty_until >= today,
+                    Asset.warranty_until <= today + timedelta(days=WARRANTY_SOON_DAYS),
+                )
+            else:
+                stmt = stmt.where(Asset.warranty_until < today)
         return stmt
 
     def order(self, stmt: Select) -> Select:
@@ -111,7 +129,20 @@ class AssetFilter:
 
     @property
     def is_active(self) -> bool:
-        return any([self.q, self.category, self.status, self.department, self.holder_id, self.unassigned])
+        return any([
+            self.q, self.category, self.status, self.department, self.holder_id,
+            self.unassigned, self.warranty in WARRANTY_FILTERS,
+        ])
+
+
+def asset_status_counts(db: Session, filters: AssetFilter) -> dict[str, int]:
+    """목록 위 상태 탭에 붙는 건수. 상태만 빼고 나머지 검색 조건은 그대로 적용한다."""
+    without_status = replace(filters, status=None)
+    stmt = without_status.apply(select(Asset.status, func.count(Asset.id))).group_by(Asset.status)
+    counts = {code: 0 for code in ASSET_STATUSES}
+    for code, count in db.execute(stmt).all():
+        counts[code] = count
+    return counts
 
 
 @dataclass
@@ -266,8 +297,6 @@ def return_asset(
 
 # --- 대시보드 집계 -------------------------------------------------------------
 
-WARRANTY_SOON_DAYS = 90
-
 
 def dashboard_stats(db: Session, today: date | None = None) -> dict:
     """대시보드 화면에 필요한 통계를 한 번에 모은다."""
@@ -316,6 +345,7 @@ def dashboard_stats(db: Session, today: date | None = None) -> dict:
             .options(joinedload(Asset.holder))
             .where(
                 Asset.warranty_until.is_not(None),
+                Asset.warranty_until >= today,
                 Asset.warranty_until <= today + timedelta(days=WARRANTY_SOON_DAYS),
                 Asset.status.not_in(("DISPOSED", "LOST")),
             )
@@ -323,6 +353,23 @@ def dashboard_stats(db: Session, today: date | None = None) -> dict:
             .limit(10)
         ).all()
     )
+
+    # 보증: 곧 끝나는 것과 이미 끝난 것을 나눠 센다. 이미 끝난 것까지 한 목록에 섞으면
+    # 오래전에 끝난 자산이 위를 다 채워서, 정작 챙겨야 할 '곧 끝나는' 자산이 안 보인다.
+    def _warranty_count(*conditions) -> int:
+        return db.scalar(
+            select(func.count(Asset.id)).where(
+                Asset.warranty_until.is_not(None),
+                Asset.status.not_in(("DISPOSED", "LOST")),
+                *conditions,
+            )
+        ) or 0
+
+    warranty_soon_count = _warranty_count(
+        Asset.warranty_until >= today,
+        Asset.warranty_until <= today + timedelta(days=WARRANTY_SOON_DAYS),
+    )
+    warranty_expired_count = _warranty_count(Asset.warranty_until < today)
 
     recent_assignments = list(
         db.scalars(
@@ -357,6 +404,8 @@ def dashboard_stats(db: Session, today: date | None = None) -> dict:
         "employee_count": employee_count,
         "assigned_count": status_counts.get("IN_USE", 0),
         "warranty_soon": warranty_soon,
+        "warranty_soon_count": warranty_soon_count,
+        "warranty_expired_count": warranty_expired_count,
         "recent_assignments": recent_assignments,
         "resigned_holding": long_held,
         "warranty_days": WARRANTY_SOON_DAYS,

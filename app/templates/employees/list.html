@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set back_url = '/' %}
-{% from "_macros.html" import pagination, sort_th, keep_sort %}
+{% from "_macros.html" import pagination, sort_th, keep_sort, icon, status_tabs %}
 {% set active = 'employees' %}
 {% block page_title %}직원 관리{% endblock %}
 {% block content %}
@@ -8,21 +8,24 @@
 <div class="page-head">
   <div class="muted">자산을 지급받는 임직원 명부입니다.</div>
   <div class="section-actions">
-    <a href="/employees/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
+    <a href="/employees/export{{ merge_query(request, page=None) }}" class="btn">{{ icon('download') }}엑셀 다운로드</a>
     {% if current_user.is_admin %}
-      <a href="/employees/import" class="btn">엑셀 일괄 등록</a>
-      <a href="/employees/new" class="btn primary">+ 직원 등록</a>
+      <a href="/employees/import" class="btn">{{ icon('upload') }}엑셀 일괄 등록</a>
+      <a href="/employees/new" class="btn primary">{{ icon('plus') }}직원 등록</a>
     {% endif %}
   </div>
 </div>
 
+{{ status_tabs(request, EMPLOYEE_STATUSES, status_counts, params.get('status')) }}
+
 <div class="card">
   <div class="card-body">
-    <form method="get" action="/employees" class="filter-form">
+    <form method="get" action="/employees" class="filter-form" data-auto-submit>
       {{ keep_sort(sort) }}
+      {% if params.get('status') %}<input type="hidden" name="status" value="{{ params.get('status') }}">{% endif %}
       <div class="field grow">
         <label for="q">검색어</label>
-        <input type="text" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="이름, 사번, 부서, 직급, 이메일">
+        <input type="search" id="q" name="q" value="{{ params.get('q', '') }}" placeholder="이름, 사번, 부서, 직급, 이메일">
       </div>
       <div class="field">
         <label for="department">부서</label>
@@ -33,17 +36,10 @@
           {% endfor %}
         </select>
       </div>
-      <div class="field">
-        <label for="status">재직상태</label>
-        <select id="status" name="status">
-          <option value="">전체</option>
-          {% for code, label in EMPLOYEE_STATUSES.items() %}
-            <option value="{{ code }}" {{ 'selected' if params.get('status') == code }}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field"><button type="submit" class="btn primary">검색</button></div>
+      <div class="field"><button type="submit" class="btn primary">{{ icon('search') }}검색</button></div>
+      {% if params.get('q') or params.get('department') or params.get('status') %}
       <div class="field"><a href="/employees" class="btn">초기화</a></div>
+      {% endif %}
     </form>
   </div>
 </div>
@@ -51,7 +47,7 @@
 <div class="card">
   <div class="card-body tight">
     <div class="table-wrap">
-      <table class="data">
+      <table class="data cards">
         <thead>
           <tr>
             {{ sort_th(request, sort, 'emp_no', '사번') }}
@@ -66,18 +62,30 @@
         </thead>
         <tbody>
         {% for emp in page_obj.items %}
-          <tr data-href="/employees/{{ emp.id }}">
-            <td class="mono nowrap"><a href="/employees/{{ emp.id }}">{{ emp.emp_no }}</a></td>
-            <td>{{ emp.name }}</td>
-            <td>{{ emp.department or '-' }}</td>
-            <td>{{ emp.position or '-' }}</td>
-            <td class="muted">{{ emp.email or '-' }}</td>
-            <td class="muted nowrap">{{ emp.phone or '-' }}</td>
-            <td class="center"><span class="badge {{ emp.status }}">{{ emp.status_label }}</span></td>
-            <td class="num">{{ emp.assets | length }}</td>
+          {% set held = emp.assets | length %}
+          <tr data-href="/employees/{{ emp.id }}" class="{{ 'row-warn' if emp.status == 'RESIGNED' and held }}">
+            <td class="mono nowrap c-no"><a href="/employees/{{ emp.id }}">{{ emp.emp_no }}</a></td>
+            <td class="c-name"><span class="cell-title">{{ emp.name }}</span></td>
+            <td class="c-cat">{{ emp.department or '-' }}</td>
+            <td class="c-pos">{{ emp.position or '-' }}</td>
+            <td class="muted c-email">{% if emp.email %}<a href="mailto:{{ emp.email }}" class="quiet-link">{{ emp.email }}</a>{% else %}-{% endif %}</td>
+            <td class="muted nowrap c-phone">{% if emp.phone %}<a href="tel:{{ emp.phone | replace('-', '') | replace(' ', '') }}" class="quiet-link">{{ emp.phone }}</a>{% else %}-{% endif %}</td>
+            <td class="center c-status"><span class="badge {{ emp.status }}">{{ emp.status_label }}</span></td>
+            <td class="num c-count">
+              {% if emp.status == 'RESIGNED' and held %}
+                <span class="badge LOST" title="퇴사했는데 아직 자산을 갖고 있습니다">{{ icon('alert') }}회수 필요 {{ held }}대</span>
+              {% else %}
+                <span class="{{ 'muted' if not held }}">{{ held }}<span class="unit">대</span></span>
+              {% endif %}
+            </td>
           </tr>
         {% else %}
-          <tr><td colspan="8" class="empty">등록된 직원이 없습니다.</td></tr>
+          <tr class="empty-row"><td colspan="8" class="empty">
+            {% if params.get('q') or params.get('department') or params.get('status') %}
+              검색 조건에 맞는 직원이 없습니다.
+              <div style="margin-top:10px;"><a href="/employees" class="btn small">조건 모두 풀기</a></div>
+            {% else %}등록된 직원이 없습니다.{% endif %}
+          </td></tr>
         {% endfor %}
         </tbody>
       </table>

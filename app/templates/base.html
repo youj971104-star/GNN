@@ -10,34 +10,66 @@
   {% include '_pwa_head.html' %}
 </head>
 <body>
+{% from "_macros.html" import icon %}
 {# 화면마다 본문 폭을 정한다. 넓은 모니터에서 표와 입력칸이 끝없이 늘어나
    시선이 흩어지지 않도록, 가운데 일정한 폭 안에 모아 둔다.
      normal (기본) 목록·대시보드  /  narrow 입력 화면  /  wide 칸이 아주 많은 표 #}
 {%- set width_class = 'page-' ~ (page_width | default('normal')) %}
+{%- macro nav_link(href, key, label, name, cls='') -%}
+  <a href="{{ href }}" class="{{ cls }} {{ 'active' if active == key }}"
+     {{ 'aria-current=page' if active == key }}>{{ icon(name) }}<span>{{ label }}</span></a>
+{%- endmacro %}
+<a class="skip-link" href="#main">본문으로 건너뛰기</a>
 <div class="layout">
-  <aside class="sidebar">
+  {# 넓은 화면에서는 왼쪽 메뉴, 휴대폰에서는 아래 '메뉴' 를 누르면 왼쪽에서 펼쳐진다.
+     자바스크립트가 없어도 #sidebar 주소로 열리도록 :target 으로도 보여 준다. #}
+  <aside class="sidebar" id="sidebar" aria-label="메뉴">
     <div class="brand">
       <a href="/">{{ APP_NAME }}<small>사내 IT 자산 통합 관리</small></a>
+      <a href="#" class="nav-close" data-nav-close aria-label="메뉴 닫기">{{ icon('close') }}</a>
     </div>
+    {% if current_user %}
+    <form method="get" action="/search" class="nav-search" role="search">
+      {{ icon('search') }}
+      <input type="search" name="q" placeholder="자산번호·자산명·직원 검색" aria-label="전체 검색">
+    </form>
+    {% endif %}
     <nav>
       <div class="nav-section">업무</div>
-      <a href="/" class="{{ 'active' if active == 'dashboard' }}">대시보드</a>
-      <a href="/assets" class="{{ 'active' if active == 'assets' }}">자산 관리</a>
-      <a href="/employees" class="{{ 'active' if active == 'employees' }}">직원 관리</a>
-      <a href="/assignments" class="{{ 'active' if active == 'assignments' }}">지급 / 반납 이력</a>
-      <a href="/maintenance" class="{{ 'active' if active == 'maintenance' }}">정비 이력</a>
-      <a href="/scan" class="{{ 'active' if active == 'scan' }}">QR 스캔</a>
-      <a href="/install" class="nav-install {{ 'active' if active == 'install' }}">폰에 앱 설치</a>
+      {{ nav_link('/', 'dashboard', '대시보드', 'home') }}
+      {{ nav_link('/assets', 'assets', '자산 관리', 'box') }}
+      {{ nav_link('/employees', 'employees', '직원 관리', 'users') }}
+      {{ nav_link('/assignments', 'assignments', '지급 / 반납 이력', 'swap') }}
+      {{ nav_link('/maintenance', 'maintenance', '정비 이력', 'wrench') }}
+      {{ nav_link('/scan', 'scan', 'QR 스캔', 'qr') }}
+      {{ nav_link('/install', 'install', '폰에 앱 설치', 'phone', 'nav-install') }}
       {% if current_user and current_user.is_admin %}
       <div class="nav-section">관리자</div>
-      <a href="/assets/import" class="{{ 'active' if active == 'import' }}">자산 일괄 등록</a>
-      <a href="/employees/import" class="{{ 'active' if active == 'emp_import' }}">직원 일괄 등록</a>
-      <a href="/users" class="{{ 'active' if active == 'users' }}">계정 관리</a>
-      <a href="/settings" class="{{ 'active' if active == 'settings' }}">채번 설정</a>
+      {{ nav_link('/assets/import', 'import', '자산 일괄 등록', 'upload') }}
+      {{ nav_link('/employees/import', 'emp_import', '직원 일괄 등록', 'upload') }}
+      {{ nav_link('/users', 'users', '계정 관리', 'shield') }}
+      {{ nav_link('/settings', 'settings', '채번 설정', 'hash') }}
       {% endif %}
     </nav>
+    {% if current_user %}
+    {# 휴대폰에서는 위쪽 막대에 자리가 없어 계정 메뉴를 여기에 둔다 #}
+    <div class="sidebar-user">
+      <div class="who"><strong>{{ current_user.name }}</strong> 님
+        <span class="badge {{ current_user.role }}">{{ current_user.role_label }}</span></div>
+      <div class="sidebar-user-actions">
+        <button type="button" class="btn small theme-toggle" data-theme-toggle hidden>
+          {{ icon('contrast') }}화면: <span data-theme-label>{{ THEMES[theme] }}</span>
+        </button>
+        <a href="/me/security" class="btn small">{{ icon('lock') }}보안 설정</a>
+        <form method="post" action="/logout" class="inline-form">
+          <button type="submit" class="btn small">{{ icon('logout') }}로그아웃</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
     <div class="sidebar-foot">v{{ APP_VERSION }}</div>
   </aside>
+  <a href="#" class="nav-backdrop" data-nav-close tabindex="-1" aria-hidden="true"></a>
 
   <div class="main">
     <header class="topbar">
@@ -52,35 +84,58 @@
         {% endif %}
         <h1 class="page-title">{% block page_title %}{% endblock %}</h1>
       </div>
+      {% if current_user %}
+      {# 어느 화면에서든 자산번호·이름으로 바로 찾는다. 키보드 / 를 누르면 여기로 온다. #}
+      <form method="get" action="/search" class="global-search" role="search">
+        {{ icon('search') }}
+        <input type="search" name="q" value="{{ search_q or '' }}" data-global-search
+               placeholder="자산번호·자산명·직원 검색" aria-label="전체 검색" autocomplete="off">
+        <kbd title="키보드 / 를 누르면 검색칸으로 갑니다">/</kbd>
+      </form>
+      {% endif %}
       <div class="user-box">
         {% if current_user %}
-          <span><strong>{{ current_user.name }}</strong> 님</span>
+          <span class="ub-name"><strong>{{ current_user.name }}</strong> 님</span>
           <span class="badge {{ current_user.role }}">{{ current_user.role_label }}</span>
-          {# 누를 때마다 자동 → 다크 → 라이트 → 자동. 자바스크립트가 없으면 보이지 않는다. #}
+          {# 누를 때마다 자동 → 다크 → 라이트 → 자동. 자바스크립트가 없으면 보이지 않는다.
+             폭이 좁으면 글자를 숨기고 아이콘만 남긴다 (title 로 이름을 알려 준다). #}
           <button type="button" class="btn small theme-toggle" data-theme-toggle hidden
                   title="화면 밝기 바꾸기 (자동은 컴퓨터·폰 설정을 따릅니다)">
-            화면: <span data-theme-label>{{ THEMES[theme] }}</span>
+            {{ icon('contrast') }}<span class="ub-text">화면: <span data-theme-label>{{ THEMES[theme] }}</span></span>
           </button>
-          <a href="/me/security" class="btn small">보안 설정</a>
+          <a href="/me/security" class="btn small" title="보안 설정">{{ icon('lock') }}<span class="ub-text">보안 설정</span></a>
           <form method="post" action="/logout" class="inline-form">
-            <button type="submit" class="btn small">로그아웃</button>
+            <button type="submit" class="btn small" title="로그아웃">{{ icon('logout') }}<span class="ub-text">로그아웃</span></button>
           </form>
         {% endif %}
       </div>
       </div>
     </header>
 
-    <main class="content">
+    <main class="content" id="main" tabindex="-1">
       <div class="page {{ width_class }}">
       {% for item in flashes %}
-        <div class="alert {{ item.category }}">{{ item.message }}</div>
+        <div class="alert {{ item.category }}" role="{{ 'alert' if item.category == 'error' else 'status' }}">
+          <span>{{ item.message }}</span>
+          <button type="button" class="alert-close" data-dismiss hidden aria-label="안내 닫기">{{ icon('close') }}</button>
+        </div>
       {% endfor %}
-      {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+      {% if error %}<div class="alert error" role="alert">{{ error }}</div>{% endif %}
       {% block content %}{% endblock %}
       </div>
     </main>
   </div>
 </div>
+{% if current_user %}
+{# 휴대폰 아래쪽 탭. 한 손으로 자주 가는 곳에 바로 간다. #}
+<nav class="tabbar" aria-label="빠른 메뉴">
+  {{ nav_link('/', 'dashboard', '홈', 'home') }}
+  {{ nav_link('/assets', 'assets', '자산', 'box') }}
+  {{ nav_link('/scan', 'scan', 'QR 스캔', 'qr', 'tab-scan') }}
+  {{ nav_link('/employees', 'employees', '직원', 'users') }}
+  <a href="#sidebar" data-nav-open aria-controls="sidebar" aria-expanded="false">{{ icon('menu') }}<span>메뉴</span></a>
+</nav>
+{% endif %}
 <script src="/static/js/back-button.js" defer></script>
 <script src="/static/js/confirm.js" defer></script>
 <script src="/static/js/ui.js" defer></script>

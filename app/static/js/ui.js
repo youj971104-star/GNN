@@ -97,25 +97,107 @@
   var THEME_LABEL = { auto: "자동", dark: "다크", light: "라이트" };
 
   function bindThemeToggle() {
-    var button = document.querySelector("[data-theme-toggle]");
-    if (!button) return;
-    var label = button.querySelector("[data-theme-label]");
-    button.hidden = false;
+    var buttons = document.querySelectorAll("[data-theme-toggle]");
+    Array.prototype.forEach.call(buttons, function (button) {
+      button.hidden = false;
+      button.addEventListener("click", function () {
+        var root = document.documentElement;
+        var now = THEME_ORDER.indexOf(root.getAttribute("data-theme"));
+        var next = THEME_ORDER[(now + 1) % THEME_ORDER.length];
 
-    button.addEventListener("click", function () {
-      var root = document.documentElement;
-      var now = THEME_ORDER.indexOf(root.getAttribute("data-theme"));
-      var next = THEME_ORDER[(now + 1) % THEME_ORDER.length];
+        root.setAttribute("data-theme", next);
+        Array.prototype.forEach.call(document.querySelectorAll("[data-theme-label]"), function (label) {
+          label.textContent = THEME_LABEL[next];
+        });
+        document.cookie = "theme=" + next + "; path=/; max-age=31536000; samesite=lax" +
+          (location.protocol === "https:" ? "; secure" : "");
+      });
+    });
+  }
 
-      root.setAttribute("data-theme", next);
-      if (label) label.textContent = THEME_LABEL[next];
-      document.cookie = "theme=" + next + "; path=/; max-age=31536000; samesite=lax" +
-        (location.protocol === "https:" ? "; secure" : "");
+  /* 휴대폰 메뉴 열고 닫기. 자바스크립트가 없으면 #sidebar 주소(:target)로 열린다. */
+  function bindNavDrawer() {
+    var body = document.body;
+    var openers = document.querySelectorAll("[data-nav-open]");
+
+    function setOpen(open) {
+      body.classList.toggle("nav-open", open);
+      Array.prototype.forEach.call(openers, function (el) {
+        el.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+      // 열면 닫기 단추로 초점을 옮긴다 (검색칸에 두면 폰 자판이 바로 올라와 가린다)
+      if (open) {
+        var close = document.querySelector("#sidebar .nav-close");
+        if (close) close.focus({ preventScroll: true });
+      }
+    }
+
+    Array.prototype.forEach.call(openers, function (el) {
+      el.addEventListener("click", function (event) { event.preventDefault(); setOpen(true); });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-nav-close]"), function (el) {
+      el.addEventListener("click", function (event) { event.preventDefault(); setOpen(false); });
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && body.classList.contains("nav-open")) setOpen(false);
+    });
+  }
+
+  /* 키보드 / 를 누르면 어디서든 검색칸으로 */
+  function bindSearchShortcut() {
+    var input = document.querySelector("[data-global-search]");
+    if (!input) return;
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      var tag = (document.activeElement && document.activeElement.tagName) || "";
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || document.activeElement.isContentEditable) return;
+      if (input.offsetParent === null) return;          // 휴대폰처럼 검색칸이 숨어 있으면 그대로
+      event.preventDefault();
+      input.focus();
+      input.select();
+    });
+  }
+
+  /* 고르기만 해도 바로 검색 (검색어 칸은 Enter 나 검색 버튼으로) */
+  function bindAutoSubmit() {
+    Array.prototype.forEach.call(document.querySelectorAll("form[data-auto-submit]"), function (form) {
+      form.addEventListener("change", function (event) {
+        var target = event.target;
+        if (target.matches("select, input[type=checkbox], input[type=radio]")) {
+          if (form.requestSubmit) form.requestSubmit(); else form.submit();
+        }
+      });
+    });
+  }
+
+  /* 휴대폰에서 상태 탭이 옆으로 넘치면, 지금 고른 탭이 보이도록 밀어 둔다 */
+  function revealActiveTab() {
+    Array.prototype.forEach.call(document.querySelectorAll(".status-tabs"), function (tabs) {
+      var current = tabs.querySelector("a.active");
+      if (current && tabs.scrollWidth > tabs.clientWidth) {
+        tabs.scrollLeft = current.offsetLeft - (tabs.clientWidth - current.offsetWidth) / 2;
+      }
+    });
+  }
+
+  /* 안내 문구 닫기 */
+  function bindDismiss() {
+    Array.prototype.forEach.call(document.querySelectorAll("[data-dismiss]"), function (button) {
+      button.hidden = false;
+      button.addEventListener("click", function () {
+        var box = button.closest(".alert");
+        if (box) box.remove();
+      });
     });
   }
 
   function init() {
     bindThemeToggle();
+    bindNavDrawer();
+    bindSearchShortcut();
+    bindAutoSubmit();
+    bindDismiss();
+    revealActiveTab();
     bindRowLinks();
     bindPrint();
     bindLabelSize();

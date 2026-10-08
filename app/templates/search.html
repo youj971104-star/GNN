@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% set back_url = '/' %}
+{% from "_macros.html" import asset_status, holder_link, category, icon %}
+{% block page_title %}검색{% endblock %}
+{% block content %}
+
+<p class="search-summary">
+  <strong>“{{ q }}”</strong> 검색 결과 ·
+  자산 {{ '{:,}'.format(assets.total) }}건, 직원 {{ '{:,}'.format(employees.total) }}명
+</p>
+
+<div class="card">
+  <div class="card-head">
+    <span>{{ icon('box') }} 자산 <span class="muted">{{ '{:,}'.format(assets.total) }}건</span></span>
+    {% if assets.total > assets.items | length %}
+      <a href="/assets?q={{ q | urlencode }}" class="btn small">{{ assets.total }}건 모두 보기</a>
+    {% endif %}
+  </div>
+  <div class="card-body tight">
+    {% if assets.items %}
+    <div class="table-wrap">
+      <table class="data cards">
+        <thead><tr><th>자산번호</th><th>자산명 · 모델</th><th>분류</th><th class="center">상태</th><th>사용자</th></tr></thead>
+        <tbody>
+        {% for asset in assets.items %}
+          <tr data-href="/assets/{{ asset.id }}">
+            <td class="mono nowrap c-no"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
+            <td class="c-name"><div class="cell-title">{{ asset.name }}</div>
+              {% if asset.model_name %}<div class="cell-sub">{{ asset.model_name }}</div>{% endif %}</td>
+            <td class="c-cat">{{ category(asset.category, asset.category_label) }}</td>
+            <td class="center c-status">{{ asset_status(asset) }}</td>
+            <td class="nowrap c-holder {{ 'is-empty' if not asset.holder }}">{{ holder_link(asset) }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="empty">맞는 자산이 없습니다.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <span>{{ icon('users') }} 직원 <span class="muted">{{ '{:,}'.format(employees.total) }}명</span></span>
+    {% if employees.total > employees.items | length %}
+      <a href="/employees?q={{ q | urlencode }}" class="btn small">{{ employees.total }}명 모두 보기</a>
+    {% endif %}
+  </div>
+  <div class="card-body tight">
+    {% if employees.items %}
+    <div class="table-wrap">
+      <table class="data cards">
+        <thead><tr><th>사번</th><th>이름</th><th>부서 · 직급</th><th class="center">재직상태</th><th class="num">보유 자산</th></tr></thead>
+        <tbody>
+        {% for emp in employees.items %}
+          <tr data-href="/employees/{{ emp.id }}">
+            <td class="mono nowrap c-no"><a href="/employees/{{ emp.id }}">{{ emp.emp_no }}</a></td>
+            <td class="c-name"><div class="cell-title">{{ emp.name }}</div></td>
+            <td class="c-cat">{{ emp.department or '-' }}{% if emp.position %} · {{ emp.position }}{% endif %}</td>
+            <td class="center c-status"><span class="badge {{ emp.status }}">{{ emp.status_label }}</span></td>
+            <td class="num c-count">{{ emp.assets | length }}대</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="empty">맞는 직원이 없습니다.</p>
+    {% endif %}
+  </div>
+</div>
+
+<p class="hint">자산번호나 사번을 정확히 넣으면 그 화면으로 바로 갑니다. 라벨의 QR 주소를 붙여 넣어도 됩니다.</p>
+{% endblock %}

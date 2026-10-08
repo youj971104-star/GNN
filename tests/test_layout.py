@@ -60,4 +60,4 @@ def test_QR_라벨_인쇄_스타일이_다른_화면을_건드리지_않는다()
 def test_금액_카드는_두_칸을_쓴다(admin_client):
     """총 취득가액은 자릿수가 많아 한 칸에 넣으면 잘린다."""
     html = admin_client.get("/").text
-    assert re.search(r'class="stat wide">\s*<div class="label">총 취득가액', html)
+    assert re.search(r'class="stat wide"[^>]*>\s*<div class="label">총 취득가액', html)

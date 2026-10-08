@@ -73,8 +73,11 @@ def test_보증_만료_임박_자산을_찾아낸다(db):
     )
     db.commit()
 
-    names = {asset.name for asset in dashboard_stats(db)["warranty_soon"]}
-    assert names == {"곧 만료", "이미 만료"}  # 폐기 자산은 제외된다
+    stats = dashboard_stats(db)
+    # 목록에는 '곧 끝나는' 자산만. 이미 끝난 것은 건수로 따로 알려 준다.
+    assert {asset.name for asset in stats["warranty_soon"]} == {"곧 만료"}
+    assert stats["warranty_soon_count"] == 1
+    assert stats["warranty_expired_count"] == 1      # 폐기 자산은 제외된다
 
 
 def test_퇴사자가_보유_중인_자산을_알려준다(db, asset, employee):

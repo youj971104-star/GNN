@@ -64,13 +64,37 @@ def merge_query(request: Request, **overrides: Any) -> str:
     return ("?" + urlencode(params)) if params else ""
 
 
+def url_with(request: Request, **overrides: Any) -> str:
+    """지금 화면 주소에서 검색 조건 일부만 바꾼 주소.
+
+    merge_query 는 조건이 하나도 안 남으면 빈 문자열을 돌려주는데, href="" 는
+    '지금 주소 그대로'라서 조건이 풀리지 않는다. 그래서 경로를 앞에 붙인다.
+    """
+    return request.url.path + merge_query(request, **overrides)
+
+
 templates.env.filters["date"] = fmt_date
 templates.env.filters["datetime"] = fmt_datetime
 templates.env.filters["money"] = fmt_money
 templates.env.filters["input_date"] = fmt_input_date
 
+# 자산 분류마다 붙는 아이콘 (static/icons/sprite.svg 의 이름).
+# 목록을 훑어볼 때 글자를 읽기 전에 모양으로 먼저 알아보게 한다.
+CATEGORY_ICONS = {
+    "NOTEBOOK": "laptop",
+    "DESKTOP": "desktop",
+    "MONITOR": "monitor",
+    "SERVER": "server",
+    "NETWORK": "network",
+    "MOBILE": "phone",
+    "PERIPHERAL": "keyboard",
+    "SOFTWARE": "code",
+    "ETC": "tag",
+}
+
 templates.env.globals.update(
     APP_NAME="IT 자산관리 시스템",
+    CATEGORY_ICONS=CATEGORY_ICONS,
     APP_VERSION="1.0.0",
     ASSET_CATEGORIES=models.ASSET_CATEGORIES,
     ASSET_STATUSES=models.ASSET_STATUSES,
@@ -81,6 +105,7 @@ templates.env.globals.update(
     MAINTENANCE_KINDS=models.MAINTENANCE_KINDS,
     ROLES=models.ROLES,
     merge_query=merge_query,
+    url_with=url_with,
     today=date.today,
 )
 

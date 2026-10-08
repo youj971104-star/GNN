@@ -119,7 +119,13 @@ def export_assignments(request: Request, db: DbSession, user: CurrentUser):
 
 
 @router.get("/new")
-def assign_form(request: Request, db: DbSession, user: AdminUser, asset_id: int | None = None):
+def assign_form(
+    request: Request,
+    db: DbSession,
+    user: AdminUser,
+    asset_id: int | None = None,
+    employee_id: int | None = None,
+):
     assets = list(
         db.scalars(
             select(Asset)
@@ -139,6 +145,8 @@ def assign_form(request: Request, db: DbSession, user: AdminUser, asset_id: int 
             "assets": assets,
             "employees": employees,
             "selected_asset_id": asset_id,
+            # 직원 상세의 [자산 지급] 으로 왔으면 그 직원을 미리 골라 둔다
+            "selected_employee_id": employee_id,
             # 직원 빠른 등록 팝업에 쓰는 값
             "modal_departments": departments(db),
             "modal_next_emp_no": numbering.next_employee_no(db),

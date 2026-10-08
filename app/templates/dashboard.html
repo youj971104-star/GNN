@@ -1,38 +1,64 @@
 {% extends "base.html" %}
-{% from "_macros.html" import bar, asset_status %}
+{% from "_macros.html" import bar, asset_status, icon %}
 {% set active = 'dashboard' %}
 {% block page_title %}대시보드{% endblock %}
 {% block content %}
 
+{# 숫자 타일을 누르면 그 조건의 목록으로 간다 #}
+{%- set lost = stats.status_counts.LOST %}
+{%- set disposed = stats.status_counts.DISPOSED %}
 <div class="stat-grid">
-  <div class="stat is-accent">
-    <div class="label">전체 자산</div>
+  <a class="stat is-accent" href="/assets">
+    <div class="label">{{ icon('box') }}전체 자산</div>
     <div class="value">{{ '{:,}'.format(stats.total) }}<small>건</small></div>
-  </div>
-  <div class="stat is-success">
-    <div class="label">사용중 (지급됨)</div>
+  </a>
+  <a class="stat is-info" href="/assets?status=IN_USE">
+    <div class="label"><span class="dot IN_USE"></span>사용중</div>
     <div class="value">{{ '{:,}'.format(stats.status_counts.IN_USE) }}<small>건</small></div>
-  </div>
-  <div class="stat">
-    <div class="label">재고 (지급 가능)</div>
+  </a>
+  <a class="stat is-success" href="/assets?status=IN_STOCK" title="지급할 수 있는 재고">
+    <div class="label"><span class="dot IN_STOCK"></span>재고</div>
     <div class="value">{{ '{:,}'.format(stats.status_counts.IN_STOCK) }}<small>건</small></div>
-  </div>
-  <div class="stat is-warn">
-    <div class="label">수리중</div>
+  </a>
+  <a class="stat is-warn" href="/assets?status=REPAIR">
+    <div class="label"><span class="dot REPAIR"></span>수리중</div>
     <div class="value">{{ '{:,}'.format(stats.status_counts.REPAIR) }}<small>건</small></div>
-  </div>
-  <div class="stat is-danger">
-    <div class="label">분실 / 폐기</div>
-    <div class="value">{{ '{:,}'.format(stats.status_counts.LOST + stats.status_counts.DISPOSED) }}<small>건</small></div>
-  </div>
-  <div class="stat wide">
+  </a>
+  <a class="stat is-danger" href="/assets?status={{ 'LOST' if lost or not disposed else 'DISPOSED' }}">
+    <div class="label"><span class="dot LOST"></span>분실 / 폐기</div>
+    <div class="value">{{ '{:,}'.format(lost + disposed) }}<small>건</small></div>
+  </a>
+  <a class="stat" href="/employees">
+    <div class="label">{{ icon('users') }}등록 임직원</div>
+    <div class="value">{{ '{:,}'.format(stats.employee_count) }}<small>명</small></div>
+  </a>
+  <a class="stat wide" href="/assets?sort=purchase_price&amp;dir=desc">
     <div class="label">총 취득가액</div>
     <div class="value">{{ stats.total_amount | money }}<small>원</small></div>
-  </div>
-  <div class="stat">
-    <div class="label">등록 임직원</div>
-    <div class="value">{{ '{:,}'.format(stats.employee_count) }}<small>명</small></div>
-  </div>
+  </a>
+</div>
+
+{# 지금 챙겨야 할 일만 모아 둔다. 해당 건이 없으면 줄이 나오지 않는다. #}
+{%- set todo = [] %}
+{%- if stats.resigned_holding %}{% set _ = todo.append(('danger', '퇴사자가 아직 갖고 있는 자산', stats.resigned_holding | length, '#resigned', '회수하고 반납 처리하세요')) %}{% endif %}
+{%- if lost %}{% set _ = todo.append(('danger', '분실 자산', lost, '/assets?status=LOST', '찾았거나 정리했다면 상태를 바꿔 주세요')) %}{% endif %}
+{%- if stats.status_counts.REPAIR %}{% set _ = todo.append(('warn', '수리 중인 자산', stats.status_counts.REPAIR, '/assets?status=REPAIR', '수리가 끝났으면 재고로 돌려 주세요')) %}{% endif %}
+{%- if stats.warranty_soon_count %}{% set _ = todo.append(('warn', '보증이 ' ~ stats.warranty_days ~ '일 안에 끝나는 자산', stats.warranty_soon_count, '/assets?warranty=soon', '연장이나 교체를 검토하세요')) %}{% endif %}
+<div class="card attention">
+  <div class="card-head">{{ icon('alert') }}확인이 필요한 일</div>
+  {% if todo %}
+  <ul class="todo-list">
+    {% for level, title, count, href, hint in todo %}
+      <li><a href="{{ href }}" class="todo {{ level }}">
+        <span class="todo-count">{{ '{:,}'.format(count) }}</span>
+        <span class="todo-text"><strong>{{ title }}</strong><small>{{ hint }}</small></span>
+        {{ icon('chevron', 'todo-go') }}
+      </a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <p class="todo-none">지금 따로 챙길 일이 없습니다.</p>
+  {% endif %}
 </div>
 
 <div class="two-col">
@@ -44,7 +70,7 @@
     <div class="card-body">
       {% if stats.by_category %}
         {% for row in stats.by_category %}
-          {{ bar(row.label, row.count, stats.max_category) }}
+          {{ bar(row.label, row.count, stats.max_category, '/assets?category=' ~ row.code, CATEGORY_ICONS.get(row.code, 'tag')) }}
         {% endfor %}
       {% else %}
         <p class="muted">등록된 자산이 없습니다.</p>
@@ -57,7 +83,8 @@
     <div class="card-body">
       {% if stats.by_department %}
         {% for row in stats.by_department %}
-          {{ bar(row.label, row.count, stats.max_department) }}
+          {% set href = none if row.label == '(부서 미지정)' else '/assets?department=' ~ (row.label | urlencode) %}
+          {{ bar(row.label, row.count, stats.max_department, href) }}
         {% endfor %}
       {% else %}
         <p class="muted">지급된 자산이 없습니다.</p>
@@ -67,7 +94,7 @@
 </div>
 
 {% if stats.resigned_holding %}
-<div class="card">
+<div class="card" id="resigned">
   <div class="card-head" style="color:var(--danger);">
     확인 필요 · 퇴사자가 아직 보유 중인 자산 ({{ stats.resigned_holding | length }}건)
   </div>
@@ -93,7 +120,10 @@
 
 <div class="two-col">
   <div class="card">
-    <div class="card-head">보증 만료 임박 · 만료 ({{ stats.warranty_days }}일 이내)</div>
+    <div class="card-head">
+      보증 곧 만료 ({{ stats.warranty_days }}일 이내)
+      {% if stats.warranty_soon_count %}<a href="/assets?warranty=soon" class="btn small">{{ stats.warranty_soon_count }}건 모두 보기</a>{% endif %}
+    </div>
     <div class="card-body tight">
       {% if stats.warranty_soon %}
       <div class="table-wrap">
@@ -102,24 +132,24 @@
           <tbody>
           {% for asset in stats.warranty_soon %}
             {% set days = asset.warranty_days_left() %}
-            <tr>
+            <tr data-href="/assets/{{ asset.id }}">
               <td class="mono"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
               <td>{{ asset.name }}</td>
               <td class="nowrap">{{ asset.warranty_until | date }}</td>
-              <td class="center">
-                {% if days < 0 %}
-                  <span class="badge LOST">만료됨</span>
-                {% else %}
-                  <span class="badge REPAIR">{{ days }}일 남음</span>
-                {% endif %}
-              </td>
+              <td class="center"><span class="badge {{ 'LOST' if days <= 30 else 'REPAIR' }}">{{ days }}일 남음</span></td>
             </tr>
           {% endfor %}
           </tbody>
         </table>
       </div>
       {% else %}
-        <p class="empty">보증 만료가 임박한 자산이 없습니다.</p>
+        <p class="empty">{{ stats.warranty_days }}일 안에 보증이 끝나는 자산이 없습니다.</p>
+      {% endif %}
+      {% if stats.warranty_expired_count %}
+        <div class="card-foot">
+          보증이 이미 끝난 자산 <strong>{{ '{:,}'.format(stats.warranty_expired_count) }}건</strong>
+          <a href="/assets?warranty=expired">목록 보기</a>
+        </div>
       {% endif %}
     </div>
   </div>
