@@ -1,6 +1,8 @@
 """Jinja2 템플릿 설정과 화면에서 쓰는 공통 필터/헬퍼."""
 
+import hashlib
 from datetime import date, datetime
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urlencode
 
@@ -73,6 +75,31 @@ def url_with(request: Request, **overrides: Any) -> str:
     return request.url.path + merge_query(request, **overrides)
 
 
+# --- 정적 파일 주소 -------------------------------------------------------------
+#
+# 브라우저는 style.css 같은 파일을 한동안 저장해 두고 다시 받지 않는다. 서버를 업데이트해도
+# 화면(HTML)만 새것이고 스타일은 예전 것이 섞여, 아이콘이 크게 그려지는 등 화면이 깨진다.
+# 그래서 주소 뒤에 파일 내용의 지문(?v=…)을 붙인다. 파일이 바뀌면 주소가 바뀌어
+# 브라우저가 반드시 새로 받고, 바뀌지 않았으면 저장해 둔 것을 오래 써도 된다.
+
+STATIC_DIR = config.BASE_DIR / "static"
+
+
+@lru_cache(maxsize=256)
+def _fingerprint(path: str, mtime_ns: int) -> str:
+    return hashlib.sha256((STATIC_DIR / path).read_bytes()).hexdigest()[:12]
+
+
+def static_url(path: str) -> str:
+    """/static 아래 파일 주소에 내용 지문을 붙인다.  static_url('css/style.css')"""
+    file = STATIC_DIR / path
+    try:
+        version = _fingerprint(path, file.stat().st_mtime_ns)
+    except OSError:
+        return f"/static/{path}"
+    return f"/static/{path}?v={version}"
+
+
 templates.env.filters["date"] = fmt_date
 templates.env.filters["datetime"] = fmt_datetime
 templates.env.filters["money"] = fmt_money
@@ -106,6 +133,7 @@ templates.env.globals.update(
     ROLES=models.ROLES,
     merge_query=merge_query,
     url_with=url_with,
+    static_url=static_url,
     today=date.today,
 )
 

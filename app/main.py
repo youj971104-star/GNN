@@ -136,6 +136,13 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         for name, value in SECURITY_HEADERS.items():
             response.headers.setdefault(name, value)
+        if request.url.path.startswith("/static/") and response.status_code == 200:
+            # 주소에 내용 지문(?v=)이 붙은 파일은 내용이 바뀌면 주소도 바뀌므로 오래 저장해도 된다.
+            # 지문이 없는 주소는 업데이트 뒤 예전 파일이 남지 않도록 매번 바뀌었는지 확인하게 한다.
+            if request.query_params.get("v"):
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            else:
+                response.headers["Cache-Control"] = "no-cache"
         if config.HTTPS_ONLY:
             response.headers.setdefault(*HSTS_HEADER)
         return response

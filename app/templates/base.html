@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="light dark">
   {%- set page_name = self.page_title() %}
   <title>{{ (page_name ~ ' · ') if page_name }}{{ APP_NAME }}</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="{{ static_url('css/style.css') }}">
   {% include '_pwa_head.html' %}
 </head>
 <body>
@@ -136,10 +136,10 @@
   <a href="#sidebar" data-nav-open aria-controls="sidebar" aria-expanded="false">{{ icon('menu') }}<span>메뉴</span></a>
 </nav>
 {% endif %}
-<script src="/static/js/back-button.js" defer></script>
-<script src="/static/js/confirm.js" defer></script>
-<script src="/static/js/ui.js" defer></script>
-<script src="/static/js/searchable-select.js" defer></script>
-<script src="/static/js/quick-employee.js" defer></script>
+<script src="{{ static_url('js/back-button.js') }}" defer></script>
+<script src="{{ static_url('js/confirm.js') }}" defer></script>
+<script src="{{ static_url('js/ui.js') }}" defer></script>
+<script src="{{ static_url('js/searchable-select.js') }}" defer></script>
+<script src="{{ static_url('js/quick-employee.js') }}" defer></script>
 </body>
 </html>

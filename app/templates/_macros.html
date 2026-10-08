@@ -2,7 +2,7 @@
 
 {# 아이콘 (static/icons/sprite.svg). 글자 옆에 붙는 장식이라 화면 읽기 프로그램은 건너뛴다. #}
 {% macro icon(name, cls='') -%}
-  <svg class="icon {{ cls }}" aria-hidden="true" focusable="false"><use href="/static/icons/sprite.svg#i-{{ name }}"></use></svg>
+  <svg class="icon {{ cls }}" aria-hidden="true" focusable="false"><use href="{{ static_url('icons/sprite.svg') }}#i-{{ name }}"></use></svg>
 {%- endmacro %}
 
 {# 분류: 아이콘 + 이름 #}
