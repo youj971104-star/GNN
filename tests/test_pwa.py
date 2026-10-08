@@ -1,6 +1,7 @@
 """폰 홈 화면에 앱으로 설치하기 (PWA)."""
 
 import json
+import re
 import pathlib
 import struct
 
@@ -104,7 +105,7 @@ def test_모든_화면이_앱_정보를_알려_준다(admin_client, path):
     html = admin_client.get(path).text
     assert '<link rel="manifest" href="/manifest.webmanifest">' in html
     assert 'rel="apple-touch-icon"' in html
-    assert '<script src="/static/js/pwa.js" defer></script>' in html
+    assert re.search(r'<script src="/static/js/pwa\.js\?v=[0-9a-f]+" defer></script>', html)
 
 
 def test_로그인_화면도_앱_정보를_알려_준다(client):

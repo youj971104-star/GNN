@@ -80,7 +80,7 @@ def test_조회_전용_계정도_스캔할_수_있다(viewer_client, db):
 def test_해독기는_외부_주소가_아니라_우리_서버에서_받는다(admin_client):
     """사내망만 쓰는 회사에서도 동작해야 한다."""
     page = admin_client.get("/scan").text
-    assert 'src="/static/js/vendor/jsQR.js"' in page
+    assert 'src="/static/js/vendor/jsQR.js?v=' in page
     assert admin_client.get("/static/js/vendor/jsQR.js").status_code == 200
 
 
