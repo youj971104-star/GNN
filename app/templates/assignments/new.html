@@ -38,7 +38,7 @@
                   data-searchable="이름, 사번, 부서로 검색">
             <option value="">직원을 선택하세요</option>
             {% for emp in employees %}
-              <option value="{{ emp.id }}"
+              <option value="{{ emp.id }}" {{ 'selected' if selected_employee_id == emp.id }}
                       data-search="{{ emp.name }} {{ emp.emp_no }} {{ emp.department or '' }} {{ emp.position or '' }}">{{ emp.name }} ({{ emp.emp_no }}{% if emp.department %} · {{ emp.department }}{% endif %})</option>
             {% endfor %}
           </select>

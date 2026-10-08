@@ -21,7 +21,15 @@ from app.models import (
     Employee,
     Maintenance,
 )
-from app.services import AssetFilter, all_matching_assets, departments, open_assignment, search_assets
+from app.services import (
+    WARRANTY_FILTERS,
+    AssetFilter,
+    all_matching_assets,
+    asset_status_counts,
+    departments,
+    open_assignment,
+    search_assets,
+)
 from app.templating import flash, render
 
 router = APIRouter(prefix="/assets", tags=["자산"])
@@ -46,6 +54,7 @@ def _filter_from_query(request: Request) -> AssetFilter:
         department=params.get("department") or None,
         holder_id=forms.parse_int(params.get("holder_id")),
         unassigned=params.get("unassigned") == "1",
+        warranty=params.get("warranty") or None,
         sort=params.get("sort") or "asset_no",
         direction=params.get("dir"),
     )
@@ -123,6 +132,9 @@ def list_assets(request: Request, db: DbSession, user: CurrentUser, page: int = 
         {
             "page_obj": result,
             "filters": filters,
+            "status_counts": asset_status_counts(db, filters),
+            "holder": db.get(Employee, filters.holder_id) if filters.holder_id else None,
+            "warranty_filters": WARRANTY_FILTERS,
             "departments": departments(db),
             "employees": _employee_choices(db),
         },

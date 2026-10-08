@@ -1,24 +1,27 @@
 {% extends "base.html" %}
 {% set back_url = '/employees' %}
-{% from "_macros.html" import asset_status %}
+{% from "_macros.html" import asset_status, icon, category %}
 {% set active = 'employees' %}
 {% block page_title %}직원 상세{% endblock %}
 {% block content %}
 
 <div class="breadcrumb"><a href="/employees">직원 관리</a> / 상세</div>
 
-<div class="page-head">
+<div class="detail-head">
   <div>
-    <h2 style="margin:0 0 4px; font-size:19px;">
-      {{ employee.name }}
-      <span class="badge {{ employee.status }}">{{ employee.status_label }}</span>
-    </h2>
-    <div class="muted mono">{{ employee.emp_no }}</div>
+    <h2>{{ employee.name }} <span class="badge {{ employee.status }}">{{ employee.status_label }}</span></h2>
+    <div class="sub">
+      <span class="mono">{{ employee.emp_no }}</span>
+      {%- if employee.department %} · {{ employee.department }}{% endif %}
+      {%- if employee.position %} · {{ employee.position }}{% endif %}
+    </div>
   </div>
   {% if current_user.is_admin %}
   <div class="section-actions">
     <a href="/employees/{{ employee.id }}/edit" class="btn">수정</a>
-    <a href="/assignments/new" class="btn primary">자산 지급</a>
+    {% if employee.status != 'RESIGNED' %}
+      <a href="/assignments/new?employee_id={{ employee.id }}" class="btn primary">{{ icon('plus') }}자산 지급</a>
+    {% endif %}
     <form method="post" action="/employees/{{ employee.id }}/delete" class="inline-form"
           data-confirm="{{ employee.name }} 님을 삭제할까요?">
       <button type="submit" class="btn danger">삭제</button>
@@ -27,43 +30,98 @@
   {% endif %}
 </div>
 
-<div class="two-col">
-  <div class="card">
-    <h2>기본 정보</h2>
-    <div class="card-body">
-      <dl class="detail">
-        <dt>부서</dt><dd>{{ employee.department or '-' }}</dd>
-        <dt>직급</dt><dd>{{ employee.position or '-' }}</dd>
-        <dt>이메일</dt><dd>{{ employee.email or '-' }}</dd>
-        <dt>연락처</dt><dd>{{ employee.phone or '-' }}</dd>
-        <dt>등록일</dt><dd>{{ employee.created_at | datetime }}</dd>
-        <dt>비고</dt><dd>{{ employee.note or '-' }}</dd>
-      </dl>
+{% if employee.status == 'RESIGNED' and assets %}
+<div class="alert error" role="alert">
+  <span>{{ icon('alert') }} <strong>퇴사한 직원이 자산 {{ assets | length }}대를 아직 갖고 있습니다.</strong>
+  회수한 뒤 아래 자산마다 반납 처리해 주세요.</span>
+</div>
+{% endif %}
+
+{# 이 직원에 대해 가장 먼저 알고 싶은 네 가지 #}
+<div class="fact-strip">
+  <div class="fact">
+    <div class="fact-label">보유 자산</div>
+    <div class="fact-value">{{ assets | length }}대</div>
+    <div class="fact-note">
+      {%- set amount = assets | selectattr('purchase_price') | sum(attribute='purchase_price') %}
+      {%- if amount %}취득가액 {{ amount | money }}원{% else %}지급 이력 {{ history | length }}건{% endif %}
+    </div>
+  </div>
+  <div class="fact">
+    <div class="fact-label">연락처</div>
+    {% if employee.phone %}
+      <div class="fact-value"><a href="tel:{{ employee.phone | replace('-', '') | replace(' ', '') }}">{{ employee.phone }}</a></div>
+      <div class="fact-note">누르면 전화를 겁니다 (휴대폰)</div>
+    {% else %}
+      <div class="fact-value muted">-</div><div class="fact-note">미입력</div>
+    {% endif %}
+  </div>
+  <div class="fact">
+    <div class="fact-label">이메일</div>
+    {% if employee.email %}
+      <div class="fact-value"><a href="mailto:{{ employee.email }}">{{ employee.email }}</a></div>
+      <div class="fact-note">누르면 메일을 씁니다</div>
+    {% else %}
+      <div class="fact-value muted">-</div><div class="fact-note">미입력</div>
+    {% endif %}
+  </div>
+  <div class="fact">
+    <div class="fact-label">부서 · 직급</div>
+    <div class="fact-value">{{ employee.department or '-' }}</div>
+    <div class="fact-note">{{ employee.position or '' }}</div>
+  </div>
+</div>
+
+<div class="detail-layout">
+  <div class="detail-main">
+    <div class="card">
+      <div class="card-head">
+        현재 보유 자산 ({{ assets | length }}대)
+        {% if assets | length > 1 %}<a href="/assets?holder_id={{ employee.id }}" class="btn small">자산 목록에서 보기</a>{% endif %}
+      </div>
+      <div class="card-body tight">
+        {% if assets %}
+        <div class="table-wrap">
+          <table class="data cards">
+            <thead><tr><th>자산번호</th><th>자산명</th><th>분류</th><th class="center">상태</th></tr></thead>
+            <tbody>
+            {% for asset in assets %}
+              <tr data-href="/assets/{{ asset.id }}">
+                <td class="mono nowrap c-no"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
+                <td class="c-name"><div class="cell-title">{{ asset.name }}</div>
+                  {% if asset.model_name %}<div class="cell-sub">{{ asset.model_name }}</div>{% endif %}</td>
+                <td class="nowrap c-cat">{{ category(asset.category, asset.category_label) }}</td>
+                <td class="center c-status">{{ asset_status(asset) }}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <div class="empty">
+            보유 중인 자산이 없습니다.
+            {% if current_user.is_admin and employee.status != 'RESIGNED' %}
+              <div style="margin-top:10px;"><a href="/assignments/new?employee_id={{ employee.id }}" class="btn primary small">{{ icon('plus') }}자산 지급하기</a></div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-head">현재 보유 자산 ({{ assets | length }}건)</div>
-    <div class="card-body tight">
-      {% if assets %}
-      <div class="table-wrap">
-        <table class="data">
-          <thead><tr><th>자산번호</th><th>자산명</th><th>분류</th><th class="center">상태</th></tr></thead>
-          <tbody>
-          {% for asset in assets %}
-            <tr>
-              <td class="mono nowrap"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
-              <td>{{ asset.name }}</td>
-              <td class="nowrap">{{ asset.category_label }}</td>
-              <td class="center">{{ asset_status(asset) }}</td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+  <div class="detail-aside">
+    <div class="card">
+      <h2>기본 정보</h2>
+      <div class="card-body">
+        <dl class="detail">
+          <dt>사번</dt><dd class="mono">{{ employee.emp_no }}</dd>
+          <dt>부서</dt><dd>{{ employee.department or '-' }}</dd>
+          <dt>직급</dt><dd>{{ employee.position or '-' }}</dd>
+          <dt>재직상태</dt><dd>{{ employee.status_label }}</dd>
+          <dt>등록일</dt><dd>{{ employee.created_at | datetime }}</dd>
+          <dt>비고</dt><dd>{{ employee.note or '-' }}</dd>
+        </dl>
       </div>
-      {% else %}
-        <p class="empty">보유 중인 자산이 없습니다.</p>
-      {% endif %}
     </div>
   </div>
 </div>

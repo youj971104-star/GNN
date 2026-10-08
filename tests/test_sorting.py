@@ -49,7 +49,7 @@ def test_누르면_오름차순부터_같은_칸을_다시_누르면_뒤집힌�
 
 def _rows(html: str) -> list[str]:
     """목록 표의 자산번호를 위에서부터."""
-    return re.findall(r'data-href="/assets/\d+">\s*<td class="mono nowrap"><a [^>]*>([^<]+)</a>', html)
+    return re.findall(r'data-href="/assets/\d+">\s*<td class="mono nowrap[^"]*"><a [^>]*>([^<]+)</a>', html)
 
 
 @pytest.fixture
@@ -139,7 +139,7 @@ def test_엑셀로_내려받아도_같은_순서다(admin_client, assets):
 def test_직원은_보유_자산_수로_정렬한다(admin_client, assets):
     html = admin_client.get("/employees?sort=assets&dir=desc").text
     assert 'aria-sort="descending"' in html
-    names = re.findall(r'data-href="/employees/\d+">.*?<td>([^<]+)</td>', html, re.S)
+    names = re.findall(r'data-href="/employees/\d+"[^>]*>.*?class="cell-title">([^<]+)<', html, re.S)
     assert names[:2] in (["나영희", "가철수"], ["가철수", "나영희"])     # 둘 다 1대
 
 

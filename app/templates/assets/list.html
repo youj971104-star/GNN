@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set back_url = '/' %}
-{% from "_macros.html" import pagination, asset_status, holder_link, sort_th, keep_sort %}
+{% from "_macros.html" import pagination, asset_status, holder_link, sort_th, keep_sort, category, icon, status_tabs %}
 {% set sort = filters.sorting %}
 {% set active = 'assets' %}
 {% block page_title %}자산 관리{% endblock %}
@@ -9,21 +9,24 @@
 <div class="page-head">
   <div class="muted">사내 IT 자산 대장입니다. 자산번호·모델명·시리얼번호 등으로 검색할 수 있습니다.</div>
   <div class="section-actions">
-    <a href="/assets/export{{ merge_query(request, page=None) }}" class="btn">엑셀 다운로드</a>
-    <a href="/assets/labels{{ merge_query(request, page=None) }}" class="btn">QR 라벨 인쇄</a>
+    <a href="/assets/export{{ merge_query(request, page=None) }}" class="btn">{{ icon('download') }}엑셀 다운로드</a>
+    <a href="/assets/labels{{ merge_query(request, page=None) }}" class="btn">{{ icon('printer') }}QR 라벨 인쇄</a>
     {% if current_user.is_admin %}
-      <a href="/assets/import" class="btn">엑셀 일괄 등록</a>
-      <a href="/assets/new" class="btn primary">+ 자산 등록</a>
+      <a href="/assets/import" class="btn">{{ icon('upload') }}엑셀 일괄 등록</a>
+      <a href="/assets/new" class="btn primary">{{ icon('plus') }}자산 등록</a>
     {% endif %}
   </div>
 </div>
 
+{# 상태별로 한 번에 거르기. 숫자는 다른 검색 조건을 그대로 둔 채 센 것이다. #}
+{{ status_tabs(request, ASSET_STATUSES, status_counts, filters.status) }}
+
 <div class="card">
   <div class="card-body">
-    <form method="get" action="/assets" class="filter-form">
+    <form method="get" action="/assets" class="filter-form" data-auto-submit>
       <div class="field grow">
         <label for="q">검색어</label>
-        <input type="text" id="q" name="q" value="{{ filters.q or '' }}" placeholder="자산번호, 자산명, 모델명, 시리얼번호, 보관위치, 사용자 이름·사번·부서…">
+        <input type="search" id="q" name="q" value="{{ filters.q or '' }}" placeholder="자산번호, 자산명, 모델명, 시리얼번호, 보관위치, 사용자 이름·사번·부서…">
       </div>
       <div class="field">
         <label for="category">분류</label>
@@ -31,15 +34,6 @@
           <option value="">전체</option>
           {% for code, label in ASSET_CATEGORIES.items() %}
             <option value="{{ code }}" {{ 'selected' if filters.category == code }}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="field">
-        <label for="status">상태</label>
-        <select id="status" name="status">
-          <option value="">전체</option>
-          {% for code, label in ASSET_STATUSES.items() %}
-            <option value="{{ code }}" {{ 'selected' if filters.status == code }}>{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -52,25 +46,40 @@
           {% endfor %}
         </select>
       </div>
+      {% if filters.status %}<input type="hidden" name="status" value="{{ filters.status }}">{% endif %}
+      {% if filters.holder_id %}<input type="hidden" name="holder_id" value="{{ filters.holder_id }}">{% endif %}
+      {% if filters.warranty in warranty_filters %}<input type="hidden" name="warranty" value="{{ filters.warranty }}">{% endif %}
       {{ keep_sort(sort) }}
       <div class="field checkbox-field" style="padding-bottom:8px;">
         <input type="checkbox" id="unassigned" name="unassigned" value="1" {{ 'checked' if filters.unassigned }}>
         <label for="unassigned" style="margin:0;">미지급만</label>
       </div>
       <div class="field">
-        <button type="submit" class="btn primary">검색</button>
+        <button type="submit" class="btn primary">{{ icon('search') }}검색</button>
       </div>
-      {% if filters.is_active %}
-      <div class="field"><a href="/assets" class="btn">초기화</a></div>
-      {% endif %}
     </form>
   </div>
 </div>
 
+{# 지금 걸려 있는 조건. 하나씩 x 로 풀 수 있다. #}
+{% if filters.is_active %}
+<div class="active-filters" aria-label="적용된 검색 조건">
+  <span class="result-count">검색 결과 <strong>{{ '{:,}'.format(page_obj.total) }}</strong>건</span>
+  {% if filters.q %}<a class="chip" href="{{ url_with(request, q=None, page=None) }}" title="조건 풀기">검색어: {{ filters.q }} {{ icon('close') }}</a>{% endif %}
+  {% if filters.status %}<a class="chip" href="{{ url_with(request, status=None, page=None) }}" title="조건 풀기">상태: {{ ASSET_STATUSES.get(filters.status, filters.status) }} {{ icon('close') }}</a>{% endif %}
+  {% if filters.category %}<a class="chip" href="{{ url_with(request, category=None, page=None) }}" title="조건 풀기">분류: {{ ASSET_CATEGORIES.get(filters.category, filters.category) }} {{ icon('close') }}</a>{% endif %}
+  {% if filters.department %}<a class="chip" href="{{ url_with(request, department=None, page=None) }}" title="조건 풀기">부서: {{ filters.department }} {{ icon('close') }}</a>{% endif %}
+  {% if filters.unassigned %}<a class="chip" href="{{ url_with(request, unassigned=None, page=None) }}" title="조건 풀기">미지급만 {{ icon('close') }}</a>{% endif %}
+  {% if holder %}<a class="chip" href="{{ url_with(request, holder_id=None, page=None) }}" title="조건 풀기">사용자: {{ holder.name }} {{ icon('close') }}</a>{% endif %}
+  {% if filters.warranty in warranty_filters %}<a class="chip" href="{{ url_with(request, warranty=None, page=None) }}" title="조건 풀기">{{ warranty_filters[filters.warranty] }} {{ icon('close') }}</a>{% endif %}
+  <a class="chip-reset" href="/assets{{ '?sort=' ~ sort.key ~ '&dir=' ~ sort.direction if request.query_params.get('sort') }}">모두 풀기</a>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-body tight">
     <div class="table-wrap">
-      <table class="data">
+      <table class="data cards">
         <thead>
           <tr>
             {{ sort_th(request, sort, 'asset_no', '자산번호') }}
@@ -86,8 +95,8 @@
         <tbody>
         {% for asset in page_obj.items %}
           <tr data-href="/assets/{{ asset.id }}">
-            <td class="mono nowrap"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
-            <td>
+            <td class="mono nowrap c-no"><a href="/assets/{{ asset.id }}">{{ asset.asset_no }}</a></td>
+            <td class="c-name">
               <div class="cell-title">{{ asset.name }}</div>
               {% if asset.model_name or asset.serial_no %}
               <div class="cell-sub">
@@ -97,16 +106,22 @@
               </div>
               {% endif %}
             </td>
-            <td class="nowrap">{{ asset.category_label }}</td>
-            <td class="center">{{ asset_status(asset) }}</td>
-            <td class="nowrap">{{ holder_link(asset) }}</td>
-            <td class="nowrap">{{ asset.location or '-' }}</td>
-            <td class="nowrap">{{ asset.purchase_date | date }}</td>
-            <td class="num nowrap">{{ asset.purchase_price | money }}</td>
+            <td class="nowrap c-cat">{{ category(asset.category, asset.category_label) }}</td>
+            <td class="center c-status">{{ asset_status(asset) }}</td>
+            <td class="nowrap c-holder {{ 'is-empty' if not asset.holder }}">{{ holder_link(asset) }}</td>
+            <td class="nowrap c-loc {{ 'is-empty' if not asset.location }}">{{ asset.location or '-' }}</td>
+            <td class="nowrap c-date">{{ asset.purchase_date | date }}</td>
+            <td class="num nowrap c-price">{{ asset.purchase_price | money }}</td>
           </tr>
         {% else %}
-          <tr><td colspan="8" class="empty">
-            {% if filters.is_active %}검색 조건에 맞는 자산이 없습니다.{% else %}등록된 자산이 없습니다.{% endif %}
+          <tr class="empty-row"><td colspan="8" class="empty">
+            {% if filters.is_active %}
+              검색 조건에 맞는 자산이 없습니다.
+              <div style="margin-top:10px;"><a href="/assets" class="btn small">조건 모두 풀기</a></div>
+            {% else %}
+              등록된 자산이 없습니다.
+              {% if current_user.is_admin %}<div style="margin-top:10px;"><a href="/assets/new" class="btn primary small">{{ icon('plus') }}첫 자산 등록</a></div>{% endif %}
+            {% endif %}
           </td></tr>
         {% endfor %}
         </tbody>

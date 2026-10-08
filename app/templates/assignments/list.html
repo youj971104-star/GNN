@@ -50,7 +50,7 @@
 <div class="card">
   <div class="card-body tight">
     <div class="table-wrap">
-      <table class="data">
+      <table class="data cards">
         <thead>
           <tr>
             {{ sort_th(request, sort, 'asset_no', '자산번호') }}
@@ -67,21 +67,21 @@
         <tbody>
         {% for item in page_obj.items %}
           <tr>
-            <td class="mono nowrap"><a href="/assets/{{ item.asset.id }}">{{ item.asset.asset_no }}</a></td>
-            <td>{{ item.asset.name }}</td>
-            <td class="nowrap"><a href="/employees/{{ item.employee.id }}">{{ item.employee.name }}</a></td>
-            <td class="nowrap">{{ item.employee.department or '-' }}</td>
-            <td class="nowrap">{{ item.assigned_at | date }}</td>
-            <td class="nowrap">{{ item.returned_at | date }}</td>
-            <td class="num">{{ '{:,}'.format(item.days_held) }}일</td>
-            <td class="center">
+            <td class="mono nowrap c-no"><a href="/assets/{{ item.asset.id }}">{{ item.asset.asset_no }}</a></td>
+            <td class="c-name"><span class="cell-title">{{ item.asset.name }}</span></td>
+            <td class="nowrap c-holder"><a href="/employees/{{ item.employee.id }}">{{ item.employee.name }}</a></td>
+            <td class="nowrap c-meta {{ 'is-empty' if not item.employee.department }}">{{ item.employee.department or '-' }}</td>
+            <td class="nowrap c-meta" data-label="지급">{{ item.assigned_at | date }}</td>
+            <td class="nowrap c-meta {{ 'is-empty' if not item.returned_at }}" data-label="반납">{{ item.returned_at | date }}</td>
+            <td class="num c-meta">{{ '{:,}'.format(item.days_held) }}일</td>
+            <td class="center c-status">
               {% if item.is_open %}<span class="badge open">지급중</span>{% else %}<span class="badge returned">반납완료</span>{% endif %}
             </td>
-            <td class="muted">
+            <td class="muted c-note {{ 'is-empty' if not (item.assigned_note or item.return_note) }}">
               {{ item.assigned_note or '' }}
               {% if item.return_note %}<div>↩ {{ item.return_note }}</div>{% endif %}
             </td>
-            <td class="center">
+            <td class="center c-action {{ 'is-empty' if not (item.is_open and current_user.is_admin) }}">
               {% if item.is_open and current_user.is_admin %}
                 <form method="post" action="/assignments/{{ item.id }}/return" class="inline-form"
                       data-confirm="[{{ item.asset.asset_no }}] 자산을 오늘 날짜로 반납 처리할까요?">
@@ -95,7 +95,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="10" class="empty">지급 이력이 없습니다.</td></tr>
+          <tr class="empty-row"><td colspan="10" class="empty">지급 이력이 없습니다.</td></tr>
         {% endfor %}
         </tbody>
       </table>

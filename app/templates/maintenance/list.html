@@ -49,7 +49,7 @@
 <div class="card">
   <div class="card-body tight">
     <div class="table-wrap">
-      <table class="data">
+      <table class="data cards">
         <thead>
           <tr>
             {{ sort_th(request, sort, 'maintained_at', '정비일') }}
@@ -65,14 +65,14 @@
         <tbody>
         {% for item in page_obj.items %}
           <tr>
-            <td class="nowrap">{{ item.maintained_at | date }}</td>
-            <td class="mono nowrap"><a href="/assets/{{ item.asset.id }}">{{ item.asset.asset_no }}</a></td>
-            <td>{{ item.asset.name }}</td>
-            <td class="center"><span class="badge">{{ item.kind_label }}</span></td>
-            <td class="nowrap">{{ item.vendor or '-' }}</td>
-            <td>{{ item.description }}</td>
-            <td class="num nowrap">{{ item.cost | money }}</td>
-            <td class="nowrap">
+            <td class="nowrap c-no">{{ item.maintained_at | date }}</td>
+            <td class="mono nowrap c-meta"><a href="/assets/{{ item.asset.id }}">{{ item.asset.asset_no }}</a></td>
+            <td class="c-meta">{{ item.asset.name }}</td>
+            <td class="center c-status"><span class="badge">{{ item.kind_label }}</span></td>
+            <td class="nowrap c-meta {{ 'is-empty' if not item.vendor }}">{{ item.vendor or '-' }}</td>
+            <td class="c-name"><span class="cell-title">{{ item.description }}</span></td>
+            <td class="num nowrap c-meta" data-label="비용">{{ item.cost | money }}</td>
+            <td class="nowrap c-meta {{ 'is-empty' if not item.next_due }}" data-label="다음 점검">
               {% if item.next_due %}
                 {% set left = item.days_until_due() %}
                 {{ item.next_due | date }}
@@ -82,7 +82,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="8" class="empty">정비 이력이 없습니다. 자산 상세 화면에서 등록할 수 있습니다.</td></tr>
+          <tr class="empty-row"><td colspan="8" class="empty">정비 이력이 없습니다. 자산 상세 화면에서 등록할 수 있습니다.</td></tr>
         {% endfor %}
         </tbody>
       </table>

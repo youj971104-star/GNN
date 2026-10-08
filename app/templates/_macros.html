@@ -1,5 +1,15 @@
 {# 여러 화면에서 재사용하는 조각 모음 #}
 
+{# 아이콘 (static/icons/sprite.svg). 글자 옆에 붙는 장식이라 화면 읽기 프로그램은 건너뛴다. #}
+{% macro icon(name, cls='') -%}
+  <svg class="icon {{ cls }}" aria-hidden="true" focusable="false"><use href="/static/icons/sprite.svg#i-{{ name }}"></use></svg>
+{%- endmacro %}
+
+{# 분류: 아이콘 + 이름 #}
+{% macro category(code, label) -%}
+  <span class="cat">{{ icon(CATEGORY_ICONS.get(code, 'tag')) }}{{ label }}</span>
+{%- endmacro %}
+
 {% macro pagination(page_obj, request) %}
   {% if page_obj.total %}
   <div class="pagination">
@@ -33,6 +43,21 @@
   {% endif %}
 {% endmacro %}
 
+{# 목록 위 상태 탭: [전체 125] [재고 29] [사용중 94] … 누르면 그 상태만 본다 #}
+{% macro status_tabs(request, statuses, counts, current) %}
+  <nav class="status-tabs" aria-label="상태별 보기">
+    <a href="{{ url_with(request, status=None, page=None) }}" class="{{ 'active' if not current }}"
+       {{ 'aria-current=true' if not current }}>전체 <span class="count">{{ '{:,}'.format(counts.values() | sum) }}</span></a>
+    {% for code, label in statuses.items() %}
+      <a href="{{ url_with(request, status=code, page=None) }}"
+         class="{{ 'active' if current == code }} {{ 'zero' if not counts.get(code) }}"
+         {{ 'aria-current=true' if current == code }}>
+        <span class="dot {{ code }}" aria-hidden="true"></span>{{ label }}
+        <span class="count">{{ '{:,}'.format(counts.get(code, 0)) }}</span></a>
+    {% endfor %}
+  </nav>
+{% endmacro %}
+
 {% macro asset_status(asset) %}
   <span class="badge {{ asset.status }}">{{ asset.status_label }}</span>
 {% endmacro %}
@@ -46,14 +71,16 @@
   {% endif %}
 {% endmacro %}
 
-{% macro bar(label, count, max_value) %}
-  <div class="bar-row">
-    <div class="bar-label" title="{{ label }}">{{ label }}</div>
+{# 막대 한 줄. href 를 주면 줄 전체가 그 목록으로 가는 링크가 된다. #}
+{% macro bar(label, count, max_value, href=None, icon_name=None) %}
+  {%- set tag = 'a' if href else 'div' %}
+  <{{ tag }} class="bar-row {{ 'is-link' if href }}" {% if href %}href="{{ href }}" title="{{ label }} 목록 보기"{% endif %}>
+    <div class="bar-label" title="{{ label }}">{% if icon_name %}{{ icon(icon_name) }}{% endif %}{{ label }}</div>
     <div class="bar-track">
       <div class="bar-fill" style="width: {{ (count / max_value * 100) | round(1) if max_value else 0 }}%"></div>
     </div>
     <div class="bar-value">{{ '{:,}'.format(count) }}</div>
-  </div>
+  </{{ tag }}>
 {% endmacro %}
 
 {# 눌러서 정렬하는 칸 제목. 한 번 누르면 오름차순(▲), 다시 누르면 내림차순(▼).
