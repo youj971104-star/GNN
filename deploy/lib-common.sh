@@ -49,3 +49,14 @@ cloud_public_ip() {
 
     echo ""
 }
+
+# 오라클 서버라면 리전 이름 (예: ap-chuncheon-1). 아니면 빈 값.
+cloud_region() {
+    local region
+    region=$(curl -s --max-time 2 --noproxy '*' -H "Authorization: Bearer Oracle" \
+                http://169.254.169.254/opc/v2/instance/canonicalRegionName 2>/dev/null) || true
+    case "$region" in
+        [a-z][a-z]-*-[0-9]*) echo "$region" ;;
+        *) echo "" ;;
+    esac
+}

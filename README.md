@@ -219,6 +219,7 @@ cd GNN
 | `./deploy.sh backup` | 데이터베이스 백업 → `backups/` 폴더에 저장 |
 | `./deploy.sh restore <파일>` | 백업 시점으로 되돌리기 (되돌리기 전 현재 상태를 자동 백업) |
 | `./deploy.sh autobackup [HH:MM]` | 매일 자동 백업 (기본 03:17) |
+| `./deploy.sh offsite oracle` | 백업을 **서버 밖**(오라클 Object Storage)에도 자동으로 올리기 (아래 *백업* 참고) |
 | `./deploy.sh encrypt-db` | 데이터베이스 파일 암호화 (한 번만, 아래 *보안* 참고) |
 | `./deploy.sh db-key` | 데이터베이스 암호화 키 보기 |
 | `./deploy.sh autoupdate [HH:MM]` | 운영체제 보안 패치 자동 설치 (재부팅 시각, 기본 04:30) |
@@ -291,13 +292,72 @@ cd GNN
 오래된 백업은 자동으로 정리되어 **최근 30개**만 남습니다
 (`.env` 의 `ITAM_BACKUP_KEEP` 으로 조절). 기록은 `backups/backup.log` 에 쌓입니다.
 
-> 백업 파일도 같은 서버 안에 있습니다. 디스크가 고장 나면 함께 사라지므로,
-> 가끔 다른 곳으로 내려받아 두세요. (DB 를 암호화했다면 백업도 암호화되어 있어,
-> 열려면 암호화 키가 있어야 합니다.)
->
-> ```bash
-> scp -i <키파일> ubuntu@<서버IP>:~/GNN/backups/*.db .
-> ```
+> 여기까지의 백업은 **같은 서버 안**에 있습니다. 서버(VM)가 망가지거나 지워지면 함께 사라지므로,
+> 아래 *서버 밖 자동 백업* 을 함께 켜 두세요.
+
+#### 서버 밖 자동 백업 (오라클 Object Storage, 0원)
+
+매일 백업을 만든 직후, 같은 파일을 **오라클 Object Storage**(서버와 별개인 파일 저장소,
+Always Free 20GB)에 한 부 더 올립니다. 서버를 통째로 잃어도 여기서 내려받아 되살릴 수 있습니다.
+
+- 올라가는 파일은 이미 **암호화된 백업**이라 저장소에서도 키 없이는 열 수 없습니다.
+- **복사만** 합니다. 서버에서 백업이 지워지거나 망가져도 서버 밖 사본은 따라 지워지지 않습니다.
+- 서버 밖 사본은 **90일** 보관 후 정리합니다(`ITAM_OFFSITE_KEEP_DAYS`).
+- 올리지 못한 날이 있어도(저장소 점검 등) 다음 백업 때 빠진 것까지 함께 올라갑니다.
+- 백업 하나가 수백 KB 라 90일치를 모아도 100MB 가 안 됩니다. 무료 범위(20GB)에 한참 못 미칩니다.
+
+**① 오라클 콘솔에서 할 일 (한 번, 5분)**
+
+1. **버킷 만들기:** ☰ 메뉴 → 스토리지 → 객체 스토리지 및 아카이브 스토리지 → **버킷** → **버킷 생성**
+   (Storage → Object Storage & Archive Storage → Buckets → Create Bucket)
+   - 이름 `itam-backups`, 기본 스토리지 계층 **표준(Standard)**, 나머지는 기본값
+   - 콘솔 오른쪽 위 리전이 **서버와 같은 리전**인지, 구획(Compartment)이 **기본값(루트)** 인지 확인하세요.
+     (S3 호환 방식은 기본적으로 루트 구획의 버킷만 보입니다)
+   - **공개(Public) 로 바꾸지 마세요.** 기본값인 비공개 그대로 둡니다.
+2. **네임스페이스 확인:** 만든 버킷을 누르면 '버킷 정보' 에 **네임스페이스**(영문·숫자 10여 자)가 보입니다.
+3. **고객 비밀 키 만들기:** 오른쪽 위 사람 아이콘 → **내 프로필**(My profile) → 왼쪽 아래 리소스의
+   **고객 비밀 키**(Customer secret keys) → **비밀 키 생성** → 이름 `itam-backup`
+   - 창에 뜨는 **비밀 키(Secret key)는 이때 한 번만 보입니다.** 바로 복사해 두세요.
+   - 창을 닫으면 목록에 **액세스 키(Access key)** 가 보입니다. 이것도 복사합니다.
+
+**② 서버에서 할 일**
+
+```bash
+./deploy.sh offsite oracle
+#   리전 [ap-chuncheon-1]:        ← 오라클 서버면 자동으로 채워집니다. 그냥 Enter
+#   네임스페이스:                  ← ① 의 2
+#   버킷 이름 [itam-backups]:      ← Enter
+#   액세스 키 / 비밀 키:           ← ① 의 3 (비밀 키는 입력해도 화면에 안 보입니다)
+#   ✔ 연결 확인: offsite:itam-backups/itam 에 올리고 지울 수 있습니다.
+#   ✔ 서버 밖에도 올렸습니다 → offsite:itam-backups/itam
+./deploy.sh autobackup      # 매일 자동 백업이 아직 꺼져 있다면 켜기
+```
+
+이후로는 매일 자동 백업 때마다 서버 밖에도 올라갑니다. 확인·관리 명령:
+
+```bash
+./deploy.sh offsite status        # 마지막 업로드 성공/실패 (./deploy.sh status 에도 나옵니다)
+./deploy.sh offsite list          # 서버 밖에 있는 백업 목록
+./deploy.sh offsite now           # 지금 바로 올리기
+./deploy.sh offsite off           # 끄기 (이미 올린 사본은 그대로)
+```
+
+**서버를 통째로 잃었을 때 되살리기:** 새 서버에 프로그램을 설치(`setup`)하고, `.env` 에
+보관해 둔 **암호화 키**(`ITAM_DB_KEY=...`)를 넣은 뒤:
+
+```bash
+./deploy.sh offsite oracle        # 같은 버킷·키로 다시 연결
+./deploy.sh offsite get latest    # 가장 최근 백업을 backups/ 로 내려받기
+./deploy.sh restore backups/itam-….db
+```
+
+> - 업로드 도구로 [rclone](https://rclone.org) 을 씁니다. 서버에 설치돼 있지 않으면 도커 이미지로 실행하므로
+>   따로 설치할 것은 없습니다(처음 한 번 이미지를 받습니다).
+> - 접속 정보는 `.offsite/rclone.conf` 에 저장됩니다(본인만 읽을 수 있는 권한, git 에 올라가지 않음).
+> - **더 안전하게(선택):** 버킷 → **보존 규칙**(Retention rules) → 30일 규칙을 추가하면, 서버가 해킹당해
+>   접속 키가 새더라도 30일 안의 백업은 아무도 지우거나 덮어쓸 수 없습니다. 규칙을 '잠금' 하지는 마세요(되돌릴 수 없음).
+> - 구글 드라이브·원드라이브·사내 NAS 등에 올리고 싶다면 `./deploy.sh offsite config` 로 rclone 저장소를 만든 뒤
+>   `./deploy.sh offsite rclone <저장소이름>:<폴더>` 를 실행하세요.
 
 되돌릴 때는 백업 파일을 지정합니다. 실행 전에 확인 절차가 있고,
 되돌리기 직전의 상태도 자동으로 백업해 둡니다.
@@ -376,6 +436,9 @@ Let's Encrypt 무료 인증서를 받아 적용하고, 90일마다 자동으로 
 > ⚠ **키를 잃어버리면 데이터와 백업을 영영 열 수 없습니다.**
 > 명령이 끝날 때 보여 주는 키를 **서버 밖**(비밀번호 관리자 등)에 꼭 보관하세요.
 > 서버를 통째로 잃으면 `.env` 도 함께 사라집니다. 나중에 다시 보려면 `./deploy.sh db-key`.
+>
+> 키는 **서버 밖 백업과 다른 곳**에 두세요. 백업과 키를 한곳(같은 클라우드 계정·같은 드라이브)에 두면,
+> 그곳이 뚫렸을 때 암호화한 의미가 없어집니다. 권장: 비밀번호 관리 프로그램 + 종이에 적어 금고 보관(두 곳).
 >
 > 새 서버로 옮길 때는 백업 파일과 함께 `.env` 에 같은 키(`ITAM_DB_KEY=...`)를 넣으면 됩니다.
 
@@ -545,6 +608,8 @@ export ITAM_DATABASE_URL="postgresql+psycopg://itam:비밀번호@db-host:5432/it
 | `ITAM_DOMAIN` | (없음) | HTTPS 로 전환하면 기록됩니다. 이 값이 있으면 배포 명령이 HTTPS 설정을 함께 씁니다 |
 | `ITAM_DUCKDNS_NAME` / `ITAM_DUCKDNS_TOKEN` | (없음) | DuckDNS 무료 주소를 쓸 때의 이름과 토큰 |
 | `ITAM_BACKUP_KEEP` | `30` | 보관할 백업 파일 개수. 넘으면 오래된 것부터 지웁니다 |
+| `ITAM_OFFSITE` | (없음) | 서버 밖 백업 위치(예: `offsite:itam-backups/itam`). `./deploy.sh offsite oracle` 이 넣어 줍니다 |
+| `ITAM_OFFSITE_KEEP_DAYS` | `90` | 서버 밖 사본 보관 일수 (최소 7) |
 | `ITAM_DB_KEY` | (없음) | 데이터베이스 암호화 키(64자리 16진수). `./deploy.sh encrypt-db` 가 넣어 줍니다. **잃어버리면 복구 불가** |
 | `ITAM_MAX_FAILED_LOGINS` | `5` | 이 횟수만큼 틀리면 계정을 잠급니다 |
 | `ITAM_LOGIN_LOCK_SECONDS` | `600` | 계정이 잠기는 시간(초) |
