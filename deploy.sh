@@ -746,7 +746,8 @@ cmd_encrypt_db() {
 
     info "서비스를 멈추고 변환합니다..."
     $DC stop "$SERVICE"
-    if ! $DC run --rm -T --no-deps -e ITAM_DB_KEY="$key" --entrypoint sh "$SERVICE" -c \
+    # /data 로 옮겨 가면 프로그램 코드(/app)를 못 찾으므로 PYTHONPATH 로 알려 준다
+    if ! $DC run --rm -T --no-deps -e ITAM_DB_KEY="$key" -e PYTHONPATH=/app --entrypoint sh "$SERVICE" -c \
         "set -e; cd /data
          python -m app.dbcrypt encrypt itam.db itam.db.encrypted
          rm -f itam.db-wal itam.db-shm
@@ -1016,7 +1017,7 @@ cmd_restore() {
     # 소유권을 넘겨줘야 한다. 그래서 이 정리 작업만 root 로 실행한다.
     #
     # 암호화해서 쓰는 중에 예전 평문 백업으로 되돌리면, 넣기 전에 암호화한다.
-    $DC run --rm -T --user root --entrypoint sh "$SERVICE" -c \
+    $DC run --rm -T --user root -e PYTHONPATH=/app --entrypoint sh "$SERVICE" -c \
         "set -e; cd /data
          if [ -n \"\$ITAM_DB_KEY\" ] && [ \"\$(head -c 15 _restore.db)\" = 'SQLite format 3' ]; then
              python -m app.dbcrypt encrypt _restore.db _restore.enc
