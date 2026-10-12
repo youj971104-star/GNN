@@ -5,8 +5,10 @@ FROM python:3.11-slim
 #  - PYTHONDONTWRITEBYTECODE: .pyc 파일을 만들지 않아 이미지가 깔끔해진다
 #  - PYTHONUNBUFFERED: 로그가 버퍼에 쌓이지 않고 바로 출력된다 (docker logs 용)
 #  - TZ: 화면에 표시되는 등록일/수정일을 한국 시간 기준으로 맞춘다
+# PYTHONPATH: 다른 폴더(/data 등)로 옮겨 가서 'python -m app.…' 을 실행해도 코드를 찾게 한다
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
     TZ=Asia/Seoul
 
 # 추가 패키지를 설치하지 않는다.
