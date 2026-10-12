@@ -9,6 +9,7 @@
 #   ./deploy.sh logs      실행 로그 보기
 #   ./deploy.sh status    상태 확인
 #   ./deploy.sh backup    데이터베이스 백업
+#   ./deploy.sh offsite oracle            백업을 서버 밖에도 자동으로 올리기
 #   ./deploy.sh restore <파일>   백업 파일로 되돌리기
 #   ./deploy.sh demo      샘플 데이터 넣기 (처음 둘러볼 때만)
 #   ./deploy.sh https <도메인> [이메일]   무료 인증서로 HTTPS 전환
@@ -312,6 +313,15 @@ cmd_status() {
     else
         fail "서비스에 응답이 없습니다."
     fi
+
+    # 백업 상태
+    local newest; newest=$(ls -1t backups/itam-*.db 2>/dev/null | head -1 || true)
+    if [ -n "$newest" ]; then
+        info "가장 최근 백업: ${newest}  ($(date -r "$newest" '+%Y-%m-%d %H:%M'))"
+    else
+        info "서버 안 백업: 아직 없음  ('./deploy.sh autobackup' 으로 매일 자동 백업)"
+    fi
+    offsite_status
 }
 
 # 백업은 쌓이기만 하면 디스크를 채운다. 최근 것만 남긴다.
@@ -355,6 +365,285 @@ cmd_backup() {
     ok "백업 완료: backups/${name}  ($(du -h "backups/${name}" | cut -f1))"
     prune_backups
     info "보관 중인 백업: $(ls -1 backups/itam-*.db 2>/dev/null | wc -l)개"
+
+    # 서버 밖에도 한 부 (설정했을 때만). 올리지 못해도 서버 안 백업은 그대로 남는다.
+    if [ -n "$(env_value ITAM_OFFSITE || true)" ]; then
+        offsite_push || true
+    fi
+}
+
+# ─────────────────────────────────────────────────────────────
+#  서버 밖 백업 (오라클 Object Storage · 구글 드라이브 등)
+# ─────────────────────────────────────────────────────────────
+#
+# 서버 안 백업만 있으면, 서버(VM)가 망가지거나 지워질 때 백업도 함께 사라진다.
+# 매일 백업을 만든 직후 같은 파일을 서버 밖 저장소에 한 부 더 올린다.
+#
+# - 올리는 파일은 이미 암호화된 백업이라, 저장소 쪽에서도 키 없이는 열 수 없다.
+# - 복사(copy)만 하고 동기화(sync)는 하지 않는다. 서버에서 파일이 지워지거나
+#   망가져도 서버 밖 사본까지 따라 지워지지 않게 하기 위해서다.
+# - 오래된 사본은 날짜로만 정리한다 (기본 90일).
+# - 업로드 도구는 rclone. 서버에 깔려 있으면 그것을, 없으면 도커 이미지를 쓴다.
+#
+# 설정은 .offsite/rclone.conf (저장소 접속 키가 들어 있어 권한 600, git 에 올리지 않음)
+# 와 .env 의 ITAM_OFFSITE(올릴 위치), ITAM_OFFSITE_KEEP_DAYS(보관 일수) 에 둔다.
+
+OFFSITE_DIR=".offsite"
+OFFSITE_CONF="${OFFSITE_DIR}/rclone.conf"
+OFFSITE_RESULT="${OFFSITE_DIR}/last-result"
+OFFSITE_KEEP_DEFAULT=90
+RCLONE_IMAGE="rclone/rclone:1.68.2"
+
+# rclone 실행. 경로는 이 폴더 기준으로 넘긴다 (도커일 때는 /work 로 바뀐다).
+rclone_run() {
+    if command -v rclone >/dev/null 2>&1; then
+        rclone --config "$PWD/${OFFSITE_CONF}" "$@"
+    else
+        local tty=""; [ -t 0 ] && tty="-t"        # 'offsite config' 처럼 묻고 답할 때
+        docker run --rm -i $tty --user "$(id -u):$(id -g)" \
+            -v "$PWD/${OFFSITE_DIR}:/work/${OFFSITE_DIR}" \
+            -v "$PWD/backups:/work/backups" \
+            -e HOME=/work/${OFFSITE_DIR} -w /work \
+            "$RCLONE_IMAGE" --config "/work/${OFFSITE_CONF}" "$@"
+    fi
+}
+
+offsite_target() { env_value ITAM_OFFSITE || true; }
+
+offsite_keep_days() {
+    local days; days=$(env_value ITAM_OFFSITE_KEEP_DAYS || true)
+    case "$days" in ''|*[!0-9]*) days=$OFFSITE_KEEP_DEFAULT ;; esac
+    [ "$days" -lt 7 ] && days=7          # 실수로 0 을 넣어 모두 지우는 일이 없게
+    echo "$days"
+}
+
+offsite_record() {
+    mkdir -p "$OFFSITE_DIR"
+    printf '%s %s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$1" "${2:-}" > "$OFFSITE_RESULT"
+}
+
+require_offsite() {
+    if [ -z "$(offsite_target)" ] || [ ! -f "$OFFSITE_CONF" ]; then
+        fail "서버 밖 백업이 설정되어 있지 않습니다.  './deploy.sh offsite oracle' 로 설정해 주세요."
+        exit 1
+    fi
+}
+
+# 서버 안 백업 중 아직 안 올린 것을 올리고, 오래된 사본을 정리한다
+offsite_push() {
+    local target days
+    target=$(offsite_target)
+    days=$(offsite_keep_days)
+    if [ ! -f "$OFFSITE_CONF" ]; then
+        fail "서버 밖 백업 설정 파일(${OFFSITE_CONF})이 없습니다."
+        offsite_record FAIL "설정 파일 없음"
+        return 1
+    fi
+
+    # pipefail 이 켜져 있어, rclone 이 실패하면 sed 를 거쳐도 실패로 돌아온다
+    # DB 를 암호화해 쓰는 중이면, 암호화하기 전의 평문 백업은 절대 밖으로 내보내지 않는다.
+    # (encrypt-db 가 변환 직전에 받는 백업, 암호화 전에 만든 예전 백업 등)
+    # 규칙은 위에서부터 적용된다: 평문 백업 빼기 → itam-*.db 넣기 → 나머지 빼기
+    local file skipped=0 rules=()
+    if [ -n "$(env_value ITAM_DB_KEY || true)" ]; then
+        for file in backups/itam-*.db; do
+            [ -f "$file" ] || continue
+            if [ "$(head -c 15 "$file")" = "SQLite format 3" ]; then
+                rules+=(--filter "- $(basename "$file")")
+                skipped=$((skipped + 1))
+            fi
+        done
+        if [ "$skipped" -gt 0 ]; then
+            info "암호화되지 않은 예전 백업 ${skipped}개는 서버 밖으로 올리지 않습니다."
+        fi
+    fi
+    rules+=(--filter "+ itam-*.db" --filter "- *")
+
+    # 실패하면 같은 오류가 재시도마다 반복되므로 마지막 몇 줄만 남긴다
+    if ! rclone_run copy backups "$target" "${rules[@]}" --max-age "${days}d" --retries 3 --low-level-retries 5 --stats 0 2>&1 | tail -n 3 | sed 's/^/    /'; then
+        fail "서버 밖 백업을 올리지 못했습니다 → $target  (서버 안 백업은 그대로 있습니다)"
+        offsite_record FAIL "업로드 실패"
+        return 1
+    fi
+
+    rclone_run delete "$target" --include "itam-*.db" --min-age "${days}d" --stats 0 >/dev/null 2>&1 || true
+    ok "서버 밖에도 올렸습니다 → $target  (${days}일 지난 사본은 정리)"
+    offsite_record OK "$target"
+}
+
+offsite_last_result() {
+    [ -f "$OFFSITE_RESULT" ] && cat "$OFFSITE_RESULT" || echo ""
+}
+
+cmd_offsite() {
+    require_env
+    local action="${1:-status}"
+    case "$action" in
+        oracle)  offsite_setup_oracle ;;
+        rclone)  shift; offsite_setup_rclone "${1:-}" ;;
+        config)  mkdir -p "$OFFSITE_DIR"; chmod 700 "$OFFSITE_DIR"; rclone_run config; chmod 600 "$OFFSITE_CONF" 2>/dev/null || true ;;
+        test)    require_offsite; offsite_test ;;
+        now)     require_offsite; offsite_push ;;
+        list|ls) require_offsite; rclone_run lsl "$(offsite_target)" --include "itam-*.db" | sort -k2,3 ;;
+        get)     shift; require_offsite; offsite_get "${1:-}" ;;
+        status)  offsite_status ;;
+        off)     offsite_off ;;
+        *)
+            fail "알 수 없는 명령: offsite $action"
+            info "./deploy.sh offsite oracle | test | now | list | get <파일|latest> | status | off"
+            exit 1
+            ;;
+    esac
+}
+
+# 백업이 암호화돼 있지 않으면 바깥 저장소에 평문이 올라간다. 그 전에 확인한다.
+offsite_confirm_encryption() {
+    if [ -n "$(env_value ITAM_DB_KEY || true)" ]; then
+        return 0
+    fi
+    echo ""
+    fail "데이터베이스가 암호화되어 있지 않습니다."
+    info "이대로면 직원 정보가 담긴 백업이 암호화 없이 서버 밖에 올라갑니다."
+    info "먼저 './deploy.sh encrypt-db' 로 암호화하기를 권합니다."
+    printf "  그래도 계속하려면 'yes' 를 입력하세요: "
+    local answer; read -r answer
+    [ "$answer" = "yes" ] || { info "취소했습니다."; exit 0; }
+}
+
+# 오라클 Object Storage (무료 20GB). 콘솔에서 버킷과 '고객 비밀 키' 를 만든 뒤 실행한다.
+offsite_setup_oracle() {
+    offsite_confirm_encryption
+    echo ""
+    echo "  오라클 Object Storage 를 서버 밖 백업 저장소로 씁니다."
+    echo "  (콘솔에서 미리 할 일은 README.md 의 '서버 밖 자동 백업' 을 보세요)"
+    echo ""
+
+    local region namespace bucket access secret
+    region=$(cloud_region || true)
+    printf "  리전 [%s]: " "${region:-ap-chuncheon-1}"; read -r answer
+    region="${answer:-${region:-ap-chuncheon-1}}"
+    printf "  네임스페이스 (콘솔 → 테넌시 세부정보의 'Object Storage 네임스페이스'): "; read -r namespace
+    printf "  버킷 이름 [itam-backups]: "; read -r bucket
+    bucket="${bucket:-itam-backups}"
+    printf "  액세스 키 (고객 비밀 키의 Access Key): "; read -r access
+    printf "  비밀 키 (만들 때 한 번만 보이는 Secret Key, 입력은 화면에 안 보입니다): "; read -rs secret; echo ""
+
+    if ! echo "$region" | grep -qE '^[a-z]{2}-[a-z]+-[0-9]+$' \
+        || ! echo "$namespace" | grep -qE '^[a-z0-9]+$' \
+        || ! echo "$bucket" | grep -qE '^[A-Za-z0-9._-]+$' \
+        || [ -z "$access" ] || [ -z "$secret" ]; then
+        fail "입력값을 확인해 주세요 (리전 예: ap-chuncheon-1, 네임스페이스는 영문 소문자·숫자)."
+        exit 1
+    fi
+
+    write_offsite_conf <<CONF
+[offsite]
+type = s3
+provider = Other
+access_key_id = ${access}
+secret_access_key = ${secret}
+region = ${region}
+endpoint = https://${namespace}.compat.objectstorage.${region}.oraclecloud.com
+force_path_style = true
+no_check_bucket = true
+CONF
+    set_env_value ITAM_OFFSITE "offsite:${bucket}/itam"
+    [ -n "$(env_value ITAM_OFFSITE_KEEP_DAYS || true)" ] || set_env_value ITAM_OFFSITE_KEEP_DAYS "$OFFSITE_KEEP_DEFAULT"
+    ok "설정을 저장했습니다 → offsite:${bucket}/itam"
+    offsite_test && offsite_push
+}
+
+# 구글 드라이브·원드라이브·NAS 등 rclone 이 아는 저장소 (먼저 './deploy.sh offsite config')
+offsite_setup_rclone() {
+    local target="$1"
+    if [ -z "$target" ] || ! echo "$target" | grep -qE '^[A-Za-z0-9_-]+:'; then
+        fail "올릴 위치를 '저장소이름:폴더' 로 넣어 주세요.  예)  ./deploy.sh offsite rclone gdrive:itam-backups"
+        info "저장소는 먼저 './deploy.sh offsite config' 로 만듭니다."
+        exit 1
+    fi
+    if [ ! -f "$OFFSITE_CONF" ] || ! grep -q "^\[${target%%:*}\]" "$OFFSITE_CONF"; then
+        fail "'${target%%:*}' 저장소 설정이 없습니다. './deploy.sh offsite config' 로 먼저 만들어 주세요."
+        exit 1
+    fi
+    offsite_confirm_encryption
+    set_env_value ITAM_OFFSITE "$target"
+    [ -n "$(env_value ITAM_OFFSITE_KEEP_DAYS || true)" ] || set_env_value ITAM_OFFSITE_KEEP_DAYS "$OFFSITE_KEEP_DEFAULT"
+    ok "서버 밖 백업 위치: $target"
+    offsite_test && offsite_push
+}
+
+write_offsite_conf() {
+    mkdir -p "$OFFSITE_DIR"
+    chmod 700 "$OFFSITE_DIR"
+    ( umask 077; cat > "$OFFSITE_CONF" )
+    chmod 600 "$OFFSITE_CONF"
+}
+
+# 작은 파일을 올리고, 목록에서 찾고, 지워 본다
+offsite_test() {
+    local target probe
+    target=$(offsite_target)
+    probe="offsite-test-$(date '+%Y%m%d%H%M%S').txt"
+    mkdir -p backups
+    echo "IT 자산관리 서버 밖 백업 연결 확인" > "backups/${probe}"
+    if rclone_run copyto "backups/${probe}" "${target}/${probe}" --stats 0 2>&1 | sed 's/^/    /' \
+        && rclone_run lsf "$target" --include "${probe}" 2>/dev/null | grep -q "$probe"; then
+        rclone_run deletefile "${target}/${probe}" >/dev/null 2>&1 || true
+        rm -f "backups/${probe}"
+        ok "연결 확인: $target 에 올리고 지울 수 있습니다."
+        return 0
+    fi
+    rm -f "backups/${probe}"
+    fail "$target 에 올리지 못했습니다. 키·네임스페이스·버킷 이름·리전을 확인해 주세요."
+    offsite_record FAIL "연결 실패"
+    return 1
+}
+
+# 서버 밖 사본을 backups/ 로 내려받는다 (서버를 새로 만들어 되살릴 때)
+offsite_get() {
+    local name="$1" target
+    target=$(offsite_target)
+    if [ -z "$name" ]; then
+        fail "내려받을 파일 이름을 넣어 주세요.  예)  ./deploy.sh offsite get latest"
+        exit 1
+    fi
+    if [ "$name" = "latest" ]; then
+        name=$(rclone_run lsf "$target" --include "itam-*.db" | sort | tail -1)
+        [ -n "$name" ] || { fail "서버 밖에 백업이 없습니다."; exit 1; }
+    fi
+    if ! echo "$name" | grep -qE '^itam-[0-9]{8}-[0-9]{6}\.db$'; then
+        fail "백업 파일 이름은 itam-날짜-시각.db 형식입니다: $name"
+        exit 1
+    fi
+    mkdir -p backups
+    rclone_run copyto "${target}/${name}" "backups/${name}" --stats 0
+    ok "내려받았습니다: backups/${name}"
+    info "되돌리려면:  ./deploy.sh restore backups/${name}"
+}
+
+offsite_status() {
+    local target last
+    target=$(offsite_target)
+    if [ -z "$target" ]; then
+        info "서버 밖 백업: 설정 안 됨  ('./deploy.sh offsite oracle' 로 설정)"
+        return 0
+    fi
+    last=$(offsite_last_result)
+    info "서버 밖 백업 위치: $target  (보관 $(offsite_keep_days)일)"
+    if [ -z "$last" ]; then
+        info "아직 올린 적이 없습니다.  './deploy.sh offsite now' 로 지금 올릴 수 있습니다."
+    elif [ "$(echo "$last" | awk '{print $3}')" = "OK" ]; then
+        ok "마지막 업로드 성공: $(echo "$last" | awk '{print $1, $2}')"
+    else
+        fail "마지막 업로드 실패: $last"
+    fi
+}
+
+offsite_off() {
+    if [ -n "$(offsite_target)" ]; then
+        sed -i.bak '/^ITAM_OFFSITE=/d' "$ENV_FILE" && rm -f "${ENV_FILE}.bak"
+    fi
+    ok "서버 밖 백업을 껐습니다. (저장소에 이미 올린 사본과 ${OFFSITE_CONF} 는 그대로 둡니다)"
 }
 
 # 호스트에 있는 DB 파일 하나를 열어 본다 (암호화돼 있으면 .env 의 키로).
@@ -686,8 +975,11 @@ cmd_autobackup() {
     local keep; keep=$(env_value ITAM_BACKUP_KEEP || true)
     ok "매일 ${when} 에 자동으로 백업합니다 (최근 ${keep:-$BACKUP_KEEP_DEFAULT}개 보관)"
     info "기록: backups/backup.log · 끄려면 ./deploy.sh autobackup off"
-    info "백업 파일은 이 서버 안에 있습니다. 가끔 다른 곳으로도 내려받아 두세요:"
-    info "  scp -i <키파일> ubuntu@<서버IP>:$PWD/backups/*.db ."
+    if [ -n "$(offsite_target)" ]; then
+        info "백업할 때마다 서버 밖에도 올립니다 → $(offsite_target)"
+    else
+        info "백업 파일은 이 서버 안에만 있습니다. 서버 밖에도 두려면:  ./deploy.sh offsite oracle"
+    fi
 }
 
 cmd_restore() {
@@ -1162,6 +1454,7 @@ case "${1:-}" in
     status|ps)  cmd_status ;;
     backup)     cmd_backup ;;
     autobackup) shift; cmd_autobackup "$@" ;;
+    offsite)    shift; cmd_offsite "$@" ;;
     encrypt-db) cmd_encrypt_db ;;
     db-key)     cmd_db_key ;;
     autoupdate) shift; cmd_autoupdate "$@" ;;
@@ -1185,6 +1478,8 @@ IT 자산관리 시스템 배포 도우미
   ./deploy.sh status           상태 확인
   ./deploy.sh backup           데이터베이스 백업 (지금 한 번)
   ./deploy.sh autobackup [HH:MM]  매일 자동 백업 (기본 03:17, 끄기: autobackup off)
+  ./deploy.sh offsite oracle   백업을 서버 밖(오라클 Object Storage)에도 자동으로 올리기
+  ./deploy.sh offsite status | test | now | list | get <파일|latest> | off
 
   ── 보안 ──
   ./deploy.sh encrypt-db       데이터베이스 파일 암호화 (한 번만)
