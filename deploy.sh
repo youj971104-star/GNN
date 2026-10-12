@@ -441,8 +441,26 @@ offsite_push() {
     fi
 
     # pipefail 이 켜져 있어, rclone 이 실패하면 sed 를 거쳐도 실패로 돌아온다
+    # DB 를 암호화해 쓰는 중이면, 암호화하기 전의 평문 백업은 절대 밖으로 내보내지 않는다.
+    # (encrypt-db 가 변환 직전에 받는 백업, 암호화 전에 만든 예전 백업 등)
+    # 규칙은 위에서부터 적용된다: 평문 백업 빼기 → itam-*.db 넣기 → 나머지 빼기
+    local file skipped=0 rules=()
+    if [ -n "$(env_value ITAM_DB_KEY || true)" ]; then
+        for file in backups/itam-*.db; do
+            [ -f "$file" ] || continue
+            if [ "$(head -c 15 "$file")" = "SQLite format 3" ]; then
+                rules+=(--filter "- $(basename "$file")")
+                skipped=$((skipped + 1))
+            fi
+        done
+        if [ "$skipped" -gt 0 ]; then
+            info "암호화되지 않은 예전 백업 ${skipped}개는 서버 밖으로 올리지 않습니다."
+        fi
+    fi
+    rules+=(--filter "+ itam-*.db" --filter "- *")
+
     # 실패하면 같은 오류가 재시도마다 반복되므로 마지막 몇 줄만 남긴다
-    if ! rclone_run copy backups "$target" --include "itam-*.db" --max-age "${days}d" --retries 3 --low-level-retries 5 --stats 0 2>&1 | tail -n 3 | sed 's/^/    /'; then
+    if ! rclone_run copy backups "$target" "${rules[@]}" --max-age "${days}d" --retries 3 --low-level-retries 5 --stats 0 2>&1 | tail -n 3 | sed 's/^/    /'; then
         fail "서버 밖 백업을 올리지 못했습니다 → $target  (서버 안 백업은 그대로 있습니다)"
         offsite_record FAIL "업로드 실패"
         return 1
