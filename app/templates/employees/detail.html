@@ -119,7 +119,10 @@
           <dt>법인</dt><dd>{{ employee.company or '-' }}</dd>
           <dt>부서</dt><dd>{{ employee.department or '-' }}</dd>
           <dt>직급</dt><dd>{{ employee.position or '-' }}</dd>
-          <dt>재직상태</dt><dd>{{ employee.status_label }}</dd>
+          <dt>팀</dt><dd>{{ employee.team or '-' }}</dd>
+          <dt>고용형태</dt><dd>{{ employee.employment_type or '-' }}</dd>
+          <dt>입사일</dt><dd>{{ employee.hired_on | date }}</dd>
+          <dt>재직상태</dt><dd>{{ employee.status_label }}{% if employee.resigned_on %} ({{ employee.resigned_on | date }} 퇴사){% endif %}</dd>
           <dt>등록일</dt><dd>{{ employee.created_at | datetime }}</dd>
           <dt>비고</dt><dd>{{ employee.note or '-' }}</dd>
         </dl>

@@ -154,6 +154,14 @@ class Employee(Base):
     note: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+    # 인력현황(HR 엑셀)에서 가져오는 값. 인력현황 양식으로 다시 내보낼 때 쓴다.
+    team: Mapped[str | None] = mapped_column(String(50))
+    employment_type: Mapped[str | None] = mapped_column(String(20))   # 정규·계약·파견·협력업체 …
+    hired_on: Mapped[date | None] = mapped_column(Date)
+    resigned_on: Mapped[date | None] = mapped_column(Date)             # 퇴사로 바꾼 날 (또는 인력현황의 퇴사일)
+    roster_group: Mapped[str | None] = mapped_column(String(30))       # '협력사' 같은 묶음 (비면 본 인력현황)
+    roster_order: Mapped[int | None] = mapped_column(Integer)          # 인력현황에서의 순서
+
     assets: Mapped[list["Asset"]] = relationship(back_populates="holder")
     assignments: Mapped[list["Assignment"]] = relationship(back_populates="employee")
 

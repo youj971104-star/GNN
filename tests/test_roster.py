@@ -94,7 +94,7 @@ def test_인력현황이_아니면_알려_준다():
     wb.active.append(["사번", "이름"])
     buffer = io.BytesIO()
     wb.save(buffer)
-    with pytest.raises(roster.RosterError, match="성명"):
+    with pytest.raises(roster.RosterError, match="인력현황 시트를 찾지 못했습니다"):
         roster.read_roster(buffer.getvalue())
     with pytest.raises(roster.RosterError, match="엑셀 파일을 열 수 없습니다"):
         roster.read_roster(b"not excel")
@@ -128,7 +128,10 @@ def staff(db):
 def test_미리보기(db, staff):
     plan = roster.plan_sync(db, roster.read_roster(_file({"s": LATEST})))
     assert sorted(m.employee.name for m in plan.company_changes) == ["김하나", "이 둘"]
-    assert [m.employee.name for m in plan.unchanged] == ["최넷"]
+    # 법인은 이미 같지만 팀·고용형태·입사일이 비어 있어 채워진다
+    info = {m.employee.name: m.changed for m in plan.info_changes}
+    assert info == {"최넷": ["팀", "고용형태", "입사일"]}
+    assert plan.unchanged == []
     assert [m.employee.name for m in plan.reactivate] == ["정다섯"]
     assert sorted(p.name for p in plan.add) == ["박셋", "한여섯"]
     resign = {r.employee.name: (r.reason, r.holding) for r in plan.resign}
@@ -156,9 +159,12 @@ def test_반영(db, staff):
 
     park = emp("박셋")
     assert park.status == "LEAVE" and park.company == "가법인" and park.department == "CS2팀"
-    assert "육아휴직" in park.note and "고용형태 정규" in park.note
+    assert park.note == "육아휴직(26.01.01-26.12.31)"            # 인력현황의 비고 그대로
+    assert (park.team, park.employment_type, str(park.hired_on)) == ("CS2팀", "정규", "2024-01-01")
+    assert park.roster_group is None and park.roster_order is not None
     partner = emp("한여섯")
-    assert partner.company == "위탁계약" and "협력사" in partner.note
+    assert partner.company == "위탁계약" and partner.roster_group == "협력사"
+    assert partner.employment_type == "협력업체" and partner.position is None
     # 새 사번은 기존 번호 뒤로 이어진다
     assert sorted([park.emp_no, partner.emp_no]) == ["E0008", "E0009"]
 
@@ -271,3 +277,116 @@ def test_대시보드에_법인별_보유_현황(admin_client, db):
     db.commit()
     html = admin_client.get("/").text
     assert "법인별 보유 현황" in html and "/assets?company=" in html
+
+
+# --- 인력현황 항목과 퇴사일 ------------------------------------------------------
+
+def test_기존_직원도_팀_고용형태_입사일을_채우고_부서_직급은_그대로(db, staff):
+    staff["김하나"].note = "기존 메모"
+    db.commit()
+    roster.apply_sync(db, roster.read_roster(_file({"s": LATEST})))
+    kim = db.scalar(select(Employee).where(Employee.name == "김하나"))
+    assert (kim.team, kim.employment_type, str(kim.hired_on)) == ("CS1팀", "정규", "2024-01-01")
+    assert kim.department == "CS1팀" and kim.note == "기존 메모"     # 비고는 비었을 때만 채운다
+    lee = db.scalar(select(Employee).where(Employee.name == "이 둘"))
+    assert (lee.department, lee.position) == ("옛부서", "선임")
+
+
+def test_퇴사일을_남긴다(db, staff):
+    from datetime import date
+    staff["정다섯"].resigned_on = date(2025, 1, 1)
+    db.commit()
+    roster.apply_sync(db, roster.read_roster(_file({"s": LATEST})), today=date(2026, 10, 21))
+
+    def emp(name):
+        return db.scalar(select(Employee).where(Employee.name == name))
+
+    assert str(emp("오일곱").resigned_on) == "2026-10-01"      # 인력현황 퇴사자 묶음의 퇴사일
+    assert str(emp("떠난사람").resigned_on) == "2026-10-21"    # 인력현황에 없어 오늘 퇴사 처리
+    assert emp("정다섯").resigned_on is None                    # 재직으로 되돌리면 지운다
+    assert emp("이미퇴사").resigned_on is None                  # 예전 퇴사자는 건드리지 않는다
+
+
+def test_화면에서_퇴사로_바꾸면_퇴사일이_남는다(admin_client, db):
+    from datetime import date
+    emp = Employee(emp_no="E1", name="가", status="ACTIVE")
+    old = Employee(emp_no="E2", name="나", status="RESIGNED")
+    db.add_all([emp, old])
+    db.commit()
+    admin_client.post(f"/employees/{emp.id}/edit", data={"emp_no": "E1", "name": "가", "status": "RESIGNED"})
+    admin_client.post(f"/employees/{old.id}/edit", data={"emp_no": "E2", "name": "나", "status": "RESIGNED",
+                                                         "note": "고침"})
+    db.expire_all()
+    assert db.get(Employee, emp.id).resigned_on == date.today()
+    assert db.get(Employee, old.id).resigned_on is None          # 이미 퇴사였던 사람은 오늘로 찍지 않는다
+    admin_client.post(f"/employees/{emp.id}/edit", data={"emp_no": "E1", "name": "가", "status": "ACTIVE"})
+    db.expire_all()
+    assert db.get(Employee, emp.id).resigned_on is None
+
+
+# --- 인력현황 양식으로 내보내기 ---------------------------------------------------
+
+def _export_rows(content: bytes) -> list[tuple]:
+    from openpyxl import load_workbook
+    return list(load_workbook(io.BytesIO(content), data_only=True).worksheets[0].iter_rows(values_only=True))
+
+
+def test_내보내기는_원본과_같은_모양이다(db, staff):
+    from datetime import date
+    db.add(Asset(asset_no="A-2", name="모니터", status="IN_USE", holder_id=staff["김하나"].id))
+    db.commit()
+    roster.apply_sync(db, roster.read_roster(_file({"s": LATEST})), today=date(2026, 10, 21))
+    rows = _export_rows(roster.export_roster(db, today=date(2026, 10, 21)))
+
+    assert rows[2][1] == "■ 인력현황"
+    assert list(rows[3][1:]) == ["번호", "구분", "부서", "팀", "직급(책)", "성명", "고용형태", "입사일", "비고",
+                                 "사번", "보유 자산", "자산번호"]
+    names = [r[6] for r in rows if isinstance(r[1], int)]
+    # 인력현황 순서 그대로, 협력사 묶음, 이번 달 퇴사자 순
+    assert names[:5] == ["김하나", "이 둘", "박셋", "최넷", "정다섯"]
+    titles = [r[1] for r in rows if isinstance(r[1], str) and r[1].startswith("*")]
+    assert titles == ["* 협력사", "* 퇴사자"]
+    kim = next(r for r in rows if r[6] == "김하나")
+    assert (kim[2], kim[10], kim[11], kim[12]) == ("가법인", "E0001", 1, "A-2")
+    leavers_header = next(r for r in rows if r[8] == "퇴사일")
+    leavers = [r[6] for r in rows[rows.index(leavers_header) + 1:] if r[6]]
+    assert sorted(leavers) == ["떠난사람", "오일곱"]           # 이번 달(10월) 퇴사자만
+
+
+def test_지난달_퇴사자는_빠진다(db, staff):
+    from datetime import date
+    roster.apply_sync(db, roster.read_roster(_file({"s": LATEST})), today=date(2026, 10, 21))
+    rows = _export_rows(roster.export_roster(db, today=date(2026, 11, 2)))
+    assert not any(r[1] == "* 퇴사자" for r in rows)
+    rows = _export_rows(roster.export_roster(db, today=date(2026, 11, 2), month=date(2026, 10, 1)))
+    assert any(r[1] == "* 퇴사자" for r in rows)
+
+
+def test_내보낸_파일을_다시_올리면_바뀌는_것이_없다(db, staff):
+    from datetime import date
+    roster.apply_sync(db, roster.read_roster(_file({"s": LATEST})), today=date(2026, 10, 21))
+    content = roster.export_roster(db, today=date(2026, 10, 21))
+    again = roster.read_roster(content)               # '요약' 시트는 건너뛰고 명단 시트를 고른다
+    assert again.sheets == ["1021"]
+    assert not roster.plan_sync(db, again).has_changes
+
+
+def test_요약_시트(db, staff):
+    from openpyxl import load_workbook
+    roster.apply_sync(db, roster.read_roster(_file({"s": LATEST})))
+    wb = load_workbook(io.BytesIO(roster.export_roster(db)), data_only=True)
+    rows = list(wb["요약"].iter_rows(values_only=True))
+    total = next(r for r in rows if r[0] == "합계")
+    assert total[rows[0].index("합계")] == 6                 # 재직·휴직 6명 (협력사 포함)
+
+
+def test_화면에서_내려받는다(admin_client, db, staff):
+    response = admin_client.get("/employees/roster/export?month=2026-10")
+    assert response.status_code == 200
+    assert "spreadsheetml" in response.headers["content-type"]
+    assert "%EC%9D%B8%EB%A0%A5%ED%98%84%ED%99%A9" in response.headers["content-disposition"]   # 인력현황
+    assert 'href="/employees/roster/export"' in admin_client.get("/employees").text
+
+
+def test_조회_계정은_내보낼_수_없다(viewer_client):
+    assert viewer_client.get("/employees/roster/export", follow_redirects=False).status_code == 403

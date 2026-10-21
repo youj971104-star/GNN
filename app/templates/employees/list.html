@@ -10,6 +10,7 @@
   <div class="section-actions">
     <a href="/employees/export{{ merge_query(request, page=None) }}" class="btn">{{ icon('download') }}엑셀 다운로드</a>
     {% if current_user.is_admin %}
+      <a href="/employees/roster/export" class="btn">{{ icon('download') }}인력현황 내보내기</a>
       <a href="/employees/roster" class="btn">{{ icon('swap') }}인력현황 반영</a>
       <a href="/employees/import" class="btn">{{ icon('upload') }}엑셀 일괄 등록</a>
       <a href="/employees/new" class="btn primary">{{ icon('plus') }}직원 등록</a>

@@ -33,6 +33,16 @@ def _render_form(request: Request, db, context: dict, **kwargs):
     return render(request, "employees/form.html", {"companies": companies(db), **context}, **kwargs)
 
 
+def _stamp_resignation(values: dict, previous_status: str | None) -> None:
+    """재직·휴직에서 퇴사로 바뀌는 순간에만, 비어 있는 퇴사일을 오늘로 채운다.
+
+    인력현황으로 내보낼 때 '이번 달 퇴사자' 를 고르는 데 쓴다. 이미 퇴사였던 사람을
+    고칠 때마다 오늘로 찍히면 예전 퇴사자가 이번 달 퇴사자로 잘못 나온다.
+    """
+    if values["status"] == "RESIGNED" and previous_status != "RESIGNED" and not values["resigned_on"]:
+        values["resigned_on"] = date.today()
+
+
 def _read_employee_form(data: dict, *, emp_no_required: bool = True) -> dict:
     values = {
         "name": forms.required_str(data.get("name"), "이름", 50),
@@ -43,7 +53,14 @@ def _read_employee_form(data: dict, *, emp_no_required: bool = True) -> dict:
         "phone": forms.clean_str(data.get("phone"), 30),
         "status": forms.parse_choice(data.get("status"), EMPLOYEE_STATUSES, "재직상태", "ACTIVE"),
         "note": forms.clean_str(data.get("note")),
+        "team": forms.clean_str(data.get("team"), 50),
+        "employment_type": forms.clean_str(data.get("employment_type"), 20),
+        "hired_on": forms.parse_date(data.get("hired_on"), "입사일"),
+        "resigned_on": forms.parse_date(data.get("resigned_on"), "퇴사일"),
     }
+    # 재직·휴직이면 퇴사일은 의미가 없으니 비운다
+    if values["status"] != "RESIGNED":
+        values["resigned_on"] = None
     if emp_no_required:
         values["emp_no"] = forms.required_str(data.get("emp_no"), "사번", 30)
     if values["email"] and "@" not in values["email"]:
@@ -176,6 +193,7 @@ async def create_employee(request: Request, db: DbSession, user: AdminUser):
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    _stamp_resignation(values, None)
     employee = Employee(**values)
     db.add(employee)
     db.commit()
@@ -209,6 +227,7 @@ async def quick_create_employee(request: Request, db: DbSession, user: AdminUser
             status_code=400,
         )
 
+    _stamp_resignation(values, None)
     employee = Employee(**values)
     db.add(employee)
     db.commit()
@@ -317,6 +336,21 @@ async def roster_preview(request: Request, db: DbSession, user: AdminUser):
                                   "file_name": upload.filename})
 
 
+@router.get("/roster/export")
+def roster_export(request: Request, db: DbSession, user: AdminUser):
+    """인력현황 양식으로 내보내기. ?month=2026-10 이면 그 달 퇴사자를 퇴사자 묶음에 넣는다."""
+    month = None
+    raw = (request.query_params.get("month") or "").strip()
+    if raw:
+        try:
+            month = date.fromisoformat(f"{raw}-01")
+        except ValueError:
+            month = None
+    today = date.today()
+    content = roster.export_roster(db, today=today, month=month)
+    return _xlsx_response(content, f"인력현황_{today:%Y%m%d}.xlsx")
+
+
 @router.post("/roster/apply")
 async def roster_apply(request: Request, db: DbSession, user: AdminUser):
     form = await request.form()
@@ -392,6 +426,7 @@ async def update_employee(request: Request, db: DbSession, user: AdminUser, empl
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    _stamp_resignation(values, employee.status)
     for key, value in values.items():
         setattr(employee, key, value)
     db.commit()
