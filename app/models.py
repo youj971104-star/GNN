@@ -144,6 +144,8 @@ class Employee(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     emp_no: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(50), index=True)
+    # 소속 법인 (계열사가 여럿일 때). 인력현황 엑셀의 '구분' 칸이다.
+    company: Mapped[str | None] = mapped_column(String(50), index=True)
     department: Mapped[str | None] = mapped_column(String(50), index=True)
     position: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(120))

@@ -33,6 +33,15 @@
           <input type="text" id="name" name="name" value="{{ val('name') }}" required maxlength="50">
         </div>
         <div class="field">
+          <label for="company">법인</label>
+          <input type="text" id="company" name="company" value="{{ val('company') }}" maxlength="50"
+                 list="company-options" placeholder="예: 본사법인" autocomplete="off">
+          <datalist id="company-options">
+            {% for name in companies or [] %}<option value="{{ name }}">{% endfor %}
+          </datalist>
+          <div class="hint">이미 있는 법인은 목록에서 고를 수 있습니다.</div>
+        </div>
+        <div class="field">
           <label for="department">부서</label>
           <input type="text" id="department" name="department" value="{{ val('department') }}" maxlength="50" placeholder="예: 개발팀">
         </div>

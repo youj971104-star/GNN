@@ -93,6 +93,18 @@
   </div>
 </div>
 
+{% if stats.by_company | length > 1 or (stats.by_company and stats.by_company[0].value) %}
+<div class="card">
+  <div class="card-head">법인별 보유 현황</div>
+  <div class="card-body">
+    {% for row in stats.by_company %}
+      {% set href = '/assets?company=' ~ (row.value | urlencode) if row.value else none %}
+      {{ bar(row.label, row.count, stats.max_company, href) }}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% if stats.resigned_holding %}
 <div class="card" id="resigned">
   <div class="card-head" style="color:var(--danger);">

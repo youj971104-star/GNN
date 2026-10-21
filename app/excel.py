@@ -59,6 +59,7 @@ REQUIRED_UPLOAD_HEADERS = ("자산번호", "자산명")
 EMPLOYEE_COLUMNS: list[tuple[str, int]] = [
     ("사번", 14),
     ("이름", 12),
+    ("법인", 14),
     ("부서", 16),
     ("직급", 12),
     ("이메일", 26),
@@ -253,13 +254,14 @@ def export_employees(employees: list[Employee]) -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "직원목록"
-    headers = ["사번", "이름", "부서", "직급", "이메일", "연락처", "재직상태", "보유자산수", "비고"]
-    _style_header(ws, headers, [14, 12, 16, 12, 26, 16, 10, 12, 30])
+    headers = ["사번", "이름", "법인", "부서", "직급", "이메일", "연락처", "재직상태", "보유자산수", "비고"]
+    _style_header(ws, headers, [14, 12, 14, 16, 12, 26, 16, 10, 12, 30])
     for emp in employees:
         ws.append(
             [
                 emp.emp_no,
                 emp.name,
+                emp.company,
                 emp.department,
                 emp.position,
                 emp.email,
@@ -497,7 +499,7 @@ def export_employee_template() -> bytes:
     ws = wb.active
     ws.title = "직원등록양식"
     _style_header(ws, [name for name, _ in EMPLOYEE_COLUMNS], [w for _, w in EMPLOYEE_COLUMNS])
-    ws.append(["2026001", "홍길동", "개발팀", "선임", "gildong@example.com",
+    ws.append(["2026001", "홍길동", "본사법인", "개발팀", "선임", "gildong@example.com",
                "010-1234-5678", "재직", "예시 행입니다. 지우고 사용하세요."])
 
     guide = wb.create_sheet("작성안내")
@@ -510,6 +512,7 @@ def export_employee_template() -> bytes:
     for row in [
         ("사번", "필수. 직원을 구분하는 고유 번호입니다. 이미 있는 사번이면 정보가 갱신됩니다."),
         ("이름", "필수."),
+        ("법인", "소속 법인. 이 칸을 아예 빼고 올리면 기존 직원의 법인은 그대로 둡니다."),
         ("부서", "자산 현황을 부서별로 집계할 때 쓰입니다."),
         ("재직상태", f"다음 중 하나: {', '.join(EMPLOYEE_STATUSES.values())} (비우면 '재직')"),
         ("이메일", "@ 가 들어간 형식이어야 합니다. 비워도 됩니다."),
@@ -585,6 +588,9 @@ def import_employees(db: Session, content: bytes) -> ImportResult:
                 db.add(employee)
 
             employee.name = name
+            # 예전 양식(법인 칸 없음)으로 올려도 이미 넣어 둔 법인이 지워지지 않게 한다
+            if "법인" in index:
+                employee.company = _cell_text(value_of(row, "법인"))
             employee.department = _cell_text(value_of(row, "부서"))
             employee.position = _cell_text(value_of(row, "직급"))
             employee.email = email
