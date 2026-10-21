@@ -156,6 +156,16 @@ def _group_title(cells: list) -> str | None:
     return None
 
 
+def _looks_like_roster(ws, scan_rows: int = 30) -> bool:
+    """앞쪽 몇 줄 안에 '성명'·'구분' 머리글이 있는 시트인지."""
+    for row_no, row in enumerate(ws.iter_rows(values_only=True), start=1):
+        if row_no > scan_rows:
+            return False
+        if _header_map(list(row)):
+            return True
+    return False
+
+
 def read_roster(content: bytes, sheet: str | None = None) -> Roster:
     """인력현황 엑셀을 읽는다. 시트를 지정하지 않으면 맨 오른쪽(가장 최근) 시트."""
     try:
@@ -164,9 +174,12 @@ def read_roster(content: bytes, sheet: str | None = None) -> Roster:
         raise RosterError(f"엑셀 파일을 열 수 없습니다: {exc}") from exc
 
     try:
-        sheets = list(wb.sheetnames)
+        # '요약' 처럼 명단이 아닌 시트는 고르는 대상에서 뺀다
+        sheets = [title for title in wb.sheetnames if _looks_like_roster(wb[title])]
         if not sheets:
-            raise RosterError("시트가 없는 파일입니다.")
+            raise RosterError(
+                "인력현황 시트를 찾지 못했습니다. '성명'과 '구분' 칸이 있는 인력현황 양식인지 확인해 주세요."
+            )
         name = sheet if sheet in sheets else sheets[-1]
         ws = wb[name]
 
@@ -222,11 +235,61 @@ def read_roster(content: bytes, sheet: str | None = None) -> Roster:
 
 # --- 미리보기 --------------------------------------------------------------------
 
+def _as_date(text: str | None) -> date | None:
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text[:10])
+    except ValueError:
+        return None
+
+
+# 인력현황이 '주인' 인 칸. 반영할 때마다 인력현황 값으로 맞춘다.
+# 부서·직급·연락처·이메일은 명부 쪽 값을 그대로 둔다.
+ROSTER_FIELD_LABELS = {
+    "company": "법인",
+    "team": "팀",
+    "employment_type": "고용형태",
+    "hired_on": "입사일",
+    "roster_group": "묶음",
+}
+
+
+def roster_values(person: RosterPerson) -> dict:
+    """인력현황 한 줄에서 명부에 넣을 값."""
+    values = {
+        "company": person.company,
+        "team": person.team,
+        "employment_type": person.kind,
+    }
+    # 퇴사자 묶음은 '어느 묶음 소속' 이 아니라 상태다. 묶음은 재직 명단에서만 가져오고,
+    # 퇴사자 묶음의 날짜 칸은 입사일이 아니라 퇴사일이다.
+    if not person.resigned:
+        values["roster_group"] = None if person.group == MAIN_GROUP else person.group
+        values["hired_on"] = _as_date(person.joined)
+    return values
+
+
+def _differences(emp: Employee, person: RosterPerson) -> list[str]:
+    """명부와 인력현황이 다른 칸 (순서는 빼고 센다 - 줄이 하나 끼면 모두 바뀌므로)."""
+    changed = [
+        ROSTER_FIELD_LABELS[name]
+        for name, value in roster_values(person).items()
+        if (getattr(emp, name) or None) != (value or None)
+    ]
+    if not emp.note and person.note:
+        changed.append("비고")
+    if person.resigned and emp.resigned_on is None and _as_date(person.joined):
+        changed.append("퇴사일")
+    return changed
+
+
 @dataclass
 class Match:
     employee: Employee
     person: RosterPerson
     old_company: str | None = None
+    changed: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -247,7 +310,8 @@ class Ambiguous:
 @dataclass
 class SyncPlan:
     company_changes: list[Match] = field(default_factory=list)   # 법인을 새로 넣거나 바꿈
-    unchanged: list[Match] = field(default_factory=list)          # 법인이 이미 같음
+    info_changes: list[Match] = field(default_factory=list)      # 법인은 같고 팀·고용형태·입사일 등만 바뀜
+    unchanged: list[Match] = field(default_factory=list)          # 바뀌는 것 없음
     reactivate: list[Match] = field(default_factory=list)         # 명부에선 퇴사인데 인력현황엔 재직
     add: list[RosterPerson] = field(default_factory=list)
     resign: list[Resign] = field(default_factory=list)
@@ -259,8 +323,21 @@ class SyncPlan:
         return [r for r in self.resign if r.holding]
 
     @property
+    def matched(self) -> list[Match]:
+        return self.company_changes + self.info_changes + self.unchanged + self.reactivate
+
+    @property
     def has_changes(self) -> bool:
-        return bool(self.company_changes or self.reactivate or self.add or self.resign)
+        return bool(self.company_changes or self.info_changes or self.reactivate or self.add or self.resign)
+
+
+def _sort_match(plan: SyncPlan, match: Match) -> None:
+    if (match.employee.company or None) != (match.person.company or None):
+        plan.company_changes.append(match)
+    elif match.changed:
+        plan.info_changes.append(match)
+    else:
+        plan.unchanged.append(match)
 
 
 def plan_sync(db: Session, roster: Roster) -> SyncPlan:
@@ -301,13 +378,11 @@ def plan_sync(db: Session, roster: Roster) -> SyncPlan:
             continue
         emp = matches[0]
         handled.add(emp.id)
-        match = Match(emp, person, emp.company)
+        match = Match(emp, person, emp.company, _differences(emp, person))
         if emp.status == "RESIGNED":
             plan.reactivate.append(match)
-        elif (emp.company or None) != person.company:
-            plan.company_changes.append(match)
         else:
-            plan.unchanged.append(match)
+            _sort_match(plan, match)
 
     for key, people in resigned.items():
         matches = by_key.get(key, [])
@@ -322,8 +397,8 @@ def plan_sync(db: Session, roster: Roster) -> SyncPlan:
         handled.add(emp.id)
         if emp.status != "RESIGNED":
             plan.resign.append(Resign(emp, "인력현황 퇴사자 명단", holding.get(emp.id, 0), people[0]))
-        elif (emp.company or None) != people[0].company:
-            plan.company_changes.append(Match(emp, people[0], emp.company))
+        else:
+            _sort_match(plan, Match(emp, people[0], emp.company, _differences(emp, people[0])))
 
     for emp in employees:
         if emp.id in handled or emp.status == "RESIGNED":
@@ -339,6 +414,7 @@ def plan_sync(db: Session, roster: Roster) -> SyncPlan:
 @dataclass
 class SyncResult:
     company: int = 0
+    info: int = 0
     reactivated: int = 0
     added: int = 0
     resigned: int = 0
@@ -351,6 +427,8 @@ class SyncResult:
             f"신규 등록 {self.added}명",
             f"퇴사 처리 {self.resigned}명",
         ]
+        if self.info:
+            parts.append(f"팀·고용형태·입사일 갱신 {self.info}명")
         if self.reactivated:
             parts.append(f"재직으로 되돌림 {self.reactivated}명")
         text = "인력현황을 반영했습니다: " + ", ".join(parts) + "."
@@ -361,51 +439,52 @@ class SyncResult:
         return text
 
 
-def _new_employee_note(person: RosterPerson, sheet: str) -> str:
-    parts = [f"인력현황({sheet})에서 등록"]
-    if person.group != MAIN_GROUP:
-        parts.append(person.group)
-    if person.kind:
-        parts.append(f"고용형태 {person.kind}")
-    if person.team and person.team != person.department:
-        parts.append(f"팀 {person.team}")
-    if person.joined:
-        parts.append(f"입사일 {person.joined}")
-    if person.note:
-        parts.append(person.note)
-    return " · ".join(parts)
+def _fill_from_roster(emp: Employee, person: RosterPerson) -> None:
+    """인력현황이 주인인 칸을 맞추고, 비고는 비어 있을 때만 채운다."""
+    for name, value in roster_values(person).items():
+        setattr(emp, name, value)
+    emp.roster_order = person.row
+    if not emp.note and person.note:
+        emp.note = person.note
+    if person.resigned and emp.resigned_on is None:
+        emp.resigned_on = _as_date(person.joined)
 
 
-def apply_sync(db: Session, roster: Roster) -> SyncResult:
+def apply_sync(db: Session, roster: Roster, today: date | None = None) -> SyncResult:
     """지금 명부 기준으로 다시 계산해 한 번에 반영한다 (중간에 실패하면 아무것도 바뀌지 않는다)."""
+    today = today or date.today()
     plan = plan_sync(db, roster)
-    result = SyncResult(ambiguous=len(plan.ambiguous))
+    result = SyncResult(
+        ambiguous=len(plan.ambiguous),
+        company=len(plan.company_changes),
+        info=len(plan.info_changes),
+    )
     try:
-        for match in plan.company_changes:
-            match.employee.company = match.person.company
-            result.company += 1
+        for match in plan.company_changes + plan.info_changes + plan.unchanged:
+            _fill_from_roster(match.employee, match.person)
         for match in plan.reactivate:
-            match.employee.company = match.person.company
+            _fill_from_roster(match.employee, match.person)
             match.employee.status = "LEAVE" if match.person.on_leave else "ACTIVE"
+            match.employee.resigned_on = None
             result.reactivated += 1
         numbers = numbering.issue_employee_numbers(db, len(plan.add))
         for person, emp_no in zip(plan.add, numbers):
-            db.add(
-                Employee(
-                    emp_no=emp_no,
-                    name=person.name,
-                    company=person.company,
-                    department=person.department,
-                    position=person.position,
-                    status="LEAVE" if person.on_leave else "ACTIVE",
-                    note=_new_employee_note(person, roster.sheet),
-                )
+            emp = Employee(
+                emp_no=emp_no,
+                name=person.name,
+                department=person.department,
+                position=person.position,
+                status="LEAVE" if person.on_leave else "ACTIVE",
             )
+            _fill_from_roster(emp, person)
+            db.add(emp)
             result.added += 1
         for item in plan.resign:
-            item.employee.status = "RESIGNED"
-            if item.person is not None and item.person.company:
-                item.employee.company = item.person.company
+            emp = item.employee
+            emp.status = "RESIGNED"
+            if item.person is not None:
+                _fill_from_roster(emp, item.person)
+            emp.resigned_on = emp.resigned_on or today
             result.resigned += 1
             result.resigned_holding += int(bool(item.holding))
         db.commit()
@@ -413,3 +492,138 @@ def apply_sync(db: Session, roster: Roster) -> SyncResult:
         db.rollback()
         raise
     return result
+
+
+# --- 인력현황 양식으로 내보내기 -----------------------------------------------------
+#
+# 올려 준 인력현황과 같은 모양으로 명부를 내보낸다. 그대로 다시 올리면 바뀌는 것이 없다.
+#   본 인력현황 → '* 협력사' 같은 묶음 → '* 퇴사자'(그 달에 퇴사한 사람, 퇴사일과 함께)
+# 원본 칸(번호~비고) 오른쪽에 사번·보유 자산을 덧붙인다 (다시 올릴 때는 읽지 않는 칸).
+
+EXPORT_HEADERS = ["번호", "구분", "부서", "팀", "직급(책)", "성명", "고용형태", "입사일", "비고",
+                  "사번", "보유 자산", "자산번호"]
+EXPORT_WIDTHS = [2, 6, 13, 14, 14, 10, 9, 10, 12, 32, 10, 9, 36]   # A 열(빈칸)부터
+
+
+def _month_range(month: date) -> tuple[date, date]:
+    first = month.replace(day=1)
+    following = (first.replace(year=first.year + 1, month=1) if first.month == 12
+                 else first.replace(month=first.month + 1))
+    return first, following
+
+
+def export_roster(db: Session, today: date | None = None, month: date | None = None) -> bytes:
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from sqlalchemy.orm import selectinload
+
+    today = today or date.today()
+    first, following = _month_range(month or today)
+
+    employees = list(db.scalars(select(Employee).options(selectinload(Employee.assets))).all())
+
+    def order(emp: Employee):
+        # 인력현황에서의 순서대로, 인력현황에 없던 사람은 뒤에 법인·부서·이름 순
+        return (emp.roster_order is None, emp.roster_order or 0,
+                emp.company or "", emp.department or "", emp.name)
+
+    working = [e for e in employees if e.status != "RESIGNED"]
+    groups: dict[str | None, list[Employee]] = defaultdict(list)
+    for emp in working:
+        groups[emp.roster_group or None].append(emp)
+    leavers = sorted(
+        (e for e in employees
+         if e.status == "RESIGNED" and e.resigned_on and first <= e.resigned_on < following),
+        key=lambda e: (e.resigned_on, e.name),
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = today.strftime("%m%d")
+    for pos, width in enumerate(EXPORT_WIDTHS, start=1):
+        ws.column_dimensions[get_column_letter(pos)].width = width
+
+    thin = Side(style="thin", color="A6A6A6")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    head_fill = PatternFill("solid", fgColor="D9E1F2")
+    extra_fill = PatternFill("solid", fgColor="FFF2CC")       # 덧붙인 칸은 색을 달리한다
+    center = Alignment(horizontal="center", vertical="center")
+
+    ws.append([])
+    ws.append([])
+    ws.append([None, "■ 인력현황", None, None, None, None, None, None, None, today])
+    ws.cell(row=3, column=2).font = Font(bold=True, size=12)
+    ws.cell(row=3, column=10).number_format = "yyyy-mm-dd"
+
+    def header(date_label: str = "입사일"):
+        labels = [date_label if h == "입사일" else h for h in EXPORT_HEADERS]
+        ws.append([None, *labels])
+        for col in range(2, len(labels) + 2):
+            cell = ws.cell(row=ws.max_row, column=col)
+            cell.font = Font(bold=True)
+            cell.fill = extra_fill if col >= 11 else head_fill
+            cell.border = border
+            cell.alignment = center
+
+    def row(number: int, emp: Employee, when: date | None):
+        held = sorted(a.asset_no for a in emp.assets)
+        ws.append([None, number, emp.company, emp.department, emp.team, emp.position, emp.name,
+                   emp.employment_type, when, emp.note, emp.emp_no, len(held) or None,
+                   ", ".join(held) or None])
+        current = ws.max_row
+        for col in range(2, 14):
+            cell = ws.cell(row=current, column=col)
+            cell.border = border
+            if col in (2, 3, 6, 7, 8, 9, 11, 12):
+                cell.alignment = center
+        ws.cell(row=current, column=9).number_format = "yyyy-mm-dd"
+
+    def section(title: str | None, people: list[Employee], date_label: str = "입사일",
+                when=lambda e: e.hired_on):
+        if title:
+            ws.append([])
+            ws.append([None, f"* {title}"])
+            ws.cell(row=ws.max_row, column=2).font = Font(bold=True)
+        header(date_label)
+        for number, emp in enumerate(people, start=1):
+            row(number, emp, when(emp))
+
+    section(None, sorted(groups.pop(None, []), key=order))
+    for title in sorted(groups, key=lambda g: min(order(e) for e in groups[g])):
+        section(title, sorted(groups[title], key=order))
+    if leavers:
+        section("퇴사자", leavers, "퇴사일", lambda e: e.resigned_on)
+
+    ws.freeze_panes = "B5"
+    _summary_sheet(wb, working, leavers, first)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
+def _summary_sheet(wb, working: list[Employee], leavers: list[Employee], month: date) -> None:
+    """법인 × 고용형태 인원표 (원본 시트 옆의 피벗과 같은 내용)."""
+    from openpyxl.styles import Font, PatternFill
+
+    ws = wb.create_sheet("요약")
+    kinds = sorted({e.employment_type or "(비어 있음)" for e in working})
+    companies = [name for name, _ in Counter(e.company or "(비어 있음)" for e in working).most_common()]
+    ws.append(["법인 \\ 고용형태", *kinds, "합계", "자산 보유 인원"])
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill("solid", fgColor="D9E1F2")
+    for company in companies:
+        people = [e for e in working if (e.company or "(비어 있음)") == company]
+        counts = Counter(e.employment_type or "(비어 있음)" for e in people)
+        ws.append([company, *[counts.get(k, 0) for k in kinds], len(people),
+                   sum(1 for e in people if e.assets)])
+    totals = Counter(e.employment_type or "(비어 있음)" for e in working)
+    ws.append(["합계", *[totals.get(k, 0) for k in kinds], len(working),
+               sum(1 for e in working if e.assets)])
+    for cell in ws[ws.max_row]:
+        cell.font = Font(bold=True)
+    ws.append([])
+    ws.append([f"{month:%Y년 %m월} 퇴사자", len(leavers)])
+    ws.column_dimensions["A"].width = 22

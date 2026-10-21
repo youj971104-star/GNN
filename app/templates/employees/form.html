@@ -50,6 +50,27 @@
           <input type="text" id="position" name="position" value="{{ val('position') }}" maxlength="50" placeholder="예: 선임">
         </div>
         <div class="field">
+          <label for="team">팀</label>
+          <input type="text" id="team" name="team" value="{{ val('team') }}" maxlength="50" placeholder="예: 서울센터">
+        </div>
+        <div class="field">
+          <label for="employment_type">고용형태</label>
+          <input type="text" id="employment_type" name="employment_type" value="{{ val('employment_type') }}"
+                 maxlength="20" list="employment-types" placeholder="예: 정규" autocomplete="off">
+          <datalist id="employment-types">
+            <option value="정규"><option value="계약"><option value="파견"><option value="협력업체">
+          </datalist>
+        </div>
+        <div class="field">
+          <label for="hired_on">입사일</label>
+          <input type="date" id="hired_on" name="hired_on" value="{{ val('hired_on') }}">
+        </div>
+        <div class="field">
+          <label for="resigned_on">퇴사일</label>
+          <input type="date" id="resigned_on" name="resigned_on" value="{{ val('resigned_on') }}">
+          <div class="hint">재직상태를 '퇴사' 로 바꾸면 비워 둬도 오늘 날짜가 들어갑니다.</div>
+        </div>
+        <div class="field">
           <label for="email">이메일</label>
           <input type="email" id="email" name="email" value="{{ val('email') }}" maxlength="120">
         </div>

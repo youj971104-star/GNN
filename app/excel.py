@@ -595,10 +595,16 @@ def import_employees(db: Session, content: bytes) -> ImportResult:
             employee.position = _cell_text(value_of(row, "직급"))
             employee.email = email
             employee.phone = _cell_text(value_of(row, "연락처"))
+            previous_status = None if is_new else employee.status
             employee.status = _cell_code(
                 value_of(row, "재직상태"), EMPLOYEE_STATUSES,
                 _EMPLOYEE_STATUS_BY_LABEL, "재직상태", "ACTIVE",
             )
+            # 화면에서 고칠 때와 같은 규칙: 퇴사로 바뀌는 순간에 퇴사일을 남기고, 재직이면 비운다
+            if employee.status != "RESIGNED":
+                employee.resigned_on = None
+            elif previous_status != "RESIGNED" and employee.resigned_on is None:
+                employee.resigned_on = date.today()
             employee.note = _cell_text(value_of(row, "비고"))
 
             result.created += int(is_new)
