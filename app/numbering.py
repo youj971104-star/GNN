@@ -161,6 +161,22 @@ def next_employee_no(db: Session) -> str | None:
     return _next_unused(_all_employee_numbers(db), rule)
 
 
+def issue_employee_numbers(db: Session, count: int) -> list[str]:
+    """새 직원 여러 명에게 줄 사번을 한꺼번에 매긴다 (인력현황 반영 등).
+
+    자동 채번을 꺼 두었어도 정해 둔 형식으로 매긴다. 한 번에 수십 명을 등록하면서
+    사번을 하나하나 물어볼 수는 없기 때문이다.
+    """
+    existing = _all_employee_numbers(db)
+    rule = employee_rule(db)
+    issued: list[str] = []
+    for _ in range(count):
+        number = _next_unused(existing, rule)
+        existing.append(number)
+        issued.append(number)
+    return issued
+
+
 def save_rules(db: Session, *, asset: dict, employee: dict) -> None:
     """설정 화면에서 넘어온 값을 저장한다."""
     for keys, values in ((ASSET_KEYS, asset), (EMPLOYEE_KEYS, employee)):

@@ -37,6 +37,17 @@
           {% endfor %}
         </select>
       </div>
+      {% if companies %}
+      <div class="field">
+        <label for="company">법인</label>
+        <select id="company" name="company">
+          <option value="">전체</option>
+          {% for name in companies %}
+            <option value="{{ name }}" {{ 'selected' if filters.company == name }}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
       <div class="field">
         <label for="department">부서</label>
         <select id="department" name="department">
@@ -68,6 +79,7 @@
   {% if filters.q %}<a class="chip" href="{{ url_with(request, q=None, page=None) }}" title="조건 풀기">검색어: {{ filters.q }} {{ icon('close') }}</a>{% endif %}
   {% if filters.status %}<a class="chip" href="{{ url_with(request, status=None, page=None) }}" title="조건 풀기">상태: {{ ASSET_STATUSES.get(filters.status, filters.status) }} {{ icon('close') }}</a>{% endif %}
   {% if filters.category %}<a class="chip" href="{{ url_with(request, category=None, page=None) }}" title="조건 풀기">분류: {{ ASSET_CATEGORIES.get(filters.category, filters.category) }} {{ icon('close') }}</a>{% endif %}
+  {% if filters.company %}<a class="chip" href="{{ url_with(request, company=None, page=None) }}" title="조건 풀기">법인: {{ filters.company }} {{ icon('close') }}</a>{% endif %}
   {% if filters.department %}<a class="chip" href="{{ url_with(request, department=None, page=None) }}" title="조건 풀기">부서: {{ filters.department }} {{ icon('close') }}</a>{% endif %}
   {% if filters.unassigned %}<a class="chip" href="{{ url_with(request, unassigned=None, page=None) }}" title="조건 풀기">미지급만 {{ icon('close') }}</a>{% endif %}
   {% if holder %}<a class="chip" href="{{ url_with(request, holder_id=None, page=None) }}" title="조건 풀기">사용자: {{ holder.name }} {{ icon('close') }}</a>{% endif %}

@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% set back_url = '/employees' %}
+{% set active = 'employees' %}
+{% from "_macros.html" import icon %}
+{% block page_title %}인력현황 반영{% endblock %}
+{% block content %}
+
+<div class="breadcrumb"><a href="/employees">직원 관리</a> / 인력현황 반영</div>
+
+{% macro upload_form(button='미리보기', compact=false) %}
+<form method="post" action="/employees/roster" enctype="multipart/form-data" class="filter-form">
+  <div class="field grow">
+    <label for="file">인력현황 엑셀 (.xlsx)</label>
+    <input type="file" id="file" name="file" accept=".xlsx,.xlsm" required>
+  </div>
+  {% if roster and roster.sheets | length > 1 %}
+  <div class="field">
+    <label for="sheet">시트</label>
+    <select id="sheet" name="sheet">
+      {% for name in roster.sheets %}
+        <option value="{{ name }}" {{ 'selected' if name == roster.sheet }}>{{ name }}{{ ' (가장 최근)' if loop.last }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="field"><button type="submit" class="btn {{ 'primary' if not compact }}">{{ icon('upload') }}{{ button }}</button></div>
+</form>
+{% endmacro %}
+
+{% if plan is none %}
+<div class="card">
+  <h2>인력현황 엑셀로 직원 명부 맞추기</h2>
+  <div class="card-body">
+    <p style="margin-top:0;">HR 이 관리하는 인력현황 파일을 올리면, 명부를 그 시점에 맞춥니다. <strong>먼저 바뀔 내용을 보여 드리고</strong>, 확인을 누를 때 반영합니다.</p>
+    <ul class="roster-rules">
+      <li><strong>인력현황과 명부에 모두 있는 사람</strong> — 법인만 채웁니다. 부서·직급·연락처는 그대로 둡니다.</li>
+      <li><strong>인력현황에만 있는 사람</strong> — 새 직원으로 등록합니다 (사번은 자동으로 매깁니다).</li>
+      <li><strong>명부에만 있는 사람</strong> — 퇴사로 바꿉니다. 인력현황의 '* 퇴사자' 묶음에 있는 사람도 퇴사로 바꿉니다.</li>
+      <li>사번이 없는 파일이라 <strong>이름으로</strong> 맞춥니다. 같은 이름이 둘 이상이면 건드리지 않고 따로 알려 드립니다.</li>
+    </ul>
+    {{ upload_form() }}
+    <p class="hint" style="margin-bottom:0;">'구분' 칸을 법인으로 읽습니다. 시트가 여러 개면 맨 오른쪽(가장 최근) 시트를 씁니다.</p>
+  </div>
+</div>
+
+{% else %}
+{% set holding = plan.resign_holding %}
+
+<div class="card">
+  <div class="card-body roster-source">
+    <div>
+      <strong>{{ file_name }}</strong> · <strong>{{ roster.sheet }}</strong> 시트
+      <span class="muted">— 재직 {{ roster.active | length }}명, 퇴사자 명단 {{ roster.resigned | length }}명</span>
+      <div class="hint">
+        {% for group, count in roster.group_counts() %}{{ group }} {{ count }}명{{ ' · ' if not loop.last }}{% endfor %}
+        <br>법인: {% for name, count in roster.company_counts() %}{{ name }} {{ count }}{{ ' · ' if not loop.last }}{% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="stat-grid roster-stats">
+  <div class="stat is-info"><div class="label">법인 입력</div><div class="value">{{ plan.company_changes | length }}<small>명</small></div></div>
+  <div class="stat is-success"><div class="label">신규 등록</div><div class="value">{{ plan.add | length }}<small>명</small></div></div>
+  <div class="stat is-danger"><div class="label">퇴사 처리</div><div class="value">{{ plan.resign | length }}<small>명</small></div></div>
+  <div class="stat is-warn"><div class="label">그중 자산 보유</div><div class="value">{{ holding | length }}<small>명</small></div></div>
+  <div class="stat"><div class="label">재직으로 되돌림</div><div class="value">{{ plan.reactivate | length }}<small>명</small></div></div>
+  <div class="stat"><div class="label">확인 필요(동명이인)</div><div class="value">{{ plan.ambiguous | length }}<small>건</small></div></div>
+  <div class="stat wide"><div class="label">이미 맞음 (바뀌는 것 없음)</div><div class="value">{{ plan.unchanged | length }}<small>명</small></div></div>
+</div>
+
+{% if plan.ambiguous %}
+<div class="card">
+  <div class="card-head" style="color:var(--warn);"><span>{{ icon('alert') }} 확인 필요 · 같은 이름이 겹쳐 건드리지 않습니다 ({{ plan.ambiguous | length }}건)</span></div>
+  <div class="card-body tight table-wrap">
+    <table class="data">
+      <thead><tr><th>이름</th><th>인력현황</th><th>명부에 있는 직원</th></tr></thead>
+      <tbody>
+      {% for item in plan.ambiguous %}
+        <tr>
+          <td class="nowrap"><strong>{{ item.name }}</strong></td>
+          <td>{% for p in item.people %}<div>{{ p.company or '-' }} · {{ p.department or '-' }}{{ ' (퇴사자 명단)' if p.resigned }}</div>{% endfor %}</td>
+          <td>{% for e in item.employees %}<div><a href="/employees/{{ e.id }}">{{ e.emp_no }}</a> · {{ e.department or '-' }} · {{ e.status_label }}</div>{% else %}<span class="muted">없음</span>{% endfor %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-foot">반영한 뒤 해당 직원 화면에서 법인·재직상태를 직접 고쳐 주세요.</div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-head">퇴사 처리 ({{ plan.resign | length }}명)
+    {% if holding %}<span class="badge LOST">{{ icon('alert') }}자산 보유 {{ holding | length }}명 — 회수 필요</span>{% endif %}
+  </div>
+  <div class="card-body tight">
+    {% if plan.resign %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>사번</th><th>이름</th><th>법인 · 부서</th><th>지금 상태</th><th>이유</th><th class="num">보유 자산</th></tr></thead>
+        <tbody>
+        {% for item in plan.resign %}
+          {% set e = item.employee %}
+          <tr class="{{ 'row-warn' if item.holding }}">
+            <td class="mono nowrap"><a href="/employees/{{ e.id }}">{{ e.emp_no }}</a></td>
+            <td class="nowrap">{{ e.name }}</td>
+            <td>{{ e.company or (item.person.company if item.person else '') or '-' }} · {{ e.department or '-' }}</td>
+            <td><span class="badge {{ e.status }}">{{ e.status_label }}</span></td>
+            <td class="muted">{{ item.reason }}</td>
+            <td class="num nowrap">{% if item.holding %}<strong class="text-danger">{{ item.holding }}대</strong>{% else %}<span class="muted">0</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="empty">퇴사로 바뀌는 직원이 없습니다.</p>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">신규 등록 ({{ plan.add | length }}명)</div>
+  <div class="card-body tight">
+    {% if plan.add %}
+    <details class="roster-more" {{ 'open' if plan.add | length <= 15 }}>
+      <summary>목록 {{ '펼치기' if plan.add | length > 15 else '' }}</summary>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>이름</th><th>법인</th><th>부서</th><th>직급</th><th>고용형태</th><th>입사일</th><th>비고</th></tr></thead>
+          <tbody>
+          {% for p in plan.add %}
+            <tr>
+              <td class="nowrap"><strong>{{ p.name }}</strong></td>
+              <td class="nowrap">{{ p.company or '-' }}</td>
+              <td>{{ p.department or '-' }}</td>
+              <td class="nowrap">{{ p.position or '-' }}</td>
+              <td class="nowrap">{{ p.kind or '-' }}</td>
+              <td class="nowrap">{{ p.joined or '-' }}</td>
+              <td class="muted">{% if p.on_leave %}<span class="badge LEAVE">휴직으로 등록</span> {% endif %}{{ p.note or '' }}{% if p.group != '본 인력현황' %} ({{ p.group }}){% endif %}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% else %}<p class="empty">새로 등록할 직원이 없습니다.</p>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-head">법인 입력 ({{ plan.company_changes | length }}명)</div>
+  <div class="card-body tight">
+    {% if plan.company_changes %}
+    <details class="roster-more" {{ 'open' if plan.company_changes | length <= 15 }}>
+      <summary>목록 {{ '펼치기' if plan.company_changes | length > 15 else '' }}</summary>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>사번</th><th>이름</th><th>부서</th><th>지금 법인</th><th>바뀔 법인</th></tr></thead>
+          <tbody>
+          {% for m in plan.company_changes %}
+            <tr>
+              <td class="mono nowrap"><a href="/employees/{{ m.employee.id }}">{{ m.employee.emp_no }}</a></td>
+              <td class="nowrap">{{ m.employee.name }}</td>
+              <td>{{ m.employee.department or '-' }}</td>
+              <td class="muted">{{ m.old_company or '(없음)' }}</td>
+              <td><strong>{{ m.person.company or '(없음)' }}</strong></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% else %}<p class="empty">법인이 바뀌는 직원이 없습니다.</p>{% endif %}
+  </div>
+</div>
+
+{% if plan.reactivate %}
+<div class="card">
+  <div class="card-head">재직으로 되돌림 ({{ plan.reactivate | length }}명) <span class="muted" style="font-weight:400;font-size:13px;">명부에선 퇴사인데 인력현황엔 재직으로 있는 사람</span></div>
+  <div class="card-body tight table-wrap">
+    <table class="data">
+      <thead><tr><th>사번</th><th>이름</th><th>명부의 부서</th><th>인력현황</th></tr></thead>
+      <tbody>
+      {% for m in plan.reactivate %}
+        <tr>
+          <td class="mono nowrap"><a href="/employees/{{ m.employee.id }}">{{ m.employee.emp_no }}</a></td>
+          <td class="nowrap">{{ m.employee.name }}</td>
+          <td>{{ m.employee.department or '-' }}</td>
+          <td>{{ m.person.company or '-' }} · {{ m.person.department or '-' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-foot">다른 사람인데 이름만 같다면, 반영한 뒤 그 직원을 다시 퇴사로 바꿔 주세요.</div>
+</div>
+{% endif %}
+
+{% if plan.unknown_resigned %}
+<p class="hint">인력현황 퇴사자 명단 중 {{ plan.unknown_resigned | length }}명은 명부에 없어 건너뜁니다
+  ({% for p in plan.unknown_resigned %}{{ p.name }}{{ ', ' if not loop.last }}{% endfor %}).</p>
+{% endif %}
+
+<div class="card roster-apply">
+  <div class="card-body">
+    {% if plan.has_changes %}
+    <form method="post" action="/employees/roster/apply" class="inline-form"
+          data-confirm="인력현황({{ roster.sheet }})을 반영할까요?&#10;법인 입력 {{ plan.company_changes | length }}명 · 신규 등록 {{ plan.add | length }}명 · 퇴사 처리 {{ plan.resign | length }}명">
+      <input type="hidden" name="token" value="{{ token }}">
+      <button type="submit" class="btn primary">{{ icon('swap') }}이대로 반영하기</button>
+    </form>
+    <a href="/employees" class="btn">취소</a>
+    <span class="hint">반영하기 전에 서버에서 <code>./deploy.sh backup</code> 을 한 번 받아 두면, 잘못됐을 때 <code>./deploy.sh restore</code> 로 되돌릴 수 있습니다.</span>
+    {% else %}
+      <p style="margin:0;">명부가 이미 인력현황과 같습니다. 바꿀 것이 없습니다.</p>
+    {% endif %}
+  </div>
+</div>
+
+<details class="card roster-reupload">
+  <summary class="card-head">다른 파일·다른 시트로 다시 보기</summary>
+  <div class="card-body">{{ upload_form('다시 미리보기', true) }}</div>
+</details>
+{% endif %}
+{% endblock %}

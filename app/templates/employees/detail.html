@@ -12,6 +12,7 @@
     <h2>{{ employee.name }} <span class="badge {{ employee.status }}">{{ employee.status_label }}</span></h2>
     <div class="sub">
       <span class="mono">{{ employee.emp_no }}</span>
+      {%- if employee.company %} · {{ employee.company }}{% endif %}
       {%- if employee.department %} · {{ employee.department }}{% endif %}
       {%- if employee.position %} · {{ employee.position }}{% endif %}
     </div>
@@ -66,9 +67,9 @@
     {% endif %}
   </div>
   <div class="fact">
-    <div class="fact-label">부서 · 직급</div>
-    <div class="fact-value">{{ employee.department or '-' }}</div>
-    <div class="fact-note">{{ employee.position or '' }}</div>
+    <div class="fact-label">법인 · 부서</div>
+    <div class="fact-value">{{ employee.company or '-' }}</div>
+    <div class="fact-note">{{ employee.department or '' }}{% if employee.position %} · {{ employee.position }}{% endif %}</div>
   </div>
 </div>
 
@@ -115,6 +116,7 @@
       <div class="card-body">
         <dl class="detail">
           <dt>사번</dt><dd class="mono">{{ employee.emp_no }}</dd>
+          <dt>법인</dt><dd>{{ employee.company or '-' }}</dd>
           <dt>부서</dt><dd>{{ employee.department or '-' }}</dd>
           <dt>직급</dt><dd>{{ employee.position or '-' }}</dd>
           <dt>재직상태</dt><dd>{{ employee.status_label }}</dd>

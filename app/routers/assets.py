@@ -26,6 +26,7 @@ from app.services import (
     AssetFilter,
     all_matching_assets,
     asset_status_counts,
+    companies,
     departments,
     open_assignment,
     search_assets,
@@ -52,6 +53,7 @@ def _filter_from_query(request: Request) -> AssetFilter:
         category=params.get("category") or None,
         status=params.get("status") or None,
         department=params.get("department") or None,
+        company=params.get("company") or None,
         holder_id=forms.parse_int(params.get("holder_id")),
         unassigned=params.get("unassigned") == "1",
         warranty=params.get("warranty") or None,
@@ -136,6 +138,7 @@ def list_assets(request: Request, db: DbSession, user: CurrentUser, page: int = 
             "holder": db.get(Employee, filters.holder_id) if filters.holder_id else None,
             "warranty_filters": WARRANTY_FILTERS,
             "departments": departments(db),
+            "companies": companies(db),
             "employees": _employee_choices(db),
         },
     )

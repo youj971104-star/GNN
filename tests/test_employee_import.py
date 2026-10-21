@@ -101,7 +101,7 @@ def test_양식을_내려받아_그대로_채워_올릴_수_있다(db):
 
     # 예시 행을 실제 값으로 바꿔 올린다
     ws.delete_rows(2)
-    ws.append(["2026001", "신입사원", "개발팀", "사원", "new@example.com", "010-0000-0000", "재직", ""])
+    ws.append(["2026001", "신입사원", "가법인", "개발팀", "사원", "new@example.com", "010-0000-0000", "재직", ""])
     buffer = io.BytesIO()
     wb.save(buffer)
 
@@ -175,3 +175,18 @@ def test_다른_직원이_쓰는_사번으로는_바꿀_수_없다(admin_client,
     )
     assert response.status_code == 400
     assert "이미 다른 직원" in response.text
+
+
+def test_법인을_함께_올린다(db):
+    import_employees(db, _file([_row(법인="나법인")]))
+    assert db.scalar(select(Employee).where(Employee.emp_no == "E001")).company == "나법인"
+
+
+def test_법인_칸이_없는_예전_양식이면_법인을_지우지_않는다(db):
+    """법인을 넣어 둔 뒤, 법인 칸이 없는 예전 양식으로 다른 정보만 고쳐 올리는 경우."""
+    import_employees(db, _file([_row(법인="다법인")]))
+    old_headers = [h for h in HEADERS if h != "법인"]
+    row = ["E001", "홍길동", "영업팀", None, None, None, "재직", None]
+    import_employees(db, _file([row], headers=old_headers))
+    emp = db.scalar(select(Employee).where(Employee.emp_no == "E001"))
+    assert emp.department == "영업팀" and emp.company == "다법인"

@@ -56,6 +56,7 @@ class AssetFilter:
     category: str | None = None
     status: str | None = None
     department: str | None = None
+    company: str | None = None           # 사용자(직원)의 법인
     holder_id: int | None = None
     unassigned: bool = False
     warranty: str | None = None          # "soon" 90일 안에 끝남 / "expired" 이미 끝남
@@ -108,6 +109,10 @@ class AssetFilter:
                     select(Employee.id).where(Employee.department == self.department)
                 )
             )
+        if self.company:
+            stmt = stmt.where(
+                Asset.holder_id.in_(select(Employee.id).where(Employee.company == self.company))
+            )
         if self.warranty in WARRANTY_FILTERS:
             # 대시보드의 '보증 만료' 칸과 같은 기준 (폐기·분실은 챙길 필요가 없다)
             today = date.today()
@@ -130,7 +135,7 @@ class AssetFilter:
     @property
     def is_active(self) -> bool:
         return any([
-            self.q, self.category, self.status, self.department, self.holder_id,
+            self.q, self.category, self.status, self.department, self.company, self.holder_id,
             self.unassigned, self.warranty in WARRANTY_FILTERS,
         ])
 
@@ -198,6 +203,14 @@ def all_matching_assets(db: Session, filters: AssetFilter) -> list[Asset]:
     """페이지네이션 없이 조건에 맞는 전체 자산 (엑셀 다운로드용)."""
     stmt = filters.order(filters.apply(select(Asset).options(joinedload(Asset.holder))))
     return list(db.scalars(stmt).all())
+
+
+def companies(db: Session) -> list[str]:
+    """직원에게 적힌 법인 목록 (가나다순)."""
+    rows = db.scalars(
+        select(Employee.company).where(Employee.company.is_not(None)).distinct().order_by(Employee.company)
+    ).all()
+    return [row for row in rows if row]
 
 
 def departments(db: Session) -> list[str]:
@@ -336,6 +349,17 @@ def dashboard_stats(db: Session, today: date | None = None) -> dict:
         {"label": dept or "(부서 미지정)", "count": count} for dept, count in dept_rows
     ]
 
+    company_rows = db.execute(
+        select(Employee.company, func.count(Asset.id))
+        .join(Asset, Asset.holder_id == Employee.id)
+        .group_by(Employee.company)
+        .order_by(func.count(Asset.id).desc())
+    ).all()
+    by_company = [
+        {"label": company or "(법인 미지정)", "value": company, "count": count}
+        for company, count in company_rows
+    ]
+
     total_amount = float(db.scalar(select(func.coalesce(func.sum(Asset.purchase_price), 0))) or 0)
     employee_count = db.scalar(select(func.count(Employee.id)).where(Employee.status != "RESIGNED")) or 0
 
@@ -398,6 +422,8 @@ def dashboard_stats(db: Session, today: date | None = None) -> dict:
         "status_counts": status_counts,
         "by_category": by_category,
         "by_department": by_department,
+        "by_company": by_company,
+        "max_company": max((row["count"] for row in by_company), default=0),
         "max_category": max_category,
         "max_department": max_department,
         "total_amount": total_amount,

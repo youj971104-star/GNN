@@ -7,11 +7,14 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import joinedload, selectinload
 
-from app import config, excel, forms, numbering
+from itsdangerous import BadSignature, URLSafeTimedSerializer
+from starlette.datastructures import UploadFile as FormFile
+
+from app import config, excel, forms, numbering, roster
 from app.deps import AdminUser, CurrentUser, DbSession
 from app.models import EMPLOYEE_STATUSES, Asset, Assignment, Employee
 from app.routers.assets import _xlsx_response
-from app.services import paginate
+from app.services import companies, paginate
 from app.sorting import SortColumn, by_code_order, read_sort
 from app.templating import flash, render
 
@@ -25,9 +28,15 @@ def _get_employee(db: DbSession, employee_id: int) -> Employee:
     return employee
 
 
+def _render_form(request: Request, db, context: dict, **kwargs):
+    """등록·수정 화면. 법인 칸에 기존 법인 이름을 골라 넣을 수 있게 목록을 함께 준다."""
+    return render(request, "employees/form.html", {"companies": companies(db), **context}, **kwargs)
+
+
 def _read_employee_form(data: dict, *, emp_no_required: bool = True) -> dict:
     values = {
         "name": forms.required_str(data.get("name"), "이름", 50),
+        "company": forms.clean_str(data.get("company"), 50),
         "department": forms.clean_str(data.get("department"), 50),
         "position": forms.clean_str(data.get("position"), 50),
         "email": forms.clean_str(data.get("email"), 120),
@@ -50,6 +59,7 @@ _ASSET_COUNT = (
 SORT_COLUMNS = {
     "emp_no": SortColumn((Employee.emp_no,)),
     "name": SortColumn((Employee.name,)),
+    "company": SortColumn((Employee.company,)),
     "department": SortColumn((Employee.department,)),
     "position": SortColumn((Employee.position,)),
     "email": SortColumn((Employee.email,)),
@@ -74,11 +84,15 @@ def _filtered(request: Request, *, with_status: bool = True):
             or_(
                 Employee.name.ilike(like),
                 Employee.emp_no.ilike(like),
+                Employee.company.ilike(like),
                 Employee.department.ilike(like),
                 Employee.position.ilike(like),
                 Employee.email.ilike(like),
             )
         )
+    company = params.get("company")
+    if company:
+        stmt = stmt.where(Employee.company == company)
     department = params.get("department")
     if department:
         stmt = stmt.where(Employee.department == department)
@@ -121,6 +135,7 @@ def list_employees(request: Request, db: DbSession, user: CurrentUser, page: int
         {
             "page_obj": result,
             "departments": departments,
+            "companies": companies(db),
             "params": dict(request.query_params),
             "sort": _sort(request),
             "status_counts": _status_counts(db, request),
@@ -131,9 +146,8 @@ def list_employees(request: Request, db: DbSession, user: CurrentUser, page: int
 @router.get("/new")
 def new_employee_form(request: Request, db: DbSession, user: AdminUser):
     suggested = numbering.next_employee_no(db)
-    return render(
-        request,
-        "employees/form.html",
+    return _render_form(
+        request, db,
         {
             "employee": None,
             # 자동 채번이 꺼져 있으면 비워 두고 직접 입력받는다
@@ -149,17 +163,15 @@ async def create_employee(request: Request, db: DbSession, user: AdminUser):
     try:
         values = _read_employee_form(data)
     except ValueError as exc:
-        return render(
-            request,
-            "employees/form.html",
+        return _render_form(
+            request, db,
             {"employee": None, "form": data, "error": str(exc)},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     if db.scalar(select(Employee).where(Employee.emp_no == values["emp_no"])):
-        return render(
-            request,
-            "employees/form.html",
+        return _render_form(
+            request, db,
             {"employee": None, "form": data, "error": f"사번 '{values['emp_no']}'는 이미 등록되어 있습니다."},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
@@ -257,6 +269,72 @@ async def import_employees(request: Request, db: DbSession, user: AdminUser, fil
     return render(request, "employees/import.html", {"result": result})
 
 
+# --- 인력현황 반영 ---------------------------------------------------------------
+#
+# 1) 인력현황 엑셀을 올리면 바뀔 내용을 미리 보여 준다.
+# 2) '반영하기' 를 누르면 그때의 명부로 다시 계산해 반영한다.
+# 두 단계 사이에는 읽어 낸 명단을 서명해 화면에 실어 보낸다 (서버에 파일을 남기지 않는다).
+# 서명이 있어 화면에서 명단을 고쳐 보내도 받아 주지 않는다.
+
+ROSTER_TOKEN_MAX_AGE = 60 * 60   # 미리보기 후 1시간 안에 반영
+
+
+def _roster_signer() -> URLSafeTimedSerializer:
+    return URLSafeTimedSerializer(config.SECRET_KEY, salt="employees.roster-sync")
+
+
+def _roster_page(request: Request, context: dict, **kwargs):
+    return render(request, "employees/roster.html", {"plan": None, "roster": None, **context}, **kwargs)
+
+
+@router.get("/roster")
+def roster_form(request: Request, user: AdminUser):
+    return _roster_page(request, {})
+
+
+@router.post("/roster")
+async def roster_preview(request: Request, db: DbSession, user: AdminUser):
+    form = await request.form()
+    upload = form.get("file")
+    sheet = forms.clean_str(form.get("sheet"), 100)
+    # request.form() 이 돌려주는 파일은 starlette 의 UploadFile 이다 (fastapi.UploadFile 은 그 하위 클래스)
+    if not isinstance(upload, FormFile) or not (upload.filename or "").lower().endswith((".xlsx", ".xlsm")):
+        return _roster_page(request, {"error": "인력현황 엑셀 파일(.xlsx)을 골라 주세요."},
+                            status_code=status.HTTP_400_BAD_REQUEST)
+    content = await upload.read()
+    if len(content) > config.MAX_UPLOAD_BYTES:
+        limit_mb = config.MAX_UPLOAD_BYTES // (1024 * 1024)
+        return _roster_page(request, {"error": f"파일이 너무 큽니다. {limit_mb}MB 이하로 올려 주세요."},
+                            status_code=status.HTTP_400_BAD_REQUEST)
+    try:
+        parsed = roster.read_roster(content, sheet)
+    except roster.RosterError as exc:
+        return _roster_page(request, {"error": str(exc)}, status_code=status.HTTP_400_BAD_REQUEST)
+
+    plan = roster.plan_sync(db, parsed)
+    token = _roster_signer().dumps(parsed.to_data())
+    return _roster_page(request, {"roster": parsed, "plan": plan, "token": token,
+                                  "file_name": upload.filename})
+
+
+@router.post("/roster/apply")
+async def roster_apply(request: Request, db: DbSession, user: AdminUser):
+    form = await request.form()
+    try:
+        data = _roster_signer().loads(str(form.get("token") or ""), max_age=ROSTER_TOKEN_MAX_AGE)
+        parsed = roster.Roster.from_data(data)
+    except (BadSignature, KeyError, TypeError, ValueError):
+        return _roster_page(
+            request,
+            {"error": "미리보기가 만료되었거나 올바르지 않습니다. 파일을 다시 올려 주세요."},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    result = roster.apply_sync(db, parsed)
+    flash(request, result.summary(), "warn" if result.resigned_holding or result.ambiguous else "success")
+    return RedirectResponse("/employees", status_code=status.HTTP_303_SEE_OTHER)
+
+
 @router.get("/{employee_id}")
 def employee_detail(request: Request, db: DbSession, user: CurrentUser, employee_id: int):
     employee = _get_employee(db, employee_id)
@@ -281,7 +359,7 @@ def employee_detail(request: Request, db: DbSession, user: CurrentUser, employee
 @router.get("/{employee_id}/edit")
 def edit_employee_form(request: Request, db: DbSession, user: AdminUser, employee_id: int):
     employee = _get_employee(db, employee_id)
-    return render(request, "employees/form.html", {"employee": employee, "form": None})
+    return _render_form(request, db, {"employee": employee, "form": None})
 
 
 @router.post("/{employee_id}/edit")
@@ -296,18 +374,16 @@ async def update_employee(request: Request, db: DbSession, user: AdminUser, empl
             if clash is not None:
                 raise ValueError(f"사번 '{values['emp_no']}'는 이미 다른 직원이 쓰고 있습니다.")
     except ValueError as exc:
-        return render(
-            request,
-            "employees/form.html",
+        return _render_form(
+            request, db,
             {"employee": employee, "form": data, "error": str(exc)},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
     holding = db.scalar(select(func.count(Asset.id)).where(Asset.holder_id == employee.id)) or 0
     if values["status"] == "RESIGNED" and holding:
-        return render(
-            request,
-            "employees/form.html",
+        return _render_form(
+            request, db,
             {
                 "employee": employee,
                 "form": data,

@@ -58,6 +58,7 @@ def search(request: Request, db: DbSession, user: CurrentUser, q: str = ""):
             or_(
                 Employee.name.ilike(like),
                 Employee.emp_no.ilike(like),
+                Employee.company.ilike(like),
                 Employee.department.ilike(like),
                 Employee.position.ilike(like),
                 Employee.email.ilike(like),
