@@ -146,6 +146,7 @@ local function teleportTo(player, stage)
 	local character = player.Character
 	local pad = checkpoints[stage]
 	if character and pad then
+		player:SetAttribute("SafeUntil", os.clock() + Config.Kill.spawnProtection)
 		character:PivotTo(pad.CFrame + Vector3.new(0, 4, 0))
 	end
 end
@@ -192,11 +193,20 @@ for stage, pad in pairs(checkpoints) do
 end
 
 local function killFromHit(hit)
-	local character = hit:FindFirstAncestorOfClass("Model")
-	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-	if humanoid and humanoid.Health > 0 and Players:GetPlayerFromCharacter(character) then
-		humanoid.Health = 0
+	-- 액세서리(머리카락·모자)는 Accessory 안에 있어서 hit.Parent 가 캐릭터가 아님
+	local character = hit.Parent
+	if not Config.Kill.ignoreAccessories and character and character:IsA("Accessory") then
+		character = character.Parent
 	end
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	local player = humanoid and Players:GetPlayerFromCharacter(character)
+	if not (player and humanoid.Health > 0) then
+		return
+	end
+	if (player:GetAttribute("SafeUntil") or 0) > os.clock() then
+		return
+	end
+	humanoid.Health = 0
 end
 for _, part in ipairs(killParts) do
 	part.Touched:Connect(killFromHit)

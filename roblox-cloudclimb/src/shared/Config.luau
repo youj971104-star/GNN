@@ -31,6 +31,13 @@ Config.Difficulty = {
 	vanishGap = { 3, 5.5 }, -- 사라지는 발판 사이 거리
 }
 
+-- 빨간 함정 판정 (클수록 너그러움)
+Config.Kill = {
+	margin = 0.35, -- 빨간 블록 겉면에서 이만큼(스터드) 안쪽까지 들어와야 죽음. 0 = 닿기만 해도 죽음
+	ignoreAccessories = true, -- 머리카락·모자 같은 액세서리가 닿은 건 무시
+	spawnProtection = 1.5, -- 부활/순간이동 직후 이 시간(초) 동안은 안 죽음
+}
+
 -- 10 스테이지마다 바뀌는 구역 테마
 Config.Zones = {
 	{ name = "초록 들판", color = Color3.fromRGB(120, 210, 110), accent = Color3.fromRGB(255, 255, 255) },

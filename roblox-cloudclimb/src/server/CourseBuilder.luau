@@ -46,11 +46,37 @@ local function platform(topCenter, dir, width, length, color, parent)
 	return block(topCenter - UP * 0.5, dir, width, 1, length, color, Enum.Material.SmoothPlastic, parent)
 end
 
+-- 보이는 빨간 블록은 장식이고, 실제 판정은 안쪽의 조금 작은 투명 상자(Hitbox)가 담당
 local function makeKill(part)
 	part.Color = KILL_COLOR
 	part.Material = Enum.Material.Neon
-	part:SetAttribute("Kill", true)
-	table.insert(killParts, part)
+	part.CanCollide = false -- 빨간 블록 위에 서는 일 없이 통과하다가 안쪽 판정에 닿으면 죽음
+	part.CanTouch = false
+
+	local margin = Config.Kill.margin * 2
+	local hitbox = Instance.new("Part")
+	hitbox.Name = "KillHitbox"
+	hitbox.Size = Vector3.new(
+		math.max(0.2, part.Size.X - margin),
+		math.max(0.2, part.Size.Y - margin),
+		math.max(0.2, part.Size.Z - margin)
+	)
+	hitbox.CFrame = part.CFrame
+	hitbox.Transparency = 1
+	hitbox.CanCollide = false
+	hitbox.CanQuery = false
+	hitbox.Anchored = part.Anchored
+	hitbox.Massless = true
+	if not part.Anchored then
+		-- 회전 막대처럼 움직이는 함정은 판정 상자를 붙여서 같이 움직이게
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = part
+		weld.Part1 = hitbox
+		weld.Parent = hitbox
+	end
+	hitbox:SetAttribute("Kill", true)
+	hitbox.Parent = part.Parent
+	table.insert(killParts, hitbox)
 	return part
 end
 
