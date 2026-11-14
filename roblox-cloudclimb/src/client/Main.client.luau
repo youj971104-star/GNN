@@ -79,7 +79,7 @@ local function step(delta)
 	if not state then
 		return
 	end
-	viewStage = math.clamp(viewStage + delta, 1, state.highest)
+	viewStage = math.clamp(viewStage + delta, 1, state.selectMax or state.highest)
 	selectorLabel.Text = "스테이지 " .. viewStage
 	act("SetStage", viewStage)
 end

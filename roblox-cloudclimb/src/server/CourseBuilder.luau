@@ -21,6 +21,12 @@ local function lerp(a, b, t)
 	return a + (b - a) * t
 end
 
+local D = Config.Difficulty
+-- Config.Difficulty 의 { 쉬움, 어려움 } 값을 난이도 d(0~1)에 맞게 섞음
+local function tune(pair, d)
+	return lerp(pair[1], pair[2], d)
+end
+
 -- center: 윗면 중앙이 아니라 파트 중심. dir 방향으로 length, 옆으로 width
 local function block(center, dir, width, height, length, color, material, parent)
 	local p = Instance.new("Part")
@@ -58,8 +64,8 @@ modules.jumps = function(cursor, dir, d, rng, zone)
 	local right = dir:Cross(UP)
 	local count = 3 + math.floor(d * 3)
 	for _ = 1, count do
-		local size = lerp(6, 3.5, d)
-		local gap = lerp(3.5, 8, d) + rng:NextNumber(-0.5, 0.5)
+		local size = tune(D.jumpPadSize, d)
+		local gap = tune(D.jumpGap, d) + rng:NextNumber(-0.4, 0.4)
 		local rise = rng:NextNumber(0, 1.5)
 		local side = rng:NextNumber(-3, 3) * d
 		local top = cursor + dir * (gap + size / 2) + UP * rise + right * side
@@ -73,7 +79,7 @@ modules.lavaStrip = function(cursor, dir, d, rng, zone)
 	local length = 26
 	local top = cursor + dir * (length / 2 + 0.2)
 	platform(top, dir, 8, length, zone.color)
-	local bars = 2 + math.floor(d * 3)
+	local bars = math.floor(tune(D.lavaBars, d) + 0.5)
 	for i = 1, bars do
 		local along = -length / 2 + (i / (bars + 1)) * length
 		local bar = block(top + dir * along + UP * 0.75, dir, 8, 1.5, 1.4, KILL_COLOR, Enum.Material.Neon)
@@ -106,7 +112,7 @@ modules.moving = function(cursor, dir, d, rng, zone)
 		prism.Attachment1 = a1
 		prism.ActuatorType = Enum.ActuatorType.Servo
 		prism.ServoMaxForce = 1e7
-		prism.Speed = lerp(5, 10, d)
+		prism.Speed = tune(D.movingSpeed, d)
 		prism.LinearResponsiveness = 60
 		prism.Parent = plat
 		local range = lerp(4, 9, d)
@@ -123,7 +129,7 @@ modules.vanish = function(cursor, dir, d, rng, zone)
 	local count = 4 + math.floor(d * 2)
 	for _ = 1, count do
 		local size = 5
-		local gap = lerp(3, 6, d)
+		local gap = tune(D.vanishGap, d)
 		local top = cursor + dir * (gap + size / 2) + UP * rng:NextNumber(-0.5, 0.8)
 		local p = platform(top, dir, size, size, Color3.fromRGB(255, 255, 255))
 		p.Material = Enum.Material.Glass
@@ -137,12 +143,12 @@ end
 modules.spinner = function(cursor, dir, d, rng, zone)
 	local length = 24
 	local top = cursor + dir * (length / 2 + 0.2)
-	platform(top, dir, 12, length, zone.color)
+	platform(top, dir, 16, length, zone.color)
 
 	local pivotPos = top + UP * 1.8
 	local pivot = block(pivotPos, dir, 1.6, 1, 1.6, Color3.fromRGB(60, 60, 70), Enum.Material.Metal)
 	pivot.CanCollide = false
-	local bar = block(pivotPos, dir, 1, 1, 22, KILL_COLOR, Enum.Material.Neon)
+	local bar = block(pivotPos, dir, 1, 1, tune(D.spinnerLength, d), KILL_COLOR, Enum.Material.Neon)
 	bar.Anchored = false
 	bar.CanCollide = false
 	bar.Massless = true
@@ -161,7 +167,7 @@ modules.spinner = function(cursor, dir, d, rng, zone)
 	hinge.ActuatorType = Enum.ActuatorType.Motor
 	hinge.MotorMaxTorque = 1e9
 	hinge.MotorMaxAcceleration = 1e9
-	hinge.AngularVelocity = lerp(1.6, 3.2, d) * (rng:NextNumber() < 0.5 and 1 or -1)
+	hinge.AngularVelocity = tune(D.spinnerSpeed, d) * (rng:NextNumber() < 0.5 and 1 or -1)
 	hinge.Parent = bar
 	table.insert(movers, { part = bar })
 	return top + dir * (length / 2)
@@ -182,7 +188,7 @@ end
 
 modules.beam = function(cursor, dir, d, rng, zone)
 	local length = lerp(16, 26, d)
-	local width = lerp(2.4, 1.1, d)
+	local width = tune(D.beamWidth, d)
 	local top = cursor + dir * (length / 2 + 1)
 	local beam = platform(top, dir, width, length, zone.accent)
 	beam.Material = Enum.Material.WoodPlanks
@@ -196,15 +202,8 @@ modules.beam = function(cursor, dir, d, rng, zone)
 	return land + dir * 3
 end
 
-local unlockAt = {
-	{ name = "jumps", stage = 1 },
-	{ name = "beam", stage = 1 },
-	{ name = "truss", stage = 4 },
-	{ name = "lavaStrip", stage = 6 },
-	{ name = "spinner", stage = 12 },
-	{ name = "moving", stage = 16 },
-	{ name = "vanish", stage = 22 },
-}
+-- 장애물 등장 순서 (몇 스테이지부터인지는 Config.Difficulty.unlock)
+local MODULE_ORDER = { "jumps", "beam", "truss", "lavaStrip", "spinner", "moving", "vanish" }
 
 ----------------------------------------------------------------------
 -- 체크포인트
@@ -289,14 +288,14 @@ function CourseBuilder.Build()
 		end
 
 		-- 이 스테이지의 장애물 2~3개
-		local d = math.clamp((stage - 1) / (Config.StageCount - 1), 0, 1)
+		local d = math.clamp((stage - 1) / (Config.StageCount - 1), 0, 1) ^ D.curve
 		local available = {}
-		for _, m in ipairs(unlockAt) do
-			if stage >= m.stage then
-				table.insert(available, m.name)
+		for _, name in ipairs(MODULE_ORDER) do
+			if stage >= (D.unlock[name] or 1) then
+				table.insert(available, name)
 			end
 		end
-		local count = stage < 10 and 2 or 3
+		local count = stage <= D.twoObstaclesUntil and 2 or 3
 		local startY = cursor.Y
 		for _ = 1, count do
 			local name = available[rng:NextInteger(1, #available)]

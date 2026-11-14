@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Format)
@@ -62,6 +63,14 @@ local function coinMultiplier(player, data)
 	return m
 end
 
+-- 스테이지 선택기로 갈 수 있는 가장 높은 스테이지
+local function selectMax(data)
+	if RunService:IsStudio() and Config.StudioFreeStageSelect then
+		return FINISH
+	end
+	return data.highest
+end
+
 local function refresh(player)
 	local data = DataService.Get(player)
 	if not data then
@@ -83,6 +92,7 @@ local function refresh(player)
 		passes = Monetization.GetOwned(player),
 		coinMult = coinMultiplier(player, data),
 		stageCount = Config.StageCount,
+		selectMax = selectMax(data),
 	})
 end
 
@@ -333,7 +343,7 @@ function actions.SetStage(player, data, stage)
 	if not stage then
 		return false
 	end
-	stage = math.clamp(math.floor(stage), 1, data.highest)
+	stage = math.clamp(math.floor(stage), 1, selectMax(data))
 	data.current = stage
 	teleportTo(player, stage)
 	return true
