@@ -34,7 +34,7 @@ Rojo 를 쓰면 이 폴더에서 `rojo serve` → Studio 플러그인에서 Conn
 
 ## 테스트 팁
 - 혼자서도 연습 경기가 시작돼요 (`Config.MinPlayers = 1`). 팀전·휘두르기·아이템은 **테스트 탭 → 클라이언트 및 서버 → 플레이어 4명**으로 확인
-- 골프채 위치가 어색하면 `Club.luau` 맨 위 `PIVOT`(관절 위치)·`SHAFT_OFFSET`, 스윙 크기·속도는 `SwingAnimator.luau` 맨 위 숫자(REST, WIND_MAX, FOLLOW, SWING_TIME)를 조절하세요
+- 골프채 위치가 어색하면 `Club.luau` 맨 위 `PIVOT`(관절 위치)·`SHAFT_OFFSET`, 스윙 크기·속도는 `SwingAnimator.luau` 맨 위 숫자(ADDRESS_TILT, BACK_MAX, FOLLOW, SWING_TIME, WAIST_TWIST)를 조절하세요. 공이 발에서 너무 멀거나 가까우면 `Config.Club.stanceOffset`
 - 공이 너무 멀리/가까이 가면 `Config.Ball.maxSpeed`, 너무 높이/낮게 뜨면 `launchAngle`
 - 프리미엄 캡슐 테스트: 상품 ID 를 넣고 Studio 에서 젬 상품을 '테스트 구매'(실제 로벅스 차감 없음)
 - 공이 너무 빨리/늦게 멈추면 `Config.Ball.rollingDrag`, 샷이 약하면 `maxShotSpeed`, 넘어뜨리기가 너무 세면 `Config.Club` 조절

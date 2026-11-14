@@ -1,6 +1,7 @@
 -- 조작 (휘두르기 하나로 공치기 + 사람 치기)
--- PC: 마우스 왼쪽 꾹 → 힘 모으기 (골프채가 뒤로 올라감) → 떼면 휘두르기
---     카메라가 보는 방향으로 몸을 돌려서 침. E: 아이템
+-- PC: 마우스 왼쪽 꾹 → 힘 모으기 (골프채가 뒤로 올라감) → 떼면 휘두르기. E: 아이템
+--     공은 카메라가 보는 방향으로 날아감. 힘을 모으면 진짜 골퍼처럼 목표를 왼쪽에 두고 옆으로 섬
+--     → 공을 '내 오른쪽 앞'(바닥의 스윙 존 원)에 두고 치면 됨
 -- 모바일: 화면의 ⛳ 버튼 꾹 → 떼기, 아이템 버튼
 
 local Players = game:GetService("Players")
@@ -39,6 +40,19 @@ local guide = arrow:Clone()
 guide.Name = "AimGuide"
 guide.Transparency = 0.75
 
+-- 바닥에 그려지는 스윙 존 (공을 이 원 안에 두고 치기)
+local zoneRing = Instance.new("Part")
+zoneRing.Name = "SwingZone"
+zoneRing.Shape = Enum.PartType.Cylinder
+zoneRing.Anchored = true
+zoneRing.CanCollide = false
+zoneRing.CanQuery = false
+zoneRing.CanTouch = false
+zoneRing.CastShadow = false
+zoneRing.Material = Enum.Material.Neon
+zoneRing.Transparency = 0.65
+zoneRing.Size = Vector3.new(0.05, CL.ballZone * 2, CL.ballZone * 2)
+
 local function character()
 	return player.Character
 end
@@ -59,24 +73,37 @@ local function canAct()
 	return enabled and root ~= nil and humanoid ~= nil and humanoid.Health > 0 and player:GetAttribute("Stunned") ~= true
 end
 
--- 지금 휘두르면 맞을 공 (몸 앞 reach 안)
+local function flat(v)
+	return Vector3.new(v.X, 0, v.Z)
+end
+
+-- 스윙 존 중심: 목표(dir)를 왼쪽에 두고 섰을 때 발 앞
+local function zoneCenter(root, dir)
+	return root.Position + dir:Cross(Vector3.new(0, 1, 0)) * CL.stanceOffset
+end
+
+-- 지금 휘두르면 맞을 공 (서버 판정과 같은 규칙), 그리고 근처(14 이내)에 공이 있는지
 local function ballInReach(dir)
 	local root = rootAndHumanoid()
 	local folder = workspace:FindFirstChild("Balls")
 	if not (root and folder) then
-		return nil
+		return nil, false
 	end
+	local zone = zoneCenter(root, dir)
+	local near = false
 	for _, ball in ipairs(folder:GetChildren()) do
 		if ball:IsA("BasePart") and ball:GetAttribute("Team") and not ball.Anchored then
-			local offset = ball.Position - root.Position
-			local fo = Vector3.new(offset.X, 0, offset.Z)
-			local inFront = fo.Magnitude < 2.4 or (fo.Magnitude > 0.01 and fo.Unit:Dot(dir) > 0.15)
-			if fo.Magnitude <= CL.reach and inFront and math.abs(offset.Y) < 6 then
-				return ball
+			local pos = ball.Position
+			if flat(pos - root.Position).Magnitude < 14 then
+				near = true
+			end
+			local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - root.Position).Magnitude <= 2.2
+			if inZone and math.abs(pos.Y - root.Position.Y) < 5 then
+				return ball, true
 			end
 		end
 	end
-	return nil
+	return nil, near
 end
 Shot.BallInReach = ballInReach
 
@@ -157,8 +184,22 @@ function Shot.Start(callbacks)
 	RunService.RenderStepped:Connect(function()
 		local dir = aimDirection()
 		local root = rootAndHumanoid()
-		local target = enabled and ballInReach(dir) or nil
+		local target, near = nil, false
+		if enabled then
+			target, near = ballInReach(dir)
+		end
 		ui.setMode(enabled, target ~= nil)
+
+		-- 스윙 존 표시 (공이 근처에 있거나 힘을 모을 때)
+		if enabled and root and (near or charging) then
+			local c = zoneCenter(root, dir)
+			local groundY = root.Position.Y - 2.9
+			zoneRing.CFrame = CFrame.new(c.X, groundY, c.Z) * CFrame.Angles(0, 0, math.rad(90))
+			zoneRing.Color = target and Color3.fromRGB(90, 255, 120) or Color3.new(1, 1, 1)
+			zoneRing.Parent = workspace
+		else
+			zoneRing.Parent = nil
+		end
 
 		if charging then
 			if not canAct() then
@@ -173,13 +214,14 @@ function Shot.Start(callbacks)
 			ui.setPower(power, true)
 			SwingAnimator.SetLocalCharge(power)
 			if root then
-				root.CFrame = CFrame.lookAt(root.Position, root.Position + dir)
+				-- 진짜 골퍼처럼: 목표(카메라 방향)를 왼쪽에 두고 공 쪽을 바라봄
+				root.CFrame = CFrame.lookAt(root.Position, root.Position + dir:Cross(Vector3.new(0, 1, 0)))
 			end
 		end
 
 		-- 조준 화살표: 맞을 공이 있으면 공에서, 없으면 내 발 앞에서
 		if enabled and root and (charging or target) then
-			local base = (target and target.Position or (root.Position + dir * 2)) - Vector3.new(0, target and 1 or 2.8, 0)
+			local base = (target and target.Position or zoneCenter(root, dir)) - Vector3.new(0, target and 1 or 2.8, 0)
 			local len = 3 + (charging and power or 0.25) * 16
 			arrow.Size = Vector3.new(0.45, 0.12, len)
 			arrow.CFrame = CFrame.lookAt(base + dir * (1.3 + len / 2), base + dir * (2 + len))

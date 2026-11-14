@@ -376,27 +376,28 @@ function Golf.Swing(player, direction, power)
 		end
 		local origin = root.Position
 		local hitSomething = false
+		-- 선수는 목표(dir)를 왼쪽에 두고 옆으로 섬 → 얼굴 방향 = dir × 위
+		local facing = dir:Cross(UP)
+		local zone = origin + facing * CL.stanceOffset
 
-		-- 공 (우리 팀 공이든 상대 팀 공이든)
+		-- 공 (우리 팀 공이든 상대 팀 공이든): 발 앞 스윙 존 안에 있으면 목표 방향으로 날아감
 		for _, t in pairs(teams) do
 			if not t.sunk and t.frozenUntil <= os.clock() then
-				local offset = t.ball.Position - origin
-				local fo = flat(offset)
-				local inFront = fo.Magnitude < 2.4 or (fo.Magnitude > 0.01 and fo.Unit:Dot(dir) > 0.15)
-				if fo.Magnitude <= CL.reach and inFront and math.abs(offset.Y) < 6 then
+				local pos = t.ball.Position
+				local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - origin).Magnitude <= 2.2
+				if inZone and math.abs(pos.Y - origin.Y) < 5 then
 					launchBall(t, dir, power, player)
 					hitSomething = true
 				end
 			end
 		end
 
-		-- 상대 선수
+		-- 상대 선수: 골프채가 크게 도는 반경 안이면 맞음 (목표 방향으로 날아감)
 		for _, enemy in ipairs(enemiesOf(player)) do
 			local er = rootOf(enemy)
 			if er then
 				local offset = er.Position - origin
-				local fo = flat(offset)
-				if fo.Magnitude <= CL.reach and fo.Magnitude > 0.01 and fo.Unit:Dot(dir) > 0.2 and math.abs(offset.Y) < 6 then
+				if flat(offset).Magnitude <= CL.reach and math.abs(offset.Y) < 6 then
 					local k = CL.knockback * (0.6 + power)
 					stun(enemy, dir * k + UP * (20 + 25 * power), player)
 					hitSomething = true

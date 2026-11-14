@@ -1,6 +1,8 @@
--- 골프채: 몸통 앞(가슴)에 관절(Motor6D "ClubMotor")로 붙입니다.
--- 실제로 크게 휘두르는 모션은 각 플레이어 화면의 SwingAnimator 가 이 관절을 돌려서 만듭니다.
--- (도구(Tool)로 쥐면 손목만 까딱이는 느낌이라 관절 방식으로 바꿈)
+-- 골프채: 가슴 위쪽(두 어깨 사이)에 관절(Motor6D "ClubMotor")로 붙입니다.
+-- 이 관절이 '팔 + 골프채'를 한 덩어리로 돌리는 스윙 중심이고,
+-- 손은 각 화면의 SwingAnimator 가 IK(관절 자동 맞춤)로 골프채 손잡이(GripL/GripR)에 붙여 줍니다.
+--
+-- 골프채 좌표: 샤프트 길이 방향 = 로컬 Y (손잡이가 +Y 쪽), 클럽 머리의 앞(공 치는 면) = 로컬 -X
 -- 빛 입자·고리 같은 스킨 연출은 ClubFX 가 그립니다. 서버는 "Skin" 속성만 달아 둡니다.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,10 +10,10 @@ local Config = require(ReplicatedStorage.Shared.Config)
 
 local Club = {}
 
--- 관절 위치: 어깨 높이 가슴 앞. 팔(약 1.9)과 골프채가 이 점을 중심으로 같이 돌면서 휘둘러짐
--- (손이 이 점에서 1.9 아래, 골프채 머리가 바닥 근처에 오도록 맞춤)
-Club.PIVOT = CFrame.new(0, 0.5, -0.35)
-Club.SHAFT_OFFSET = CFrame.new(0, 2.6, 0) -- 샤프트 중심이 관절보다 2.6 아래
+-- 스윙 중심: 두 어깨 사이 (R15 UpperTorso 기준)
+-- 여기서 골프채 방향으로 약 2.0 지점이 손(손잡이), 4.6 지점이 클럽 머리 → 어드레스 때 머리가 발 앞 땅에 닿음
+Club.PIVOT = CFrame.new(0, 0.4, -0.2)
+Club.SHAFT_OFFSET = CFrame.new(0, 3.1, 0) -- 샤프트 중심이 스윙 중심에서 3.1 떨어짐
 
 local function weldTo(base, part, offset)
 	part.CanCollide = false
@@ -47,8 +49,17 @@ local function makeClub()
 	grip.Size = Vector3.new(0.32, 0.9, 0.32)
 	grip.Color = Color3.fromRGB(35, 35, 40)
 	grip.Material = Enum.Material.Fabric
-	weldTo(shaft, grip, CFrame.new(0, 0.85, 0))
+	weldTo(shaft, grip, CFrame.new(0, 0.95, 0))
 	grip.Parent = model
+	-- 손이 잡을 자리 (왼손이 위, 오른손이 아래 — 오른손잡이 골퍼)
+	local gl = Instance.new("Attachment")
+	gl.Name = "GripL"
+	gl.Position = Vector3.new(0, 0.22, 0)
+	gl.Parent = grip
+	local gr = Instance.new("Attachment")
+	gr.Name = "GripR"
+	gr.Position = Vector3.new(0, -0.22, 0)
+	gr.Parent = grip
 
 	local ferrule = Instance.new("Part")
 	ferrule.Name = "Ferrule"
@@ -58,11 +69,11 @@ local function makeClub()
 	weldTo(shaft, ferrule, CFrame.new(0, -1.2, 0))
 	ferrule.Parent = model
 
-	-- 머리: 옆으로 긴 드라이버 모양 (스윙 방향과 수직)
+	-- 머리: 앞뒤로 긴 드라이버 모양 (발끝 방향으로 뻗음, 치는 면은 목표 쪽)
 	local head = Instance.new("Part")
 	head.Name = "Head"
-	head.Size = Vector3.new(1.5, 0.75, 0.6)
-	weldTo(shaft, head, CFrame.new(0.45, -1.5, 0))
+	head.Size = Vector3.new(0.6, 0.7, 1.5)
+	weldTo(shaft, head, CFrame.new(0, -1.45, -0.5))
 	head.Parent = model
 
 	local gem = Instance.new("Part")
@@ -71,7 +82,7 @@ local function makeClub()
 	gem.Size = Vector3.one * 0.4
 	gem.Material = Enum.Material.Neon
 	gem.Transparency = 1
-	weldTo(shaft, gem, CFrame.new(0.55, -1.45, -0.32))
+	weldTo(shaft, gem, CFrame.new(-0.32, -1.4, -0.6))
 	gem.Parent = model
 
 	model.PrimaryPart = shaft
