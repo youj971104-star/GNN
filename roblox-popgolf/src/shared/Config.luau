@@ -1,53 +1,68 @@
 -- ⛳ 펑! 골프 파티 (Pop Golf Party) 설정
--- 모두가 동시에 공을 쳐서 홀컵에 넣는 배틀 골프. 아이템으로 서로 방해할 수 있어요.
+-- 2대2 팀 배틀 골프: 캐릭터가 코스를 뛰어다니며 골프채로 팀 공을 치고,
+-- 상대 선수를 때려 넘어뜨리거나 상대 공을 쳐 내며 먼저 홀컵에 넣는 팀이 이깁니다.
 
 local Config = {}
 
 ----------------------------------------------------------------------
 -- 경기
 ----------------------------------------------------------------------
-Config.MinPlayers = 1 -- 혼자서도 연습 가능 (2명 이상이면 더 재밌음)
-Config.MaxPlayers = 8
-Config.Intermission = 20 -- 경기 사이 대기(초)
+Config.TeamSize = 2 -- 2대2
+Config.MinPlayers = 1 -- 혼자서도 연습 가능 (1명이면 레드 팀만)
+Config.MaxPlayers = 4 -- 한 경기 인원 (서버 최대 인원도 4~6 추천, 넘치면 관전 후 다음 판)
+Config.Intermission = 15
 Config.HolesPerMatch = 3
-Config.HoleTime = 120 -- 홀 하나 제한 시간(초)
-Config.MaxStrokes = 12 -- 이 타수를 넘기면 그 홀은 기권 처리
+Config.HoleTime = 150 -- 홀 제한 시간. 끝나면 홀컵에 더 가까운 팀이 승리
 Config.Countdown = 3
 
--- 홀 순위 점수 (1등, 2등, ...). 못 넣으면 0점
-Config.PlacePoints = { 10, 8, 6, 5, 4, 3, 2, 1 }
+Config.Teams = {
+	{ id = "Red", name = "🔴 레드 팀", color = Color3.fromRGB(255, 80, 80), brick = BrickColor.new("Bright red") },
+	{ id = "Blue", name = "🔵 블루 팀", color = Color3.fromRGB(80, 150, 255), brick = BrickColor.new("Bright blue") },
+}
 
 -- 공 물리
 Config.Ball = {
-	diameter = 2,
-	maxShotSpeed = 120, -- 최대 파워일 때 속도(스터드/초)
-	loft = 0.12, -- 샷을 살짝 띄우는 비율 (작은 턱을 넘기 위함)
+	diameter = 2.2,
+	maxShotSpeed = 130, -- 최대 파워 샷 속도(스터드/초)
+	loft = 0.14, -- 샷을 살짝 띄우는 비율 (작은 턱 넘기)
 	rollingDrag = 0.985, -- 0.1초마다 속도에 곱함 (작을수록 빨리 멈춤)
-	stopSpeed = 1.2, -- 이 속도보다 느려지면 멈춘 것으로 보고 다음 샷 가능
-	cupRadius = 2.4, -- 홀컵 판정 반경
-	cupMaxSpeed = 40, -- 이보다 빠르면 홀컵을 지나쳐 버림
+	stopSpeed = 1.2, -- 이보다 느리면 멈춘 것으로 보고 다음 샷 가능
+	cupRadius = 2.8, -- 홀컵 판정 반경
+	cupMaxSpeed = 45, -- 이보다 빠르면 홀컵을 지나쳐 버림
 }
 
--- 코스 생성
+-- 골프채 (치기 / 때리기)
+Config.Club = {
+	shotRange = 7, -- 우리 팀 공과 이 거리 안이면 꾹 눌러서 샷
+	swingRange = 8, -- 짧게 클릭하면 앞쪽 이 거리 안을 휘두름
+	swingCooldown = 0.9,
+	stunTime = 1.6, -- 맞은 선수가 넘어져 있는 시간
+	knockback = 55, -- 맞은 선수가 날아가는 세기
+	enemyBallHit = 45, -- 휘둘러서 상대 공을 쳐 낼 때 속도 (상대 타수는 안 늘어남)
+	walkSpeed = 18,
+}
+
+-- 코스 생성 (캐릭터가 뛰어다니므로 넓게)
 Config.Course = {
-	tile = 20, -- 바닥 타일 한 칸 크기
-	minTiles = 7,
-	maxTiles = 12,
-	wallHeight = 2.5,
-	itemBoxesPerHole = 3,
+	tile = 30, -- 바닥 타일 한 칸 크기
+	minTiles = 6,
+	maxTiles = 10,
+	wallHeight = 3, -- 보이는 벽 높이 (공이 못 나가게)
+	fenceHeight = 14, -- 투명 울타리 높이 (선수가 못 나가게)
+	itemBoxesPerHole = 4,
 	itemBoxRespawn = 8,
 }
 
 ----------------------------------------------------------------------
--- 배틀 아이템 (코스의 ❓ 상자에서 무료로 획득 — 돈으로 살 수 없음)
+-- 배틀 아이템 (코스의 ❓ 상자에서 무료 획득 — 돈으로 살 수 없음)
 ----------------------------------------------------------------------
-Config.ItemOrder = { "Bomb", "Freeze", "Super", "Magnet", "Twister" }
+Config.ItemOrder = { "Bomb", "Freeze", "Dash", "Shield", "Gust" }
 Config.Items = {
-	Bomb = { name = "💣 폭탄", desc = "내 공 주변(25)의 다른 공을 날려 버려요", weight = 25 },
-	Freeze = { name = "🧊 얼음", desc = "홀컵에 가장 가까운 상대 공을 4초 얼려요", weight = 20 },
-	Super = { name = "⚡ 슈퍼샷", desc = "다음 샷 파워 1.6배", weight = 20 },
-	Magnet = { name = "🧲 자석", desc = "8초 동안 홀컵이 내 공을 끌어당겨요", weight = 20 },
-	Twister = { name = "🌀 회오리", desc = "다른 모든 공을 아무 데로나 밀어내요", weight = 15 },
+	Bomb = { name = "💣 물풍선 폭탄", desc = "앞으로 던져서 터진 곳 주변 선수와 공을 날려요", weight = 25 },
+	Freeze = { name = "🧊 얼음", desc = "상대 팀 공을 5초 동안 얼려서 못 치게 해요", weight = 20 },
+	Dash = { name = "👟 대시 신발", desc = "6초 동안 아주 빠르게 달려요", weight = 20 },
+	Shield = { name = "🛡️ 방패", desc = "8초 동안 맞아도 안 넘어져요", weight = 18 },
+	Gust = { name = "🌬️ 돌풍", desc = "상대 선수 모두를 공중으로 날려요", weight = 17 },
 }
 
 ----------------------------------------------------------------------
@@ -58,14 +73,13 @@ Config.Items = {
 ----------------------------------------------------------------------
 Config.Rewards = {
 	play = 15, -- 경기 참가 코인
-	perPoint = 2, -- 점수 1점당 코인
-	winGems = 5, -- 경기 1등 젬
+	holeWin = 10, -- 이긴 홀마다 코인 (팀원 모두)
+	matchWin = 30, -- 경기 승리 코인
+	winGems = 5, -- 경기 승리 젬
 	dailyGems = 20, -- 매일 첫 경기 젬
+	knockout = 1, -- 상대를 넘어뜨릴 때마다 코인
 }
 
-----------------------------------------------------------------------
--- 공 스킨 (꾸미기 전용 — 성능 차이 없음)
--- effect: "Sparkles" | "Fire" | "Smoke" | "Light" | nil
 ----------------------------------------------------------------------
 Config.Rarities = {
 	{ id = "Common", name = "일반", color = Color3.fromRGB(200, 200, 200), shards = 1 },
@@ -80,6 +94,8 @@ for i, r in ipairs(Config.Rarities) do
 	Config.RarityById[r.id] = r
 end
 
+-- 골프채 스킨 (꾸미기 전용 — 성능 차이 없음). 팀 공은 팀 색깔로 고정해서 누구 공인지 헷갈리지 않게
+-- effect: "Sparkles" | "Fire" | "Smoke" | "Light" | nil, trail: 휘두를 때 남는 꼬리 색
 Config.SkinOrder = {
 	"White", "Lime", "Sky", "Peach", "Lemon", "Mint",
 	"Watermelon", "Ocean", "Choco", "Bubblegum", "Panda",
@@ -89,7 +105,7 @@ Config.SkinOrder = {
 	"VIPCrown",
 }
 Config.Skins = {
-	White = { name = "기본 흰 공", rarity = "Common", color = Color3.fromRGB(245, 245, 245), material = "SmoothPlastic" },
+	White = { name = "기본 은색", rarity = "Common", color = Color3.fromRGB(245, 245, 245), material = "SmoothPlastic" },
 	Lime = { name = "라임", rarity = "Common", color = Color3.fromRGB(160, 230, 80), material = "SmoothPlastic" },
 	Sky = { name = "하늘", rarity = "Common", color = Color3.fromRGB(120, 200, 255), material = "SmoothPlastic" },
 	Peach = { name = "복숭아", rarity = "Common", color = Color3.fromRGB(255, 180, 150), material = "SmoothPlastic" },
@@ -146,15 +162,15 @@ Config.ShardPrice = { Common = 10, Rare = 30, Epic = 100, Legendary = 400, Mythi
 --    코인을 돈으로 살 수 있게 되면 일반 캡슐도 유료 확률형 아이템이 되기 때문입니다.
 ----------------------------------------------------------------------
 Config.GamePasses = {
-	VIP = { id = 0, name = "👑 VIP", desc = "VIP 전용 왕관 공 + 채팅 태그 + 매일 젬 +20", price = 299 },
-	AimPlus = { id = 0, name = "🎯 정밀 조준", desc = "조준선이 2배 길게 보여요", price = 149 },
+	VIP = { id = 0, name = "👑 VIP", desc = "VIP 전용 왕관 골프채 + 채팅 태그 + 매일 젬 +20", price = 299 },
+	AimPlus = { id = 0, name = "🎯 정밀 조준", desc = "샷 조준선이 2배 길게 보여요", price = 149 },
 }
 
 Config.Products = {
 	Gems110 = { id = 0, name = "💎 젬 110", desc = "프리미엄 캡슐 2번", price = 49, gems = 110 },
 	Gems500 = { id = 0, name = "💎 젬 500", desc = "10연차 + 50 보너스", price = 199, gems = 500 },
 	Gems1300 = { id = 0, name = "💎 젬 1300", desc = "가장 이득!", price = 449, gems = 1300 },
-	Starter = { id = 0, name = "🎁 스타터 팩 (1회)", desc = "젬 300 + 희귀 '바다' 공 확정", price = 99, gems = 300, skin = "Ocean", once = true },
+	Starter = { id = 0, name = "🎁 스타터 팩 (1회)", desc = "젬 300 + 희귀 '바다' 골프채 확정", price = 99, gems = 300, skin = "Ocean", once = true },
 }
 
 -- 프리미엄 회원 혜택은 코인 대신 '매일 젬'으로 (코인을 어떤 식으로든 돈과 연결하지 않기 위해)

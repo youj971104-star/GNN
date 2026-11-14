@@ -2,52 +2,56 @@
 
 크리에이터 허브 → 내 게임 → 기본 정보에서 이름과 설명 칸에 붙여넣으세요. 영어는 **현지화**(Localization)에서 영어 번역으로 등록하세요.
 
+⚠️ 다른 게임 이름(예: "○○ 골프 같은 게임")은 설명·태그·광고에 넣지 마세요. 상표 문제와 로블록스 신고 대상이 될 수 있어요.
+
 ## 🇰🇷 한국어
 
-**이름:** ⛳ 펑! 골프 파티
+**이름:** ⛳ 펑! 골프 파티 [2대2 팀 배틀 골프]
 
 **설명:**
 ```
-⛳ 모두 동시에 치는 배틀 미니골프!
+⛳ 2대2 팀 배틀 골프! 먼저 홀컵에 넣는 팀이 이겨요!
 
-최대 8명이 같은 홀을 동시에 쳐요. 내 차례를 기다릴 필요 없이 먼저 홀컵에 넣는 사람이 이겨요!
+🔴 레드 팀 vs 🔵 블루 팀 — 팀마다 공이 하나!
+🏃 코스를 직접 뛰어다니며 우리 팀 공을 치고
+🏌️ 골프채를 휘둘러 상대를 넘어뜨리거나 상대 공을 쳐 내세요!
 
-❓ 코스 위 상자를 먹고 친구를 방해하세요
-• 💣 폭탄 — 근처 공을 날려 버려요
-• 🧊 얼음 — 1등 공을 꽁꽁!
-• ⚡ 슈퍼샷 · 🧲 자석 · 🌀 회오리
+👫 팀워크가 중요해요
+• 한 명은 공을 치고, 한 명은 상대를 막아 주기
+• 시간이 끝나면 홀컵에 더 가까운 팀 승리
+
+❓ 코스 위 아이템 상자
+• 💣 물풍선 폭탄 · 🧊 얼음 · 👟 대시 신발 · 🛡️ 방패 · 🌬️ 돌풍
 
 ✨ 특징
-• 매 홀 코스가 새로 만들어져요 (꼬불길, 범퍼, 회전 막대, 가속 발판)
-• 홀 3개, 순위 점수로 우승 결정
-• 🎉 홀인원하면 보너스!
-• 🎨 공 꾸미기 21종 — 캡슐에서 뽑거나 조각으로 직접 구매 (확률은 게임 안에 공개, 성능 차이 없음)
+• 매 홀 코스가 새로 만들어져요
+• 🎨 골프채 꾸미기 21종 — 캡슐 또는 조각으로 직접 구매 (확률은 게임 안에 공개, 성능 차이 없음)
 
-👫 친구와 함께하면 더 웃겨요!
 👍 재밌었다면 좋아요와 즐겨찾기 부탁해요!
 ```
 
 ## 🇺🇸 English
 
-**Name:** ⛳ Pop Golf Party
+**Name:** ⛳ Pop Golf Party [2v2 Team Battle Golf]
 
 **Description:**
 ```
-⛳ Battle mini-golf where everyone shoots at the same time!
+⛳ 2v2 Team Battle Golf! First team to sink their ball wins the hole!
 
-Up to 8 players race on the same hole. No waiting for turns — first one in the cup wins!
+🔴 Red Team vs 🔵 Blue Team — one ball per team!
+🏃 Run around the course and hit your team's ball
+🏌️ Swing your club to knock down rivals or whack their ball away!
 
-❓ Grab item boxes on the course and mess with your friends
-• 💣 Bomb — blast nearby balls away
-• 🧊 Freeze — freeze the leader's ball!
-• ⚡ Super Shot · 🧲 Magnet · 🌀 Twister
+👫 Teamwork matters
+• One player shoots, the other plays defense
+• When time runs out, the team closest to the cup wins
+
+❓ Item boxes on the course
+• 💣 Water Bomb · 🧊 Freeze · 👟 Dash Shoes · 🛡️ Shield · 🌬️ Gust
 
 ✨ Features
-• A brand-new course every hole (twisty paths, bumpers, spinners, boost pads)
-• 3 holes per match, points decide the winner
-• 🎉 Hole-in-one bonus!
-• 🎨 21 ball skins — get them from capsules or buy directly with shards (odds shown in-game, cosmetic only)
+• A brand-new course every hole
+• 🎨 21 club skins — from capsules or buy directly with shards (odds shown in-game, cosmetic only)
 
-👫 Even funnier with friends!
 👍 Like and favorite if you had fun!
 ```

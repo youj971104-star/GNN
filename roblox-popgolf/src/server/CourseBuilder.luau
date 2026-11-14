@@ -176,6 +176,11 @@ function CourseBuilder.Build(holeNumber, seed)
 				local wallCenter = center + dir3 * (T / 2) + UP * (Config.Course.wallHeight / 2)
 				local size = (d.X ~= 0) and Vector3.new(1, Config.Course.wallHeight, T + 1) or Vector3.new(T + 1, Config.Course.wallHeight, 1)
 				part({ Name = "Wall", Size = size, CFrame = CFrame.new(wallCenter), Color = theme.wall, Material = Enum.Material.SmoothPlastic }, folder)
+				-- 투명 울타리: 선수가 벽을 뛰어넘어 코스 밖으로 떨어지지 않게
+				local fenceH = Config.Course.fenceHeight - Config.Course.wallHeight
+				local fenceCenter = center + dir3 * (T / 2) + UP * (Config.Course.wallHeight + fenceH / 2)
+				local fsize = (d.X ~= 0) and Vector3.new(1, fenceH, T + 1) or Vector3.new(T + 1, fenceH, 1)
+				part({ Name = "Fence", Size = fsize, CFrame = CFrame.new(fenceCenter), Transparency = 1, CanQuery = false }, folder)
 			end
 		end
 	end
@@ -236,8 +241,8 @@ function CourseBuilder.Build(holeNumber, seed)
 	for _ = 1, math.min(Config.Course.itemBoxesPerHole, #picks) do
 		local idx = table.remove(picks, rng:NextInteger(1, #picks))
 		local center = world(origin, cells[idx])
-		local off = Vector3.new(rng:NextNumber(-5, 5), 0, rng:NextNumber(-5, 5))
-		local box = part({ Name = "ItemBox", Size = Vector3.new(2.4, 2.4, 2.4), CFrame = CFrame.new(center + off + UP * 1.8) * CFrame.Angles(math.rad(45), math.rad(45), 0), Color = Color3.fromRGB(255, 210, 60), Material = Enum.Material.Neon, Transparency = 0.15, CanCollide = false }, folder)
+		local off = Vector3.new(rng:NextNumber(-8, 8), 0, rng:NextNumber(-8, 8))
+		local box = part({ Name = "ItemBox", Size = Vector3.new(3, 3, 3), CFrame = CFrame.new(center + off + UP * 3) * CFrame.Angles(math.rad(45), math.rad(45), 0), Color = Color3.fromRGB(255, 210, 60), Material = Enum.Material.Neon, Transparency = 0.15, CanCollide = false }, folder)
 		local gui = Instance.new("BillboardGui")
 		gui.Size = UDim2.fromOffset(40, 40)
 		gui.AlwaysOnTop = false
@@ -280,11 +285,19 @@ function CourseBuilder.Build(holeNumber, seed)
 	return hole
 end
 
--- 출발 위치: 티 위에 사람 수만큼 나란히
-function CourseBuilder.TeePosition(hole, i, count)
+-- 팀 공 출발 위치: 티 위에 팀마다 좌우로 나란히
+function CourseBuilder.BallStart(hole, teamIndex, teamCount)
 	local side = Vector3.new(hole.startDir.Z, 0, -hole.startDir.X)
-	local spread = (i - (count + 1) / 2) * 2.6
+	local spread = (teamIndex - (teamCount + 1) / 2) * 7
 	return hole.tee + side * spread + UP * (Config.Ball.diameter / 2 + 0.2)
+end
+
+-- 선수 출발 위치: 우리 팀 공 바로 뒤
+function CourseBuilder.PlayerStart(hole, teamIndex, teamCount, slot)
+	local ballPos = CourseBuilder.BallStart(hole, teamIndex, teamCount)
+	local side = Vector3.new(hole.startDir.Z, 0, -hole.startDir.X)
+	local pos = ballPos - hole.startDir * 6 + side * ((slot - 1.5) * 3) + UP * 3
+	return CFrame.lookAt(pos, pos + hole.startDir)
 end
 
 function CourseBuilder.Clear()
