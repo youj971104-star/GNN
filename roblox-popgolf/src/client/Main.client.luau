@@ -9,6 +9,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Format)
 local UIKit = require(script.Parent.UIKit)
 local Shot = require(script.Parent.Shot)
+local ClubFX = require(script.Parent.ClubFX)
 
 local C = UIKit.C
 local new, label, button = UIKit.new, UIKit.label, UIKit.button
@@ -25,6 +26,7 @@ end)
 local state
 local info = { phase = "Waiting", hole = 0, holes = 3, timeLeft = 0, teams = {}, golf = { teams = {}, players = {} }, theme = "", need = 1 }
 local endsAt = 0
+ClubFX.Start()
 local screen = UIKit.Screen("PopGolfUI")
 screen.isReady = function()
 	return state ~= nil
@@ -215,6 +217,28 @@ screen.menu("Gacha", "🎰\n캡슐", Color3.fromRGB(255, 120, 180), "🎰 캡슐
 	end
 end)
 
+-- 스킨 연출 요약 아이콘 (✨ 입자 · 🔮 빛구슬 · ⭕ 고리 · 🌈 무지개 · 💥 충격파)
+local function fxIcons(skinId)
+	local fx = Config.GetFx(skinId)
+	local icons = {}
+	if fx.aura then
+		table.insert(icons, fx.texture == "fire" and "🔥" or (fx.texture == "smoke" and "❄️" or "✨"))
+	end
+	if fx.orbit then
+		table.insert(icons, "🔮" .. fx.orbit.count)
+	end
+	if fx.ring then
+		table.insert(icons, "⭕")
+	end
+	if fx.rainbow then
+		table.insert(icons, "🌈")
+	end
+	if fx.burst.shock then
+		table.insert(icons, "💥")
+	end
+	return table.concat(icons, " ")
+end
+
 ----------------------------------------------------------------------
 -- 메뉴: 내 골프채 (컬렉션 / 조각 상점)
 ----------------------------------------------------------------------
@@ -225,18 +249,19 @@ screen.menu("Clubs", "🏌️\n골프채", Color3.fromRGB(90, 160, 255), "🏌�
 	end
 	UIKit.paragraph(parent, string.format("모은 골프채 %d / %d · 🧩 조각 %d개", owned, #Config.SkinOrder, state.shards), 1, 26)
 	local grid = new("Frame", { Parent = parent, LayoutOrder = 2, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }, {
-		new("UIGridLayout", { CellSize = UDim2.fromOffset(112, 140), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIGridLayout", { CellSize = UDim2.fromOffset(120, 170), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	for i, id in ipairs(Config.SkinOrder) do
 		local skin = Config.Skins[id]
 		local has = state.skins[id] == true
 		local equipped = state.equipped == id
 		local card = new("Frame", { Parent = grid, LayoutOrder = i, BackgroundColor3 = equipped and C.cardHi or C.card }, { UIKit.corner(10), UIKit.stroke(rarityColor(skin.rarity), equipped and 3 or 1.5) })
-		-- 골프채 머리 모양 미리보기
-		new("Frame", { Parent = card, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 6, 0, 10), Size = UDim2.fromOffset(6, 40), BackgroundColor3 = Color3.fromRGB(80, 80, 90), Rotation = 20 })
-		new("Frame", { Parent = card, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, -4, 0, 40), Size = UDim2.fromOffset(28, 14), BackgroundColor3 = skin.color, BackgroundTransparency = has and 0 or 0.6 }, { UIKit.corner(4), UIKit.stroke(Color3.new(0, 0, 0), 1) })
-		label({ Parent = card, Position = UDim2.fromOffset(4, 58), Size = UDim2.new(1, -8, 0, 22), Text = skin.name })
-		label({ Parent = card, Position = UDim2.fromOffset(4, 80), Size = UDim2.new(1, -8, 0, 16), TextColor3 = rarityColor(skin.rarity), Text = Config.RarityById[skin.rarity].name })
+		-- 빙글빙글 도는 3D 미리보기 (없는 건 흐리게)
+		ClubFX.Preview(card, id, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.fromOffset(96, 64), ImageTransparency = has and 0 or 0.55 })
+		ClubFX.Shine(card:FindFirstChildOfClass("UIStroke"), skin.rarity)
+		label({ Parent = card, Position = UDim2.fromOffset(4, 68), Size = UDim2.new(1, -8, 0, 22), Text = skin.name })
+		label({ Parent = card, Position = UDim2.fromOffset(4, 90), Size = UDim2.new(1, -8, 0, 16), TextColor3 = rarityColor(skin.rarity), Text = Config.RarityById[skin.rarity].name })
+		label({ Parent = card, Position = UDim2.fromOffset(4, 106), Size = UDim2.new(1, -8, 0, 18), Text = fxIcons(id) })
 		local text, color, fn
 		if equipped then
 			text, color = "장착 중", C.gray
@@ -309,12 +334,12 @@ end)
 local resultOverlay = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35, Visible = false, ZIndex = 30, Parent = screen.gui })
 local resultGrid = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.48),
-	Size = UDim2.fromOffset(620, 300),
+	Position = UDim2.fromScale(0.5, 0.46),
+	Size = UDim2.fromOffset(620, 330),
 	BackgroundTransparency = 1,
 	ZIndex = 31,
 	Parent = resultOverlay,
-}, { new("UIGridLayout", { CellSize = UDim2.fromOffset(112, 136), CellPadding = UDim2.fromOffset(10, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
+}, { new("UIGridLayout", { CellSize = UDim2.fromOffset(112, 150), CellPadding = UDim2.fromOffset(10, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
 button({ Parent = resultOverlay, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -40), Size = UDim2.fromOffset(200, 54), BackgroundColor3 = C.green, Text = "확인", ZIndex = 32 }, function()
 	resultOverlay.Visible = false
 end)
@@ -326,13 +351,30 @@ remotes:WaitForChild("GachaResult").OnClientEvent:Connect(function(results)
 		end
 	end
 	resultOverlay.Visible = true
+	-- 전설 이상이 나오면 화면이 번쩍!
+	local best = 1
+	for _, r in ipairs(results) do
+		best = math.max(best, Config.RarityById[r.rarity].index)
+	end
+	if best >= 4 then
+		local flashColor = best >= 5 and Color3.fromRGB(255, 120, 200) or Color3.fromRGB(255, 200, 80)
+		resultOverlay.BackgroundColor3 = flashColor
+		resultOverlay.BackgroundTransparency = 0
+		game:GetService("TweenService"):Create(resultOverlay, TweenInfo.new(0.8), { BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35 }):Play()
+		screen.banner(best >= 5 and "🌈 신화 등장!!" or "✨ 전설 등장!", 2.5, flashColor)
+	else
+		resultOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
+		resultOverlay.BackgroundTransparency = 0.35
+	end
 	for i, r in ipairs(results) do
 		local skin = Config.Skins[r.skin]
 		local card = new("Frame", { Parent = resultGrid, LayoutOrder = i, BackgroundColor3 = C.card, ZIndex = 32, Visible = false }, { UIKit.corner(12), UIKit.stroke(rarityColor(r.rarity), 3) })
-		new("Frame", { Parent = card, ZIndex = 33, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 22), Size = UDim2.fromOffset(44, 22), BackgroundColor3 = skin.color }, { UIKit.corner(6) })
-		label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 66), Size = UDim2.new(1, -8, 0, 22), Text = skin.name })
-		label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 88), Size = UDim2.new(1, -8, 0, 18), TextColor3 = rarityColor(r.rarity), Text = Config.RarityById[r.rarity].name })
-		label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 108), Size = UDim2.new(1, -8, 0, 20), TextColor3 = r.new and C.gold or C.sub, Text = r.new and "✨ NEW!" or ("🧩 +" .. r.shards) })
+		ClubFX.Preview(card, r.skin, { ZIndex = 33, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.fromOffset(96, 64) })
+		ClubFX.Shine(card:FindFirstChildOfClass("UIStroke"), r.rarity)
+		label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 70), Size = UDim2.new(1, -8, 0, 22), Text = skin.name })
+		label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 92), Size = UDim2.new(1, -8, 0, 18), TextColor3 = rarityColor(r.rarity), Text = Config.RarityById[r.rarity].name })
+		label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 110), Size = UDim2.new(1, -8, 0, 16), Text = fxIcons(r.skin) })
+		label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 128), Size = UDim2.new(1, -8, 0, 18), TextColor3 = r.new and C.gold or C.sub, Text = r.new and "✨ NEW!" or ("🧩 +" .. r.shards) })
 		task.delay(0.12 * i, function()
 			card.Visible = true
 			UIKit.pop(card)

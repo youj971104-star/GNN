@@ -1,4 +1,6 @@
--- 골프채: 캐릭터 손에 쥐어 주고, 스킨(가챠로 얻는 꾸미기)을 입히고, 휘두르는 모습을 보여 줍니다.
+-- 골프채: 캐릭터 손에 쥐어 주고, 스킨 색·재질을 입히고, 휘두르는 모습을 보여 줍니다.
+-- 빛 입자·빛구슬·고리 같은 화려한 연출은 각 플레이어 화면(client/ClubFX)이 그립니다.
+-- 서버는 골프채에 "Skin" 속성만 달아 두면 됨 → 서버 부담 없음
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -11,63 +13,16 @@ local SWING_GRIPS = {
 	CFrame.new(0, 0, -1.6) * CFrame.Angles(math.rad(70), 0, 0), -- 휘두르기
 }
 
-local function applySkin(tool, skinId)
-	local skin = Config.Skins[skinId] or Config.Skins.White
-	local head = tool:FindFirstChild("Head")
-	local shaft = tool:FindFirstChild("Handle")
-	if not (head and shaft) then
-		return
-	end
-	head.Color = skin.color
-	head.Material = Enum.Material[skin.material] or Enum.Material.SmoothPlastic
-	for _, c in ipairs(head:GetChildren()) do
-		if not c:IsA("WeldConstraint") and not c:IsA("Attachment") then
-			c:Destroy()
-		end
-	end
-	if skin.trail then
-		local a0 = Instance.new("Attachment")
-		a0.Position = Vector3.new(0, 0.4, 0)
-		a0.Parent = head
-		local a1 = Instance.new("Attachment")
-		a1.Position = Vector3.new(0, -0.4, 0)
-		a1.Parent = head
-		local trail = Instance.new("Trail")
-		trail.Attachment0 = a0
-		trail.Attachment1 = a1
-		trail.Lifetime = 0.25
-		trail.LightEmission = 0.7
-		trail.Transparency = NumberSequence.new(0.1, 1)
-		local kps = {}
-		for i, c in ipairs(skin.trail) do
-			table.insert(kps, ColorSequenceKeypoint.new((i - 1) / math.max(1, #skin.trail - 1), c))
-		end
-		trail.Color = ColorSequence.new(kps)
-		trail.Parent = head
-	end
-	if skin.effect == "Sparkles" then
-		local s = Instance.new("Sparkles")
-		s.SparkleColor = skin.color
-		s.Parent = head
-	elseif skin.effect == "Fire" then
-		local f = Instance.new("Fire")
-		f.Size = 1.5
-		f.Heat = 1
-		f.Color = skin.color
-		f.Parent = head
-	elseif skin.effect == "Smoke" then
-		local sm = Instance.new("Smoke")
-		sm.Size = 0.4
-		sm.Opacity = 0.15
-		sm.RiseVelocity = 1
-		sm.Parent = head
-	elseif skin.effect == "Light" then
-		local l = Instance.new("PointLight")
-		l.Color = skin.color
-		l.Range = 8
-		l.Brightness = 2
-		l.Parent = head
-	end
+local function weldTo(base, part, offset)
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Massless = true
+	part.CFrame = base.CFrame * offset
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = base
+	w.Part1 = part
+	w.Parent = part
 end
 
 local function makeTool()
@@ -78,27 +33,74 @@ local function makeTool()
 	tool.RequiresHandle = true
 	tool.Grip = REST_GRIP
 
+	-- 샤프트(손잡이 막대)
 	local shaft = Instance.new("Part")
 	shaft.Name = "Handle"
-	shaft.Size = Vector3.new(0.25, 0.25, 4.2)
-	shaft.Color = Color3.fromRGB(60, 60, 70)
+	shaft.Size = Vector3.new(0.22, 0.22, 4.2)
+	shaft.Color = Color3.fromRGB(190, 195, 205)
 	shaft.Material = Enum.Material.Metal
 	shaft.CanCollide = false
 	shaft.Massless = true
 	shaft.Parent = tool
 
+	-- 그립 (손 쪽 고무)
+	local grip = Instance.new("Part")
+	grip.Name = "Grip"
+	grip.Size = Vector3.new(0.32, 0.32, 1.1)
+	grip.Color = Color3.fromRGB(35, 35, 40)
+	grip.Material = Enum.Material.Fabric
+	weldTo(shaft, grip, CFrame.new(0, 0, 1.6))
+	grip.Parent = tool
+
+	-- 금속 띠 (머리와 샤프트 이음새)
+	local ferrule = Instance.new("Part")
+	ferrule.Name = "Ferrule"
+	ferrule.Shape = Enum.PartType.Cylinder
+	ferrule.Size = Vector3.new(0.35, 0.34, 0.34)
+	ferrule.Color = Color3.fromRGB(255, 215, 120)
+	ferrule.Material = Enum.Material.Foil
+	weldTo(shaft, ferrule, CFrame.new(0, 0, -1.95) * CFrame.Angles(0, math.rad(90), 0))
+	ferrule.Parent = tool
+
+	-- 머리 (스킨 색)
 	local head = Instance.new("Part")
 	head.Name = "Head"
-	head.Size = Vector3.new(0.5, 0.7, 1.4)
-	head.CanCollide = false
-	head.Massless = true
-	head.CFrame = shaft.CFrame * CFrame.new(0, -0.2, -2.1)
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = shaft
-	weld.Part1 = head
-	weld.Parent = head
+	head.Size = Vector3.new(0.55, 0.75, 1.5)
+	weldTo(shaft, head, CFrame.new(0, -0.25, -2.25))
 	head.Parent = tool
+
+	-- 머리에 박힌 보석 (영웅 등급 이상에서 보임)
+	local gem = Instance.new("Part")
+	gem.Name = "Gem"
+	gem.Shape = Enum.PartType.Ball
+	gem.Size = Vector3.one * 0.38
+	gem.Material = Enum.Material.Neon
+	gem.Transparency = 1
+	weldTo(head, gem, CFrame.new(0.3, 0.05, 0))
+	gem.Parent = tool
+
 	return tool
+end
+
+local function applySkin(tool, skinId)
+	local skin = Config.Skins[skinId] or Config.Skins.White
+	local head = tool:FindFirstChild("Head")
+	local gem = tool:FindFirstChild("Gem")
+	local ferrule = tool:FindFirstChild("Ferrule")
+	if not head then
+		return
+	end
+	head.Color = skin.color
+	head.Material = Enum.Material[skin.material] or Enum.Material.SmoothPlastic
+	local rarityIndex = Config.RarityById[skin.rarity].index
+	if gem then
+		gem.Transparency = rarityIndex >= 3 and 0 or 1
+		gem.Color = (skin.trail and skin.trail[#skin.trail]) or skin.color
+	end
+	if ferrule then
+		ferrule.Color = rarityIndex >= 4 and Color3.fromRGB(255, 215, 120) or Color3.fromRGB(170, 175, 185)
+	end
+	tool:SetAttribute("Skin", skinId) -- 클라이언트 ClubFX 가 이걸 보고 연출을 붙임
 end
 
 -- 캐릭터에게 골프채를 쥐어 줌 (이미 있으면 스킨만 갱신)
@@ -130,7 +132,7 @@ function Club.Remove(player)
 	end
 end
 
--- 휘두르는 모습 (Grip 을 빠르게 바꿈)
+-- 휘두르는 모습 (Grip 을 빠르게 바꿈). Swinging 속성이 켜지면 클라이언트가 폭발 연출을 터뜨림
 function Club.SwingVisual(player)
 	local character = player.Character
 	local tool = character and character:FindFirstChild("GolfClub")

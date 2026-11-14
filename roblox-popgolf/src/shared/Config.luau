@@ -119,15 +119,56 @@ Config.Skins = {
 	Lava = { name = "용암", rarity = "Epic", color = Color3.fromRGB(255, 90, 30), material = "Neon", effect = "Fire", trail = { Color3.fromRGB(255, 220, 80), Color3.fromRGB(255, 50, 20) } },
 	Galaxy = { name = "은하", rarity = "Epic", color = Color3.fromRGB(70, 40, 140), material = "Glass", effect = "Sparkles", trail = { Color3.fromRGB(120, 80, 255), Color3.fromRGB(255, 120, 220) } },
 	Neon = { name = "네온", rarity = "Epic", color = Color3.fromRGB(60, 255, 200), material = "Neon", effect = "Light", trail = { Color3.fromRGB(60, 255, 200), Color3.fromRGB(60, 120, 255) } },
-	Frost = { name = "서리", rarity = "Epic", color = Color3.fromRGB(200, 240, 255), material = "Ice", effect = "Smoke", trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(160, 220, 255) } },
+	Frost = { fx = { texture = "smoke" }, name = "서리", rarity = "Epic", color = Color3.fromRGB(200, 240, 255), material = "Ice", effect = "Smoke", trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(160, 220, 255) } },
 	Sun = { name = "태양", rarity = "Legendary", color = Color3.fromRGB(255, 200, 40), material = "Neon", effect = "Fire", trail = { Color3.fromRGB(255, 255, 160), Color3.fromRGB(255, 120, 0) } },
-	Rainbow = { name = "무지개", rarity = "Legendary", color = Color3.fromRGB(255, 255, 255), material = "Neon", effect = "Sparkles", trail = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 80), Color3.fromRGB(80, 220, 120), Color3.fromRGB(80, 160, 255), Color3.fromRGB(190, 100, 255) } },
+	Rainbow = { fx = { rainbow = true }, name = "무지개", rarity = "Legendary", color = Color3.fromRGB(255, 255, 255), material = "Neon", effect = "Sparkles", trail = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 80), Color3.fromRGB(80, 220, 120), Color3.fromRGB(80, 160, 255), Color3.fromRGB(190, 100, 255) } },
 	Gold = { name = "황금", rarity = "Legendary", color = Color3.fromRGB(255, 200, 80), material = "Foil", effect = "Sparkles", trail = { Color3.fromRGB(255, 240, 160), Color3.fromRGB(220, 150, 30) } },
 	Comet = { name = "혜성", rarity = "Mythic", color = Color3.fromRGB(150, 220, 255), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(120, 200, 255), Color3.fromRGB(80, 60, 255) } },
 	Aurora = { name = "오로라", rarity = "Mythic", color = Color3.fromRGB(120, 255, 200), material = "Glass", effect = "Sparkles", trail = { Color3.fromRGB(90, 255, 190), Color3.fromRGB(110, 140, 255), Color3.fromRGB(230, 120, 255) } },
 	-- 뽑기로 나오지 않는 VIP 전용 스킨 (게임패스는 확률형 아이템을 줄 수 없음)
 	VIPCrown = { name = "👑 VIP 왕관", rarity = "Legendary", color = Color3.fromRGB(255, 215, 90), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 240, 150), Color3.fromRGB(255, 180, 40) }, exclusive = "VIP" },
 }
+
+----------------------------------------------------------------------
+-- 골프채 연출 (각자 화면에서 그림). 등급이 높을수록 화려해짐
+--   aura  : 머리에서 계속 나오는 빛 입자
+--   orbit : 머리 주위를 도는 빛구슬
+--   ring  : 머리를 감싸고 도는 빛 고리
+--   pulse : 빛이 숨 쉬듯 밝아졌다 어두워짐
+--   rainbow : 색이 무지개처럼 계속 바뀜
+--   burst : 휘두를 때 터지는 입자 (shock = 충격파 고리, punch = 내 화면 살짝 흔들림)
+-- 스킨에 fx = {...} 를 직접 적으면 그 값이 우선합니다.
+----------------------------------------------------------------------
+local RARITY_FX = {
+	Common = { burst = { count = 10 } },
+	Rare = { aura = { rate = 6, size = 0.35 }, burst = { count = 18 } },
+	Epic = { aura = { rate = 14, size = 0.45 }, orbit = { count = 2, radius = 1.3, speed = 3 }, pulse = true, burst = { count = 28, shock = true } },
+	Legendary = { aura = { rate = 22, size = 0.55 }, orbit = { count = 3, radius = 1.5, speed = 3.5 }, ring = true, pulse = true, burst = { count = 45, shock = true, punch = true } },
+	Mythic = { aura = { rate = 32, size = 0.6 }, orbit = { count = 4, radius = 1.7, speed = 4.5 }, ring = true, pulse = true, rainbow = true, burst = { count = 70, shock = true, punch = true } },
+}
+local EFFECT_TEXTURE = { Fire = "fire", Smoke = "smoke" }
+
+-- 스킨 하나의 최종 연출 값
+function Config.GetFx(skinId)
+	local skin = Config.Skins[skinId] or Config.Skins.White
+	local base = RARITY_FX[skin.rarity] or RARITY_FX.Common
+	local colors = skin.trail or { skin.color, Color3.new(1, 1, 1) }
+	local fx = {
+		colors = colors,
+		texture = EFFECT_TEXTURE[skin.effect or ""] or "sparkle",
+		aura = base.aura and table.clone(base.aura),
+		orbit = base.orbit and table.clone(base.orbit),
+		ring = base.ring,
+		pulse = base.pulse,
+		rainbow = base.rainbow,
+		burst = table.clone(base.burst),
+	}
+	for k, v in pairs(skin.fx or {}) do
+		fx[k] = v
+	end
+	return fx
+end
+
 
 ----------------------------------------------------------------------
 -- 캡슐 뽑기 (가챠) — 확률은 게임 안에 항상 표시

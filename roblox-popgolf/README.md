@@ -19,6 +19,7 @@
 | StarterPlayer → StarterPlayerScripts | Folder | `Client` | |
 | └ Client | **LocalScript** | `Main` | `src/client/Main.client.luau` |
 | └ Client | ModuleScript | `Shot` | `src/client/Shot.luau` |
+| └ Client | ModuleScript | `ClubFX` | `src/client/ClubFX.luau` |
 | └ Client | ModuleScript | `UIKit` | `src/client/UIKit.luau` |
 
 Rojo 를 쓰면 이 폴더에서 `rojo serve` → Studio 플러그인에서 Connect.
