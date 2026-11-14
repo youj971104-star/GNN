@@ -1,4 +1,4 @@
-# ⛳ 펑! 골프 파티 — 로블록스 게임 소스
+# ⛳ 팝골프 — 로블록스 게임 소스
 
 기획(타깃 연령, 가챠 설계, 수익 모델)은 [GAME_DESIGN.md](GAME_DESIGN.md), 게임 페이지 설명은 [STORE_DESCRIPTION.md](STORE_DESCRIPTION.md), 이미지는 [images/](images/) 를 보세요.
 

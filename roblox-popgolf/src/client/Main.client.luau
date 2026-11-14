@@ -1,4 +1,4 @@
--- ⛳ 펑! 골프 파티 클라이언트 UI (2대2 팀 배틀 골프)
+-- ⛳ 팝골프 클라이언트 UI (2대2 팀 배틀 골프)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -422,7 +422,7 @@ remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	elseif red then
 		scoreLabel.Text = "🔴 연습 경기"
 	else
-		scoreLabel.Text = "⛳ 펑! 골프 파티"
+		scoreLabel.Text = "⛳ 팝골프"
 	end
 	local myTeam = player:GetAttribute("Team")
 	if myTeam then
