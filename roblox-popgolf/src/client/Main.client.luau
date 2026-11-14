@@ -122,7 +122,7 @@ local function roundButton(text, color, position, size)
 	}, { UIKit.corner(size / 2), UIKit.stroke(Color3.new(1, 1, 1), 3), new("UIPadding", { PaddingTop = UDim.new(0, 16), PaddingBottom = UDim.new(0, 16), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }) })
 end
 
-local shotButton = roundButton("⛳\n꾹 눌러 샷", C.green, UDim2.new(1, -20, 1, -30), 116)
+local shotButton = roundButton("🏌️\n꾹 눌렀다\n떼기", C.green, UDim2.new(1, -20, 1, -30), 120)
 shotButton.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 		Shot.BeginCharge()
@@ -133,8 +133,6 @@ shotButton.InputEnded:Connect(function(input)
 		Shot.Release()
 	end
 end)
-local swingButton = roundButton("🏌️\n휘두르기", Color3.fromRGB(255, 120, 80), UDim2.new(1, -146, 1, -30), 96)
-swingButton.Activated:Connect(Shot.Swing)
 
 local itemButton = button({
 	AnchorPoint = Vector2.new(1, 1),
@@ -152,18 +150,17 @@ Shot.Start({
 		powerFill.BackgroundColor3 = Color3.fromHSV(0.33 - p * 0.33, 0.85, 0.95)
 		powerText.Text = math.floor(p * 100) .. "%"
 	end,
-	setMode = function(playing, canShoot)
+	setMode = function(playing, ballNear)
 		shotButton.Visible = playing
-		swingButton.Visible = playing
-		shotButton.BackgroundColor3 = canShoot and C.green or C.gray
+		shotButton.BackgroundColor3 = ballNear and C.green or Color3.fromRGB(255, 130, 80)
 		if not playing then
 			hint.Text = ""
 		elseif player:GetAttribute("Stunned") then
 			hint.Text = "💫 넘어졌어요! 잠깐만..."
-		elseif canShoot then
-			hint.Text = "⛳ 우리 공 옆! 마우스 왼쪽 꾹 → 떼면 샷 (카메라 방향)"
+		elseif ballNear then
+			hint.Text = "⛳ 공이 사정권! 꾹 눌러 힘을 모았다가 떼면 카메라 방향으로 날아가요"
 		else
-			hint.Text = "🏃 우리 팀 공으로 달려가요 · 클릭/F: 휘두르기로 상대 방해 · E: 아이템"
+			hint.Text = "🏃 우리 공을 쫓아가요 · 상대가 가까우면 휘둘러서 넘어뜨리기 · 상대 공을 쳐 내는 것도 작전! · E: 아이템"
 		end
 	end,
 })
@@ -302,7 +299,7 @@ screen.menu("Stats", "📊\n기록", Color3.fromRGB(60, 190, 120), "📊 내 기
 		{ "🏆 승리", s.wins },
 		{ "🎮 경기 수", s.matches },
 		{ "⛳ 이긴 홀", s.holesWon },
-		{ "🎉 홀인원", s.holeInOnes },
+		{ "⛳ 우리 공 넣은 횟수", s.sinks or 0 },
 		{ "💫 넘어뜨린 횟수", s.knockouts },
 		{ "🎰 뽑은 캡슐", s.pulls },
 	}
@@ -315,12 +312,14 @@ end)
 
 screen.menu("Help", "❔\n방법", Color3.fromRGB(120, 120, 150), "❔ 하는 방법", function(parent)
 	local lines = {
-		"🔴🔵 2대2 팀전! 팀마다 공이 하나 있어요. 먼저 홀컵에 넣는 팀이 그 홀을 이겨요.",
-		"⛳ 우리 팀 공 옆에서 마우스 왼쪽을 꾹 눌렀다 떼면 샷. 파워 게이지가 왔다 갔다 해요. 카메라가 보는 방향으로 날아가요.",
-		"🏌️ 공에서 떨어져 있을 때 클릭(또는 F)하면 골프채를 휘둘러요. 앞의 상대를 넘어뜨리고, 상대 공을 쳐 낼 수 있어요!",
-		"👫 한 명은 공을 치고, 한 명은 상대를 막아 주는 작전이 좋아요.",
-		"❓ 상자를 지나가면 아이템! E 키로 사용: 💣 물풍선 · 🧊 얼음 · 👟 대시 · 🛡️ 방패 · 🌬️ 돌풍",
-		"⏱️ 시간이 끝나면 홀컵에 공이 더 가까운 팀이 이겨요. 홀 3개 중 더 많이 이긴 팀 우승!",
+		"🔴🔵 2대2 팀전! 팀마다 공이 하나. 타수는 없어요 — 우리 공을 먼저 홀컵에 넣는 팀이 그 홀을 이겨요.",
+		"🏌️ 마우스 왼쪽(모바일은 버튼)을 꾹 누르면 골프채가 뒤로 올라가며 힘이 모이고, 떼면 휘둘러요. 힘 게이지가 왔다 갔다 하니 타이밍!",
+		"💥 휘두르면 앞에 있는 건 다 맞아요: 공은 카메라 방향으로 높이 날아가고(그린 위에선 굴러가는 퍼팅), 상대 선수는 날아가 넘어져요.",
+		"😈 상대 팀 공도 칠 수 있어요! 홀컵에서 멀리 쳐 내 버리세요. 대신 잘못 쳐서 넣어 주면 상대 팀 득점!",
+		"👫 한 명은 우리 공을 몰고 가고, 한 명은 상대를 넘어뜨리거나 상대 공을 쳐 내는 작전이 좋아요.",
+		"❓ 페어웨이 위 상자 = 아이템! E 키로 사용: 💣 물풍선 · 🧊 얼음(상대 공 정지) · 👟 대시 · 🛡️ 방패 · 🌬️ 돌풍",
+		"🌳 러프(진한 풀)·🏖️ 벙커(모래)에선 공이 잘 안 굴러가요. 💦 연못에 빠지면 마지막으로 멈췄던 자리로!",
+		"⏱️ 시간이 끝나면 홀컵에 우리 공이 더 가까운 팀 승리. 홀 3개 중 더 많이 이긴 팀 우승!",
 		"💡 Shift 키(마우스 고정)를 켜면 조준이 편해요.",
 	}
 	for i, l in ipairs(lines) do
@@ -398,7 +397,7 @@ local function renderBoard()
 		local t = info.golf.teams[index]
 		if t then
 			order += 1
-			local status = t.sunk and "✅ 홀인" or string.format("%d타 · 홀컵까지 %d", t.strokes, t.dist)
+			local status = t.sunk and "✅ 홀인!" or string.format("홀컵까지 %d%s", t.dist, t.onGreen and " · 🟢 그린 위" or "")
 			label({ Parent = board, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 22), Font = UIKit.FONT_TITLE, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = team.color, Text = team.name .. (t.frozen and " 🧊" or "") })
 			order += 1
 			label({ Parent = board, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.sub, Text = status })

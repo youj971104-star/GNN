@@ -12,7 +12,7 @@ Config.MinPlayers = 1 -- 혼자서도 연습 가능 (1명이면 레드 팀만)
 Config.MaxPlayers = 4 -- 한 경기 인원 (서버 최대 인원도 4~6 추천, 넘치면 관전 후 다음 판)
 Config.Intermission = 15
 Config.HolesPerMatch = 3
-Config.HoleTime = 150 -- 홀 제한 시간. 끝나면 홀컵에 더 가까운 팀이 승리
+Config.HoleTime = 180 -- 홀 제한 시간. 끝나면 홀컵에 더 가까운 팀이 승리
 Config.Countdown = 3
 
 Config.Teams = {
@@ -20,36 +20,42 @@ Config.Teams = {
 	{ id = "Blue", name = "🔵 블루 팀", color = Color3.fromRGB(80, 150, 255), brick = BrickColor.new("Bright blue") },
 }
 
--- 공 물리
+-- 공 물리 (공은 포물선으로 날아가고, 그린 위에선 굴러가는 퍼팅)
 Config.Ball = {
 	diameter = 2.2,
-	maxShotSpeed = 130, -- 최대 파워 샷 속도(스터드/초)
-	loft = 0.14, -- 샷을 살짝 띄우는 비율 (작은 턱 넘기)
-	rollingDrag = 0.985, -- 0.1초마다 속도에 곱함 (작을수록 빨리 멈춤)
-	stopSpeed = 1.2, -- 이보다 느리면 멈춘 것으로 보고 다음 샷 가능
-	cupRadius = 2.8, -- 홀컵 판정 반경
-	cupMaxSpeed = 45, -- 이보다 빠르면 홀컵을 지나쳐 버림
+	maxSpeed = 165, -- 최대 파워 샷의 속도(스터드/초). 클수록 멀리
+	launchAngle = 36, -- 일반 샷 발사 각도(도). 클수록 높이 뜸
+	puttAngle = 4, -- 그린 위에서는 거의 굴림
+	puttPower = 0.38, -- 그린 위 샷 세기 배율 (섬세한 퍼팅)
+	cupRadius = 2.6, -- 홀컵 판정 반경
+	cupMaxSpeed = 32, -- 이보다 빠르면 홀컵을 지나쳐 버림
+	stopSpeed = 1.2,
+	-- 바닥 종류별 굴러가는 저항 (0.1초마다 속도에 곱함, 작을수록 빨리 멈춤)
+	drag = { Fairway = 0.975, Rough = 0.93, Green = 0.985, Sand = 0.8, Tee = 0.975 },
 }
 
--- 골프채 (치기 / 때리기)
+-- 휘두르기 (공치기 + 사람 치기가 하나의 동작)
+-- 꾹 누르면 골프채가 뒤로 올라가며 힘이 모이고, 떼면 휘두름 → 앞에 있는 공(우리 팀/상대 팀 모두)과 상대 선수가 맞음
 Config.Club = {
-	shotRange = 7, -- 우리 팀 공과 이 거리 안이면 꾹 눌러서 샷
-	swingRange = 8, -- 짧게 클릭하면 앞쪽 이 거리 안을 휘두름
-	swingCooldown = 0.9,
+	chargeCycle = 1.4, -- 힘 게이지가 0→100%→0 한 번 왕복하는 시간(초)
+	reach = 6.5, -- 몸 앞 이 거리 안의 공·선수가 맞음
+	cooldown = 0.55, -- 휘두르기 사이 최소 간격
+	impactDelay = 0.09, -- 떼고 나서 실제로 맞는 순간까지 (내려치는 모션과 맞춤)
 	stunTime = 1.6, -- 맞은 선수가 넘어져 있는 시간
-	knockback = 55, -- 맞은 선수가 날아가는 세기
-	enemyBallHit = 45, -- 휘둘러서 상대 공을 쳐 낼 때 속도 (상대 타수는 안 늘어남)
-	walkSpeed = 18,
+	knockback = 50, -- 맞은 선수가 날아가는 기본 세기 (힘 게이지에 비례해 커짐)
+	minPower = 0.12, -- 살짝 톡 쳐도 이만큼은 나감
+	walkSpeed = 24, -- 넓은 코스라 기본보다 빠르게
 }
 
--- 코스 생성 (캐릭터가 뛰어다니므로 넓게)
+-- 코스 생성 (실제 골프장처럼: 티 → 페어웨이 → 그린, 주변에 러프·벙커·연못·나무)
 Config.Course = {
-	tile = 30, -- 바닥 타일 한 칸 크기
-	minTiles = 6,
-	maxTiles = 10,
-	wallHeight = 3, -- 보이는 벽 높이 (공이 못 나가게)
-	fenceHeight = 14, -- 투명 울타리 높이 (선수가 못 나가게)
-	itemBoxesPerHole = 4,
+	length = { 260, 380 }, -- 티에서 그린까지 거리 범위
+	fairwayWidth = 46,
+	greenRadius = 26,
+	bunkers = { 2, 4 },
+	ponds = { 0, 2 },
+	trees = 40,
+	itemBoxes = 6,
 	itemBoxRespawn = 8,
 }
 
@@ -59,7 +65,7 @@ Config.Course = {
 Config.ItemOrder = { "Bomb", "Freeze", "Dash", "Shield", "Gust" }
 Config.Items = {
 	Bomb = { name = "💣 물풍선 폭탄", desc = "앞으로 던져서 터진 곳 주변 선수와 공을 날려요", weight = 25 },
-	Freeze = { name = "🧊 얼음", desc = "상대 팀 공을 5초 동안 얼려서 못 치게 해요", weight = 20 },
+	Freeze = { name = "🧊 얼음", desc = "상대 팀 공을 5초 동안 얼려서 아무도 못 치게 해요", weight = 20 },
 	Dash = { name = "👟 대시 신발", desc = "6초 동안 아주 빠르게 달려요", weight = 20 },
 	Shield = { name = "🛡️ 방패", desc = "8초 동안 맞아도 안 넘어져요", weight = 18 },
 	Gust = { name = "🌬️ 돌풍", desc = "상대 선수 모두를 공중으로 날려요", weight = 17 },

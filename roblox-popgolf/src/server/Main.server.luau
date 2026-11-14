@@ -22,7 +22,7 @@ DataService.Configure("PopGolfData_v2", function()
 		skins = { White = true },
 		equipped = "White",
 		pity = { sinceLegendary = 0 },
-		stats = { matches = 0, wins = 0, holesWon = 0, holeInOnes = 0, knockouts = 0, pulls = 0 },
+		stats = { matches = 0, wins = 0, holesWon = 0, sinks = 0, knockouts = 0, pulls = 0 },
 		lastDailyDay = 0,
 		lastVipGemDay = 0,
 		starterBought = false,
@@ -36,7 +36,7 @@ end)
 local remoteFolder = Instance.new("Folder")
 remoteFolder.Name = "Remotes"
 local remotes = {}
-for _, name in ipairs({ "State", "Match", "Notify", "Announce", "Shoot", "Swing", "UseItem", "GachaResult" }) do
+for _, name in ipairs({ "State", "Match", "Notify", "Announce", "ChargeStart", "Swing", "UseItem", "GachaResult" }) do
 	local r = Instance.new("RemoteEvent")
 	r.Name = name
 	r.Parent = remoteFolder
@@ -99,7 +99,6 @@ local match = {
 	endsAt = 0,
 	teams = {}, -- { {Player, Player}, {Player, Player} }
 	holeWins = {}, -- [teamIndex] = 이긴 홀 수
-	strokes = {}, -- [teamIndex] = 누적 타수 (동점일 때 비교)
 	lastHole = nil, -- { winner, reason }
 	theme = "",
 }
@@ -183,7 +182,6 @@ Golf.Start({
 	announce = announce,
 	ballStart = CourseBuilder.BallStart,
 	playerStart = CourseBuilder.PlayerStart,
-	swingVisual = Club.SwingVisual,
 	onChange = function()
 		changePending = true
 	end,
@@ -194,15 +192,14 @@ Golf.Start({
 			data.coins += Config.Rewards.knockout
 		end
 	end,
-	onSunk = function(teamIndex, strokes)
-		if strokes == 1 then
-			for _, p in ipairs(match.teams[teamIndex] or {}) do
-				local data = DataService.Get(p)
-				if data then
-					data.stats.holeInOnes += 1
-					data.gems += 5
-					notify(p, "🎉 홀인원 보너스 💎 +5", Color3.fromRGB(140, 220, 255))
-				end
+	onSunk = function(teamIndex, hitter)
+		-- 우리 팀 공을 직접 넣은 선수에게 보너스
+		if hitter and table.find(match.teams[teamIndex] or {}, hitter) then
+			local data = DataService.Get(hitter)
+			if data then
+				data.stats.sinks += 1
+				data.coins += 5
+				notify(hitter, "⛳ 홀인 보너스 🪙 +5", Color3.fromRGB(255, 230, 120))
 			end
 		end
 	end,
@@ -217,14 +214,14 @@ task.spawn(function()
 	end
 end)
 
-remotes.Shoot.OnServerEvent:Connect(function(player, direction, power)
+remotes.ChargeStart.OnServerEvent:Connect(function(player)
 	if match.phase == "Playing" then
-		Golf.Shoot(player, direction, power)
+		Golf.ChargeStart(player)
 	end
 end)
-remotes.Swing.OnServerEvent:Connect(function(player)
+remotes.Swing.OnServerEvent:Connect(function(player, direction, power)
 	if match.phase == "Playing" then
-		Golf.Swing(player)
+		Golf.Swing(player, direction, power)
 	end
 end)
 remotes.UseItem.OnServerEvent:Connect(function(player)
@@ -289,8 +286,6 @@ local function finishMatch()
 	if #match.teams >= 2 then
 		if w1 ~= w2 then
 			winnerTeam = w1 > w2 and 1 or 2
-		elseif (match.strokes[1] or 0) ~= (match.strokes[2] or 0) then
-			winnerTeam = (match.strokes[1] or 0) < (match.strokes[2] or 0) and 1 or 2
 		end
 	end
 
@@ -342,7 +337,6 @@ local function finishMatch()
 	end
 	match.teams = {}
 	match.holeWins = {}
-	match.strokes = {}
 	match.lastHole = nil
 	match.hole = 0
 	match.phase = "Waiting"
@@ -352,10 +346,8 @@ end
 local function playMatch(participants)
 	match.teams = makeTeams(participants)
 	match.holeWins = {}
-	match.strokes = {}
 	for index, members in ipairs(match.teams) do
 		match.holeWins[index] = 0
-		match.strokes[index] = 0
 		for _, p in ipairs(members) do
 			p:SetAttribute("Team", index)
 			p.Neutral = false
@@ -407,10 +399,6 @@ local function playMatch(participants)
 			end
 		end
 
-		local snap = Golf.Snapshot()
-		for index, t in pairs(snap.teams) do
-			match.strokes[index] = (match.strokes[index] or 0) + t.strokes
-		end
 		local holeWinner, reason = Golf.EndHole()
 		match.lastHole = { winner = holeWinner, reason = reason }
 		if holeWinner and #match.teams >= 2 then

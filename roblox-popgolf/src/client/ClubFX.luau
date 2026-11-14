@@ -73,10 +73,13 @@ local function detach(tool)
 	active[tool] = nil
 end
 
-local function burst(e)
+local function burst(e, full)
 	local fx = e.fx
 	if e.burstEmitter then
-		e.burstEmitter:Emit(fx.burst.count)
+		e.burstEmitter:Emit(full and fx.burst.count or math.ceil(fx.burst.count * 0.3))
+	end
+	if not full then
+		return -- 헛스윙: 작은 반짝임만
 	end
 	if fx.burst.shock and e.head.Parent then
 		local ring = glowPart(Enum.PartType.Cylinder, Vector3.new(0.15, 1, 1), fx.colors[1])
@@ -212,11 +215,15 @@ local function attach(tool)
 		e.ring = ring
 	end
 
-	table.insert(e.cleanup, tool:GetAttributeChangedSignal("Swinging"):Connect(function()
-		if tool:GetAttribute("Swinging") then
-			burst(e)
-		end
-	end))
+	-- 휘두를 때 작은 반짝임, 실제로 맞혔을 때 큰 폭발
+	if character then
+		table.insert(e.cleanup, character:GetAttributeChangedSignal("SwingId"):Connect(function()
+			task.delay(Config.Club.impactDelay, burst, e, false)
+		end))
+		table.insert(e.cleanup, character:GetAttributeChangedSignal("HitId"):Connect(function()
+			burst(e, true)
+		end))
+	end
 	active[tool] = e
 end
 
@@ -224,7 +231,7 @@ end
 local watched = setmetatable({}, { __mode = "k" }) -- 이미 감시 중인 골프채 (중복 연결 방지)
 
 local function watchTool(tool)
-	if not (tool:IsA("Tool") and tool.Name == "GolfClub") then
+	if not ((tool:IsA("Model") or tool:IsA("Tool")) and tool.Name == "GolfClub") then
 		return
 	end
 	if watched[tool] then

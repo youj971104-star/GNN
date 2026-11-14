@@ -1,8 +1,8 @@
--- 2대2 팀 배틀 골프의 핵심 규칙
--- * 팀마다 공 하나. 팀원 누구든 공 옆(Club.shotRange)에서 꾹 눌러 샷
--- * 짧게 클릭하면 골프채 휘두르기: 앞의 상대 선수는 넘어지고, 상대 공은 쳐 내짐
--- * ❓ 상자 아이템으로 방해
--- * 먼저 홀컵에 넣은 팀이 홀 승리. 시간이 끝나면 홀컵에 더 가까운 팀 승리
+-- 2대2 팀 배틀 골프 규칙 (휘두르기 하나로 공치기 + 사람 치기)
+-- * 꾹 누르면 힘을 모으고, 떼면 휘두름 → 몸 앞의 공(어느 팀 공이든)은 날아가고, 상대 선수는 넘어짐
+-- * 공은 포물선으로 날아가고, 그린 위에서는 굴리는 퍼팅
+-- * 타수 없음! 우리 공을 먼저 홀컵에 넣는 팀이 홀 승리 (상대 공을 쳐서 멀리 보내는 것도 작전)
+-- * 시간이 끝나면 우리 공이 홀컵에 더 가까운 팀 승리
 -- 모든 판정은 서버에서 합니다.
 
 local Players = game:GetService("Players")
@@ -19,9 +19,9 @@ local CL = Config.Club
 
 local ctx
 local hole
-local teams = {} -- [teamIndex] = { members = {Player}, ball = Part, strokes, sunk, lastRest, restTimer, frozenUntil }
+local teams = {} -- [teamIndex] = { members, ball, sunk, lastSafe, restTimer, frozenUntil, lastHitter }
 local playerTeam = {} -- [Player] = teamIndex
-local pstate = {} -- [Player] = { stunUntil, shieldUntil, item, lastSwing, lastShot, dashUntil }
+local pstate = {} -- [Player] = { stunUntil, shieldUntil, item, lastSwing, dashUntil }
 local winner = nil
 local active = false
 local ballsFolder
@@ -41,8 +41,10 @@ local function flat(v)
 	return Vector3.new(v.X, 0, v.Z)
 end
 
-local function grounded(ball)
-	return workspace:Raycast(ball.Position, Vector3.new(0, -(B.diameter / 2 + 0.6), 0), rayParams) ~= nil
+-- 공 아래 바닥 종류 (없으면 nil = 공중)
+local function surfaceUnder(ball)
+	local hit = workspace:Raycast(ball.Position, Vector3.new(0, -(B.diameter / 2 + 0.7), 0), rayParams)
+	return hit and hit.Instance.Name or nil
 end
 
 local function stopBall(ball)
@@ -50,7 +52,11 @@ local function stopBall(ball)
 	ball.AssemblyAngularVelocity = Vector3.zero
 end
 
--- 선수 캐릭터는 각자 컴퓨터가 물리를 담당하므로, 서버에서 날릴 땐 잠깐 힘(LinearVelocity)을 붙임
+local function onGreen(pos)
+	return flat(pos - hole.greenCenter).Magnitude < hole.greenRadius
+end
+
+-- 선수 캐릭터는 각자 컴퓨터가 물리를 담당하므로 잠깐 힘을 붙여서 날림
 local function fling(player, velocity)
 	local root = rootOf(player)
 	if not root then
@@ -124,21 +130,19 @@ local function makeBall(index, position)
 	ball.Position = position
 	ball.Color = team.color
 	ball.Material = Enum.Material.SmoothPlastic
-	ball.CustomPhysicalProperties = PhysicalProperties.new(2, 0.35, 0.45, 1, 1)
+	ball.CustomPhysicalProperties = PhysicalProperties.new(2, 0.4, 0.35, 1, 1)
 	ball.Anchored = true
 	ball:SetAttribute("Team", index)
-	ball:SetAttribute("Resting", true)
 
-	-- 벽 너머에서도 보이는 팀 색 테두리 + 이름표
 	local hl = Instance.new("Highlight")
-	hl.FillTransparency = 0.6
+	hl.FillTransparency = 0.5
 	hl.FillColor = team.color
 	hl.OutlineColor = Color3.new(1, 1, 1)
 	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	hl.Parent = ball
 	local gui = Instance.new("BillboardGui")
-	gui.Size = UDim2.fromOffset(110, 28)
-	gui.StudsOffset = Vector3.new(0, 2.6, 0)
+	gui.Size = UDim2.fromOffset(120, 30)
+	gui.StudsOffset = Vector3.new(0, 2.8, 0)
 	gui.AlwaysOnTop = true
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
@@ -151,18 +155,20 @@ local function makeBall(index, position)
 	label.Parent = gui
 	gui.Parent = ball
 
+	-- 날아갈 때 보이는 긴 꼬리
 	local a0 = Instance.new("Attachment")
-	a0.Position = Vector3.new(0, 0.6, 0)
+	a0.Position = Vector3.new(0, 0.7, 0)
 	a0.Parent = ball
 	local a1 = Instance.new("Attachment")
-	a1.Position = Vector3.new(0, -0.6, 0)
+	a1.Position = Vector3.new(0, -0.7, 0)
 	a1.Parent = ball
 	local trail = Instance.new("Trail")
 	trail.Attachment0 = a0
 	trail.Attachment1 = a1
-	trail.Lifetime = 0.4
-	trail.Color = ColorSequence.new(team.color)
-	trail.Transparency = NumberSequence.new(0.2, 1)
+	trail.Lifetime = 0.8
+	trail.LightEmission = 0.6
+	trail.Color = ColorSequence.new(team.color, Color3.new(1, 1, 1))
+	trail.Transparency = NumberSequence.new(0.1, 1)
 	trail.Parent = ball
 
 	ball.Parent = ballsFolder
@@ -172,7 +178,6 @@ end
 ----------------------------------------------------------------------
 -- 홀 시작 / 끝
 ----------------------------------------------------------------------
--- teamLists = { {Player, Player}, {Player, Player} }
 function Golf.BeginHole(newHole, teamLists)
 	hole = newHole
 	teams = {}
@@ -188,21 +193,20 @@ function Golf.BeginHole(newHole, teamLists)
 		teams[index] = {
 			members = members,
 			ball = makeBall(index, pos),
-			strokes = 0,
 			sunk = false,
-			lastRest = pos,
+			lastSafe = pos,
 			restTimer = 0,
 			frozenUntil = 0,
+			lastHitter = nil,
 		}
 		for slot, p in ipairs(members) do
 			playerTeam[p] = index
-			pstate[p] = { stunUntil = 0, shieldUntil = 0, item = nil, lastSwing = 0, lastShot = 0, dashUntil = 0 }
+			pstate[p] = { stunUntil = 0, shieldUntil = 0, item = nil, lastSwing = 0, dashUntil = 0 }
 			Golf.PlacePlayer(p, slot)
 		end
 	end
 end
 
--- 홀 시작 / 리스폰 때 우리 팀 공 근처로
 function Golf.PlacePlayer(player, slot)
 	local index = playerTeam[player]
 	if not (hole and index) then
@@ -216,8 +220,7 @@ function Golf.PlacePlayer(player, slot)
 	if slot then
 		cf = ctx.playerStart(hole, index, #teams, slot)
 	else
-		local ball = teams[index].ball
-		cf = CFrame.new(ball.Position + UP * 4 + Vector3.new(math.random(-3, 3), 0, math.random(-3, 3)))
+		cf = CFrame.new(teams[index].ball.Position + UP * 4 + Vector3.new(math.random(-4, 4), 0, math.random(-4, 4)))
 	end
 	character:PivotTo(cf)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -237,7 +240,6 @@ function Golf.Go()
 	end
 end
 
--- 홀 승리 팀 (먼저 넣은 팀, 아니면 홀컵에 더 가까운 팀)
 function Golf.EndHole()
 	active = false
 	if winner then
@@ -284,18 +286,14 @@ function Golf.RemovePlayer(player)
 	end
 end
 
-function Golf.TeamOf(player)
-	return playerTeam[player]
-end
-
 function Golf.Snapshot()
 	local teamInfo = {}
 	for index, t in pairs(teams) do
 		teamInfo[index] = {
-			strokes = t.strokes,
 			sunk = t.sunk,
 			frozen = t.frozenUntil > os.clock(),
 			dist = hole and math.floor(flat(t.ball.Position - hole.cup).Magnitude) or 0,
+			onGreen = hole and onGreen(t.ball.Position) or false,
 		}
 	end
 	local players = {}
@@ -309,94 +307,108 @@ function Golf.Snapshot()
 			shield = ps and ps.shieldUntil > os.clock(),
 		})
 	end
-	return { teams = teamInfo, players = players }
+	return { teams = teamInfo, players = players, length = hole and hole.length or 0 }
 end
 
 ----------------------------------------------------------------------
--- 샷 (우리 팀 공 옆에서 꾹 눌렀다 떼기)
+-- 힘 모으기 / 휘두르기
 ----------------------------------------------------------------------
-function Golf.Shoot(player, direction, power)
+-- 다른 사람 화면에서도 골프채가 뒤로 올라가는 모습이 보이도록 캐릭터에 표시
+function Golf.ChargeStart(player)
+	local ps = pstate[player]
+	local character = player.Character
+	if not (active and ps and character) or ps.stunUntil > os.clock() then
+		return
+	end
+	character:SetAttribute("ChargeStart", workspace:GetServerTimeNow())
+	character:SetAttribute("Charging", true)
+end
+
+local function launchBall(t, dir, power, hitter)
+	local pos = t.ball.Position
+	local speed = B.maxSpeed * math.max(power, CL.minPower)
+	local angle = B.launchAngle
+	if onGreen(pos) then
+		speed *= B.puttPower
+		angle = B.puttAngle
+	end
+	local rad = math.rad(angle)
+	t.ball:SetAttribute("Resting", false)
+	t.restTimer = 0
+	t.lastHitter = hitter
+	t.ball.AssemblyLinearVelocity = dir * (math.cos(rad) * speed) + UP * (math.sin(rad) * speed)
+	t.ball.AssemblyAngularVelocity = Vector3.new(dir.Z, 0, -dir.X) * -speed * 0.3 -- 앞으로 구르는 회전
+end
+
+function Golf.Swing(player, direction, power)
 	local index = playerTeam[player]
 	local ps = pstate[player]
-	local t = index and teams[index]
-	if not (active and t and ps) or t.sunk then
+	local character = player.Character
+	if not (active and index and ps and character) then
 		return
 	end
 	if typeof(direction) ~= "Vector3" or type(power) ~= "number" or power ~= power then
 		return
 	end
-	if ps.stunUntil > os.clock() or os.clock() - ps.lastShot < 0.5 then
+	local now = os.clock()
+	if ps.stunUntil > now or now - ps.lastSwing < CL.cooldown then
+		character:SetAttribute("Charging", false)
 		return
 	end
-	if not t.ball:GetAttribute("Resting") or t.frozenUntil > os.clock() then
-		return
-	end
-	local root = rootOf(player)
-	if not root or (root.Position - t.ball.Position).Magnitude > CL.shotRange + 1 then
-		return
-	end
+	ps.lastSwing = now
 	local dir = flat(direction)
 	if dir.Magnitude < 0.01 then
 		return
 	end
 	dir = dir.Unit
-	power = math.clamp(power, 0.05, 1)
-	local speed = B.maxShotSpeed * power
-	ps.lastShot = os.clock()
-	t.lastRest = t.ball.Position
-	t.strokes += 1
-	t.restTimer = 0
-	t.ball:SetAttribute("Resting", false)
-	t.ball.AssemblyLinearVelocity = dir * speed + UP * speed * B.loft
-	ctx.swingVisual(player)
-	ctx.onChange()
-end
+	power = math.clamp(power, 0, 1)
 
-----------------------------------------------------------------------
--- 휘두르기 (짧게 클릭)
-----------------------------------------------------------------------
-function Golf.Swing(player)
-	local index = playerTeam[player]
-	local ps = pstate[player]
-	if not (active and index and ps) then
-		return
-	end
-	local now = os.clock()
-	if ps.stunUntil > now or now - ps.lastSwing < CL.swingCooldown then
-		return
-	end
-	ps.lastSwing = now
-	local root = rootOf(player)
-	if not root then
-		return
-	end
-	ctx.swingVisual(player)
-	local look = flat(root.CFrame.LookVector).Unit
-	local origin = root.Position
+	-- 모든 화면에서 휘두르는 모션 재생
+	character:SetAttribute("Charging", false)
+	character:SetAttribute("SwingPower", power)
+	character:SetAttribute("SwingId", (character:GetAttribute("SwingId") or 0) + 1)
 
-	-- 앞의 상대 선수
-	for _, enemy in ipairs(enemiesOf(player)) do
-		local er = rootOf(enemy)
-		if er then
-			local offset = er.Position - origin
-			if offset.Magnitude <= CL.swingRange and flat(offset).Unit:Dot(look) > 0.2 then
-				stun(enemy, look * CL.knockback + UP * 30, player)
+	-- 내려치는 순간에 맞춰 판정
+	task.delay(CL.impactDelay, function()
+		local root = rootOf(player)
+		if not (active and root) then
+			return
+		end
+		local origin = root.Position
+		local hitSomething = false
+
+		-- 공 (우리 팀 공이든 상대 팀 공이든)
+		for _, t in pairs(teams) do
+			if not t.sunk and t.frozenUntil <= os.clock() then
+				local offset = t.ball.Position - origin
+				local fo = flat(offset)
+				local inFront = fo.Magnitude < 2.4 or (fo.Magnitude > 0.01 and fo.Unit:Dot(dir) > 0.15)
+				if fo.Magnitude <= CL.reach and inFront and math.abs(offset.Y) < 6 then
+					launchBall(t, dir, power, player)
+					hitSomething = true
+				end
 			end
 		end
-	end
-	-- 앞의 상대 공 (상대 타수는 안 늘어남)
-	for i, t in pairs(teams) do
-		if i ~= index and not t.sunk and t.frozenUntil <= now then
-			local offset = t.ball.Position - origin
-			if offset.Magnitude <= CL.swingRange and flat(offset).Magnitude > 0.1 and flat(offset).Unit:Dot(look) > 0.1 then
-				t.ball:SetAttribute("Resting", false)
-				t.restTimer = 0
-				t.ball.AssemblyLinearVelocity = look * CL.enemyBallHit + UP * 8
-				ctx.notify(player, "🏌️ 상대 공을 쳐 냈어요!", Color3.fromRGB(255, 230, 120))
+
+		-- 상대 선수
+		for _, enemy in ipairs(enemiesOf(player)) do
+			local er = rootOf(enemy)
+			if er then
+				local offset = er.Position - origin
+				local fo = flat(offset)
+				if fo.Magnitude <= CL.reach and fo.Magnitude > 0.01 and fo.Unit:Dot(dir) > 0.2 and math.abs(offset.Y) < 6 then
+					local k = CL.knockback * (0.6 + power)
+					stun(enemy, dir * k + UP * (20 + 25 * power), player)
+					hitSomething = true
+				end
 			end
 		end
-	end
-	ctx.onChange()
+
+		if hitSomething then
+			character:SetAttribute("HitId", (character:GetAttribute("HitId") or 0) + 1)
+			ctx.onChange()
+		end
+	end)
 end
 
 ----------------------------------------------------------------------
@@ -420,7 +432,7 @@ end
 local function explode(position, thrower)
 	local fx = Instance.new("Explosion")
 	fx.Position = position
-	fx.BlastRadius = 0 -- 연출만 (실제 힘은 아래에서 직접)
+	fx.BlastRadius = 0
 	fx.BlastPressure = 0
 	fx.DestroyJointRadiusPercent = 0
 	fx.Parent = workspace
@@ -435,14 +447,13 @@ local function explode(position, thrower)
 	splash.Size = Vector3.one * 2
 	splash.Position = position
 	splash.Parent = workspace
-	TweenService:Create(splash, TweenInfo.new(0.35), { Size = Vector3.one * 26, Transparency = 1 }):Play()
+	TweenService:Create(splash, TweenInfo.new(0.35), { Size = Vector3.one * 28, Transparency = 1 }):Play()
 	task.delay(0.4, function()
 		splash:Destroy()
 	end)
-
 	for _, enemy in ipairs(enemiesOf(thrower)) do
 		local er = rootOf(enemy)
-		if er and (er.Position - position).Magnitude < 14 then
+		if er and (er.Position - position).Magnitude < 15 then
 			local away = flat(er.Position - position)
 			away = away.Magnitude > 0.1 and away.Unit or Vector3.new(1, 0, 0)
 			stun(enemy, away * 60 + UP * 45, thrower)
@@ -450,12 +461,13 @@ local function explode(position, thrower)
 	end
 	local mine = playerTeam[thrower]
 	for i, t in pairs(teams) do
-		if i ~= mine and not t.sunk and t.frozenUntil <= os.clock() and (t.ball.Position - position).Magnitude < 14 then
+		if i ~= mine and not t.sunk and t.frozenUntil <= os.clock() and (t.ball.Position - position).Magnitude < 15 then
 			local away = flat(t.ball.Position - position)
 			away = away.Magnitude > 0.1 and away.Unit or Vector3.new(1, 0, 0)
 			t.ball:SetAttribute("Resting", false)
 			t.restTimer = 0
-			t.ball.AssemblyLinearVelocity += away * 60 + UP * 20
+			t.lastHitter = thrower
+			t.ball.AssemblyLinearVelocity += away * 55 + UP * 35
 		end
 	end
 end
@@ -469,22 +481,21 @@ local function throwBomb(player)
 	local bomb = Instance.new("Part")
 	bomb.Name = "WaterBomb"
 	bomb.Shape = Enum.PartType.Ball
-	bomb.Size = Vector3.one * 1.6
+	bomb.Size = Vector3.one * 1.8
 	bomb.Color = Color3.fromRGB(90, 180, 255)
 	bomb.Material = Enum.Material.Glass
 	bomb.CanCollide = false
 	bomb.Position = root.Position + look * 3 + UP * 2
 	bomb.Parent = workspace
-	bomb.AssemblyLinearVelocity = look * 55 + UP * 28
+	bomb.AssemblyLinearVelocity = look * 65 + UP * 32
 	pcall(function()
 		bomb:SetNetworkOwner(nil)
 	end)
 	task.spawn(function()
 		local start = os.clock()
-		while bomb.Parent and os.clock() - start < 1.6 do
+		while bomb.Parent and os.clock() - start < 1.8 do
 			task.wait(0.05)
-			local hit = workspace:Raycast(bomb.Position, Vector3.new(0, -1.2, 0), rayParams)
-			if hit and os.clock() - start > 0.2 then
+			if os.clock() - start > 0.2 and workspace:Raycast(bomb.Position, Vector3.new(0, -1.3, 0), rayParams) then
 				break
 			end
 		end
@@ -513,7 +524,7 @@ function Golf.UseItem(player)
 				stopBall(t.ball)
 				t.ball.Anchored = true
 				local ice = Instance.new("Part")
-				ice.Size = Vector3.one * (B.diameter + 1.6)
+				ice.Size = Vector3.one * (B.diameter + 1.8)
 				ice.CFrame = t.ball.CFrame
 				ice.Anchored = true
 				ice.CanCollide = false
@@ -535,7 +546,7 @@ function Golf.UseItem(player)
 	elseif item == "Dash" then
 		ps.dashUntil = os.clock() + 6
 		if humanoid then
-			humanoid.WalkSpeed = 32
+			humanoid.WalkSpeed = 40
 		end
 		task.delay(6, function()
 			local _, h = rootOf(player)
@@ -567,26 +578,32 @@ end
 ----------------------------------------------------------------------
 -- 매 프레임
 ----------------------------------------------------------------------
+local function resetBall(t, message)
+	stopBall(t.ball)
+	t.ball.CFrame = CFrame.new(t.lastSafe + UP * 1.5)
+	for _, m in ipairs(t.members) do
+		ctx.notify(m, message, Color3.fromRGB(255, 160, 140))
+	end
+end
+
 local function sink(index, t)
 	t.sunk = true
 	winner = winner or index
 	local ball = t.ball
 	ball.Anchored = true
-	ball:SetAttribute("Resting", true)
 	TweenService:Create(ball, TweenInfo.new(0.35), { Position = hole.cup - UP * 1.5, Transparency = 1 }):Play()
 	local team = Config.Teams[index]
-	ctx.onSunk(index, t.strokes)
-	if t.strokes == 1 then
-		ctx.announce("🎉 홀인원!! " .. team.name .. " 🎉", 4)
+	local hitter = t.lastHitter
+	ctx.onSunk(index, hitter)
+	if hitter and playerTeam[hitter] ~= index then
+		ctx.announce(string.format("😱 %s 님이 상대 공을 넣어 줬어요! %s 홀인!", hitter.DisplayName, team.name), 4)
 	else
-		ctx.announce(string.format("⛳ %s 홀인! (%d타)", team.name, t.strokes), 3)
+		ctx.announce(string.format("⛳ %s 홀인!%s", team.name, hitter and (" (" .. hitter.DisplayName .. ")") or ""), 4)
 	end
 	ctx.onChange()
 end
 
 local function tick(dt)
-	local now = os.clock()
-	local factor = B.rollingDrag ^ (dt / 0.1)
 	local changed = false
 
 	for index, t in pairs(teams) do
@@ -595,48 +612,41 @@ local function tick(dt)
 			continue
 		end
 		local pos = ball.Position
-		if pos.Y < -15 then
-			stopBall(ball)
-			ball.CFrame = CFrame.new(t.lastRest + UP * 1)
-			t.strokes += 1
-			ball:SetAttribute("Resting", true)
-			for _, m in ipairs(t.members) do
-				ctx.notify(m, "💦 우리 공 장외! 벌타 +1", Color3.fromRGB(255, 140, 140))
-			end
+		if pos.Y < -20 then
+			resetBall(t, "💨 우리 공이 코스 밖으로! 마지막 자리로 돌아와요")
+			changed = true
+			continue
+		end
+		local surface = surfaceUnder(ball)
+		if surface == "Water" then
+			resetBall(t, "💦 풍덩! 우리 공이 연못에 빠졌어요")
 			changed = true
 			continue
 		end
 		local v = ball.AssemblyLinearVelocity
-		local onGround = grounded(ball)
-		if onGround then
+		if surface then
+			local drag = B.drag[surface] or B.drag.Rough
+			local factor = drag ^ (dt / 0.1)
 			ball.AssemblyLinearVelocity = Vector3.new(v.X * factor, v.Y, v.Z * factor)
 			ball.AssemblyAngularVelocity *= factor
 		end
+
+		-- 홀인: 홀컵 위에서 너무 빠르지 않으면 쏙
 		local cupDist = flat(hole.cup - pos).Magnitude
-		if cupDist < B.cupRadius and pos.Y < 3.5 and v.Magnitude < B.cupMaxSpeed then
+		if cupDist < B.cupRadius and pos.Y < 2.6 and v.Magnitude < B.cupMaxSpeed then
 			sink(index, t)
 			continue
 		end
-		if onGround and v.Magnitude < B.stopSpeed then
+
+		-- 멈춤 (느리게 끝없이 구르는 것 방지) + 안전한 위치 기억
+		if surface and v.Magnitude < B.stopSpeed then
 			t.restTimer += dt
-			if t.restTimer > 0.3 and not ball:GetAttribute("Resting") then
+			if t.restTimer > 0.3 then
 				stopBall(ball)
-				ball:SetAttribute("Resting", true)
-				changed = true
+				t.lastSafe = pos
 			end
 		else
 			t.restTimer = 0
-			if ball:GetAttribute("Resting") and v.Magnitude > B.stopSpeed * 2 then
-				ball:SetAttribute("Resting", false)
-			end
-		end
-		for _, b in ipairs(hole.boosters) do
-			local rel = b.part.CFrame:PointToObjectSpace(pos)
-			if math.abs(rel.X) < 3.2 and math.abs(rel.Z) < 4.2 and rel.Y < 2 and (t.boostedAt or 0) < now - 0.6 then
-				t.boostedAt = now
-				ball.AssemblyLinearVelocity += b.dir * 45
-				ball:SetAttribute("Resting", false)
-			end
 		end
 	end
 
