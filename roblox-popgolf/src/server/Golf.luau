@@ -137,6 +137,7 @@ local function stun(player, velocity, by, duration)
 	if player.Character then
 		bump(player.Character, "KnockedId") -- 맞은 사람 화면 흔들기
 	end
+	ctx.impact(root.Position, Color3.fromRGB(255, 235, 200), false)
 	task.delay(duration, function()
 		if ps.stunUntil <= os.clock() + 0.05 then
 			local _, h = rootOf(player)
@@ -473,6 +474,8 @@ function Golf.Swing(player, direction, power)
 				if inZone and math.abs(pos.Y - origin.Y) < 6 then
 					launchBall(t, dir, ult and math.max(power, 0.8) or power, player, ult and UL.launchMult or mult)
 					addGauge(player, UL.perBallHit)
+					ctx.onBallHit(player)
+					ctx.impact(t.ball.Position, Config.Teams[index].color, ult or mult > 1)
 					hitSomething = true
 				end
 			end

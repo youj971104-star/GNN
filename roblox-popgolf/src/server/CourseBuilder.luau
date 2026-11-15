@@ -19,6 +19,10 @@ local THEMES = {
 	{ name = "가을 단풍 코스", fairA = Color3.fromRGB(150, 190, 80), fairB = Color3.fromRGB(135, 175, 70), rough = Color3.fromRGB(110, 120, 50), green = Color3.fromRGB(160, 210, 100), leaves = Color3.fromRGB(230, 120, 50), clock = 16 },
 	{ name = "노을 코스", fairA = Color3.fromRGB(110, 180, 90), fairB = Color3.fromRGB(95, 165, 80), rough = Color3.fromRGB(60, 110, 60), green = Color3.fromRGB(130, 200, 110), leaves = Color3.fromRGB(200, 90, 120), clock = 18 },
 }
+-- 마지막 홀 전용: 밤 경기장 (조명탑·네온이 가장 돋보임)
+local NIGHT = { name = "🌙 네온 나이트", fairA = Color3.fromRGB(45, 125, 70), fairB = Color3.fromRGB(38, 110, 62), rough = Color3.fromRGB(30, 75, 50), green = Color3.fromRGB(70, 175, 100), leaves = Color3.fromRGB(110, 70, 170), clock = 21, night = true }
+local NEON_CYAN = Color3.fromRGB(60, 230, 255)
+local NEON_PINK = Color3.fromRGB(255, 70, 190)
 
 local current
 
@@ -92,6 +96,9 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	CourseBuilder.Clear()
 	local rng = Random.new(seed)
 	local theme = THEMES[((holeNumber - 1 + seed) % #THEMES) + 1]
+	if holeNumber == Config.HolesPerMatch then
+		theme = NIGHT
+	end
 	Lighting.ClockTime = theme.clock
 
 	local folder = Instance.new("Folder")
@@ -305,6 +312,81 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local side = Vector3.new(dir.Z, 0, -dir.X) * cartSide * (W / 2 + 7)
 		local mid = (a + b) / 2 + side
 		part({ Name = "CartPath", Size = Vector3.new(5, 0.2, (b - a).Magnitude + 5), CFrame = CFrame.lookAt(mid + UP * 0.05, mid + UP * 0.05 + dir), Color = Color3.fromRGB(175, 170, 160), Material = Enum.Material.Concrete }, folder)
+	end
+
+	-- 8.5) 경기장 연출: 네온 테두리 · 조명탑 · LED 전광판 · 관중석
+	local edgeTrans = theme.night and 0 or 0.45
+	for k = 1, #path - 1 do
+		local a, b = path[k], path[k + 1]
+		local dir = (b - a).Unit
+		local side = Vector3.new(dir.Z, 0, -dir.X)
+		local len = (b - a).Magnitude
+		for _, sgn in ipairs({ -1, 1 }) do
+			local mid = (a + b) / 2 + side * sgn * (W / 2)
+			part({ Name = "NeonEdge", Size = Vector3.new(0.45, 0.16, len + 1), CFrame = CFrame.lookAt(mid + UP * 0.13, mid + UP * 0.13 + dir), Color = sgn > 0 and NEON_CYAN or NEON_PINK, Material = Enum.Material.Neon, Transparency = edgeTrans, CanCollide = false, CanQuery = false }, folder)
+		end
+	end
+	-- 조명탑: 코스를 따라 양쪽에 번갈아, 밤에는 스포트라이트를 페어웨이로
+	for k = 1, 6 do
+		local p, dir = pointOnPath(path, (k - 0.5) / 6)
+		local side = Vector3.new(dir.Z, 0, -dir.X) * ((k % 2 == 0) and 1 or -1)
+		local base = p + side * (W / 2 + 26)
+		part({ Name = "Tower", Size = Vector3.new(1.6, 44, 1.6), CFrame = CFrame.new(base + UP * 22), Color = Color3.fromRGB(70, 75, 90), Material = Enum.Material.Metal }, folder)
+		local head = part({ Name = "LampHead", Size = Vector3.new(9, 4, 1.5), CFrame = CFrame.lookAt(base + UP * 45, p) , Color = Color3.fromRGB(40, 44, 60), Material = Enum.Material.Metal }, folder)
+		local panel = part({ Name = "LampPanel", Size = Vector3.new(8, 3, 0.3), CFrame = head.CFrame * CFrame.new(0, 0, -0.85), Color = Color3.fromRGB(255, 250, 225), Material = Enum.Material.Neon, CanCollide = false }, folder)
+		local spot = Instance.new("SpotLight")
+		spot.Face = Enum.NormalId.Front
+		spot.Range = 60
+		spot.Angle = 75
+		spot.Brightness = theme.night and 5 or 1
+		spot.Color = Color3.fromRGB(255, 245, 225)
+		spot.Parent = panel
+	end
+	-- LED 전광판 (티 뒤, 그린 옆)
+	local function ledBoard(pos, lookAt, line1, line2)
+		local cf = CFrame.lookAt(pos, Vector3.new(lookAt.X, pos.Y, lookAt.Z))
+		local screen = part({ Name = "LED", Size = Vector3.new(30, 9, 0.8), CFrame = cf, Color = Color3.fromRGB(10, 14, 30) }, folder)
+		for _, e in ipairs({ { Vector3.new(0, 4.8, 0), Vector3.new(31, 0.6, 1) }, { Vector3.new(0, -4.8, 0), Vector3.new(31, 0.6, 1) } }) do
+			part({ Name = "LEDFrame", Size = e[2], CFrame = cf * CFrame.new(e[1]), Color = NEON_CYAN, Material = Enum.Material.Neon, CanCollide = false }, folder)
+		end
+		for _, x in ipairs({ -12, 12 }) do
+			part({ Name = "LEDLeg", Size = Vector3.new(1, pos.Y, 1), CFrame = CFrame.new(cf.Position.X + cf.RightVector.X * x, pos.Y / 2 - 4.5, cf.Position.Z + cf.RightVector.Z * x), Color = Color3.fromRGB(60, 65, 80), Material = Enum.Material.Metal }, folder)
+		end
+		local sg = Instance.new("SurfaceGui")
+		sg.Face = Enum.NormalId.Front
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 20
+		sg.LightInfluence = 0
+		for _, info in ipairs({ { line1, 0, 0.58, NEON_CYAN }, { line2, 0.58, 0.4, Color3.fromRGB(255, 220, 120) } }) do
+			local l = Instance.new("TextLabel")
+			l.BackgroundTransparency = 1
+			l.Position = UDim2.fromScale(0.03, info[2])
+			l.Size = UDim2.fromScale(0.94, info[3])
+			l.Font = Enum.Font.FredokaOne
+			l.TextScaled = true
+			l.TextColor3 = info[4]
+			l.Text = info[1]
+			l.Parent = sg
+		end
+		sg.Parent = screen
+	end
+	local startDir0 = (path[2] - path[1]).Unit
+	ledBoard(path[1] - startDir0 * 22 + UP * 12, path[2], "⛳ HOLE " .. holeNumber .. "  ·  " .. theme.name, "🔴 레드  VS  블루 🔵")
+	local greenSide = Vector3.new(startDir0.Z, 0, -startDir0.X)
+	ledBoard(greenCenter + greenSide * (R + 22) + UP * 12, greenCenter, "POP GOLF", "먼저 넣는 팀이 승리!")
+	-- 관중석 (그린 반대쪽): 계단 + 색색 관중
+	local standBase = greenCenter - greenSide * (R + 20)
+	local standCf = CFrame.lookAt(standBase, Vector3.new(greenCenter.X, standBase.Y, greenCenter.Z))
+	local crowdColors = { Color3.fromRGB(255, 90, 90), Color3.fromRGB(90, 150, 255), Color3.fromRGB(255, 220, 90), Color3.new(1, 1, 1), Color3.fromRGB(120, 230, 140) }
+	for row = 0, 3 do
+		part({ Name = "Stand", Size = Vector3.new(34, 1.6, 4), CFrame = standCf * CFrame.new(0, 0.8 + row * 1.6, 2 + row * 4), Color = Color3.fromRGB(60, 65, 95), Material = Enum.Material.Concrete }, folder)
+		for c = -15, 15, 3 do
+			if rng:NextNumber() < 0.8 then
+				local body = standCf * CFrame.new(c + rng:NextNumber(-0.5, 0.5), 2.6 + row * 1.6, 2 + row * 4)
+				part({ Name = "Fan", Size = Vector3.new(1.4, 1.8, 1), CFrame = body, Color = crowdColors[rng:NextInteger(1, #crowdColors)], Material = Enum.Material.SmoothPlastic, CanCollide = false }, folder)
+				part({ Name = "FanHead", Shape = Enum.PartType.Ball, Size = Vector3.one * 1.1, CFrame = body * CFrame.new(0, 1.35, 0), Color = Color3.fromRGB(245, 205, 160), Material = Enum.Material.SmoothPlastic, CanCollide = false }, folder)
+			end
+		end
 	end
 
 	-- 9) ❓ 아이템 상자 (페어웨이 위)

@@ -51,33 +51,82 @@ local function rarityColor(id)
 end
 
 ----------------------------------------------------------------------
--- HUD: 위쪽 팀 점수판
+-- HUD: 위쪽 점수판  [ 레드 n ] [ 타이머 ] [ n 블루 ]
 ----------------------------------------------------------------------
+local NAVY = Color3.fromRGB(18, 22, 48)
+local CYAN = Color3.fromRGB(60, 230, 255)
+
+-- 그림 아이콘 (Config.Icons 에 ID 가 있으면 그림, 없으면 이모지)
+local function iconInto(parent, key, emoji, props)
+	local id = Config.Icons[key]
+	local obj
+	if id and id ~= 0 then
+		obj = new("ImageLabel", { BackgroundTransparency = 1, Image = "rbxassetid://" .. id, ScaleType = Enum.ScaleType.Fit })
+	else
+		obj = label({ Text = emoji })
+	end
+	for k, v in pairs(props or {}) do
+		obj[k] = v
+	end
+	obj.Parent = parent
+	return obj
+end
+
 local hud = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 8),
-	Size = isMobile and UDim2.new(0.46, 0, 0, 84) or UDim2.fromOffset(440, 96),
-	BackgroundColor3 = C.bg,
-	BackgroundTransparency = 0.15,
+	Position = UDim2.new(0.5, 0, 0, 6),
+	Size = isMobile and UDim2.fromOffset(300, 96) or UDim2.fromOffset(400, 104),
+	BackgroundTransparency = 1,
 	Parent = screen.gui,
-}, { UIKit.corner(14), UIKit.stroke(Color3.new(1, 1, 1), 2) })
-local phaseLabel = label({ Parent = hud, Position = UDim2.fromOffset(10, 4), Size = UDim2.new(1, -20, 0, 26), TextColor3 = C.sub, Text = "대기 중..." })
-local scoreLabel = label({ Parent = hud, Position = UDim2.fromOffset(10, 30), Size = UDim2.new(1, -20, 0, 36), Font = UIKit.FONT_TITLE, Text = "" })
-local teamLabel = label({ Parent = hud, Position = UDim2.fromOffset(10, 68), Size = UDim2.new(1, -20, 0, 22), Text = "" })
+})
+local scoreBar = new("Frame", { Parent = hud, Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 1 })
+local function teamBlock(xScale, anchorX, team, title)
+	local f = new("Frame", {
+		Parent = scoreBar,
+		AnchorPoint = Vector2.new(anchorX, 0),
+		Position = UDim2.fromScale(xScale, 0),
+		Size = UDim2.new(0.3, 0, 1, 0),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+	}, { UIKit.corner(12), UIKit.stroke(Color3.new(1, 1, 1), 2) })
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(team.color:Lerp(Color3.new(1, 1, 1), 0.2), team.color:Lerp(Color3.new(0, 0, 0), 0.35)), Parent = f })
+	label({ Parent = f, Position = UDim2.fromScale(0, 0.04), Size = UDim2.fromScale(1, 0.3), Text = title, TextColor3 = Color3.new(1, 1, 1) })
+	return label({ Parent = f, Position = UDim2.fromScale(0, 0.3), Size = UDim2.fromScale(1, 0.7), Font = UIKit.FONT_TITLE, Text = "0", TextStrokeTransparency = 0.3 })
+end
+local redNum = teamBlock(0, 0, Config.Teams[1], "레드")
+local blueNum = teamBlock(1, 1, Config.Teams[2], "블루")
+local timerBox = new("Frame", {
+	Parent = scoreBar,
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.fromScale(0.5, 0),
+	Size = UDim2.new(0.38, 0, 1, 0),
+	BackgroundColor3 = NAVY,
+}, { UIKit.corner(12), UIKit.stroke(CYAN, 2) })
+local timerLabel = label({ Parent = timerBox, Position = UDim2.fromScale(0, 0.02), Size = UDim2.fromScale(1, 0.66), Font = UIKit.FONT_TITLE, Text = "--:--", TextColor3 = Color3.new(1, 1, 1) })
+local scoreLabel = label({ Parent = timerBox, Position = UDim2.fromScale(0, 0.66), Size = UDim2.fromScale(1, 0.3), TextColor3 = CYAN, Text = "" }) -- 모드·홀 표시
+local phaseLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, 58), Size = UDim2.new(1, 0, 0, 22), TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3, Text = "대기 중..." })
+local teamLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, 80), Size = UDim2.new(1, 0, 0, 20), TextStrokeTransparency = 0.3, Text = "" })
 
-local wallet = label({
-	Position = UDim2.fromOffset(12, 12),
-	Size = UDim2.fromOffset(300, 28),
-	TextXAlignment = Enum.TextXAlignment.Left,
-	TextColor3 = C.gold,
-	TextStrokeTransparency = 0.3,
+-- 오른쪽 위: 재화 알약
+local walletPill = new("Frame", {
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -12, 0, 8),
+	Size = UDim2.fromOffset(isMobile and 220 or 290, 34),
+	BackgroundColor3 = NAVY,
+	BackgroundTransparency = 0.1,
 	Parent = screen.gui,
+}, { UIKit.corner(17), UIKit.stroke(Color3.fromRGB(255, 200, 70), 2) })
+local wallet = label({
+	Parent = walletPill,
+	Position = UDim2.fromOffset(10, 4),
+	Size = UDim2.new(1, -20, 1, -8),
+	TextColor3 = Color3.fromRGB(255, 225, 140),
+	Text = "",
 })
 
 -- 오른쪽: 선수 목록 (팀, 아이템, 방패)
 local board = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -10, 0, 60),
+	Position = UDim2.new(1, -10, 0, 50),
 	Size = UDim2.fromOffset(isMobile and 170 or 230, 0),
 	AutomaticSize = Enum.AutomaticSize.Y,
 	BackgroundColor3 = C.bg,
@@ -95,7 +144,7 @@ local board = new("Frame", {
 ----------------------------------------------------------------------
 local powerBack = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -110),
+	Position = UDim2.new(0.5, 0, 1, -150),
 	Size = UDim2.fromOffset(380, 28),
 	BackgroundColor3 = Color3.fromRGB(20, 15, 40),
 	Visible = false,
@@ -106,7 +155,7 @@ local powerText = label({ Parent = powerBack, Size = UDim2.fromScale(1, 1), ZInd
 
 local hint = label({
 	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -146),
+	Position = UDim2.new(0.5, 0, 1, -186),
 	Size = isMobile and UDim2.new(0.6, 0, 0, 22) or UDim2.fromOffset(560, 26),
 	TextColor3 = Color3.new(1, 1, 1),
 	TextStrokeTransparency = 0.3,
@@ -184,18 +233,25 @@ end)
 -- 능력 버튼: 대시(Q) · 스킬(E) · 궁극기(R) — 쿨다운이 버튼 위에 덮였다 줄어듦
 ----------------------------------------------------------------------
 local abilityButtons = {}
-local function abilityButton(key, icon, onPress)
-	local size = isMobile and 74 or 66
+local function abilityButton(key, icon, onPress, name, iconKey)
+	local size = isMobile and 74 or 70
 	local b = new("TextButton", {
 		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = Color3.fromRGB(40, 36, 70),
+		BackgroundColor3 = NAVY,
 		Text = "",
 		AutoButtonColor = true,
 		Visible = false,
 		Parent = screen.gui,
-	}, { UIKit.corner(size / 2), UIKit.stroke(Color3.new(1, 1, 1), 2) })
-	local iconLabel = label({ Parent = b, Size = UDim2.fromScale(1, 0.62), Position = UDim2.fromScale(0, 0.08), Text = icon, ZIndex = 3 })
-	local keyLabel = label({ Parent = b, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.new(1, 0, 0.3, 0), Text = isMobile and "" or key, TextColor3 = C.sub, ZIndex = 3 })
+	}, { UIKit.corner(size / 2), UIKit.stroke(CYAN, 2) })
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(70, 80, 150), Color3.fromRGB(20, 22, 50)), Parent = b })
+	local iconLabel = iconInto(b, iconKey or key, icon, { Size = UDim2.fromScale(0.66, 0.66), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.47), ZIndex = 3 })
+	-- 키 표시 칩 (PC)
+	local keyLabel = label({ Parent = b, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 1, 2), Size = UDim2.fromOffset(22, 18), Text = isMobile and "" or key, BackgroundTransparency = isMobile and 1 or 0, BackgroundColor3 = Color3.fromRGB(240, 240, 250), TextColor3 = NAVY, ZIndex = 5 })
+	if not isMobile then
+		new("UICorner", { CornerRadius = UDim.new(0, 4), Parent = keyLabel })
+		-- 이름표 (버튼 위)
+		label({ Parent = b, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -2), Size = UDim2.fromOffset(90, 18), Text = name or "", TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3, ZIndex = 5 })
+	end
 	-- 쿨다운 덮개 (아래에서 위로 차 있는 어두운 막)
 	local clip = new("Frame", { Parent = b, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 2 }, { UIKit.corner(size / 2) })
 	local cover = new("Frame", { Parent = clip, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35, ZIndex = 2 })
@@ -206,9 +262,9 @@ local function abilityButton(key, icon, onPress)
 	return entry
 end
 
-local dashBtn = abilityButton("Q", "💨", Shot.Dash)
-local skillBtn = abilityButton("E", "💥", Shot.Skill)
-local ultBtn = abilityButton("R", "☄️", Shot.Ultimate)
+local dashBtn = abilityButton("Q", "💨", Shot.Dash, "대시", "Dash")
+local skillBtn = abilityButton("E", "💥", Shot.Skill, "스킬", "Skill_")
+local ultBtn = abilityButton("R", "☄️", Shot.Ultimate, "궁극기", "Ultimate")
 
 if isMobile then
 	-- 샷 버튼(오른쪽 중간) 주변: 왼쪽에 대시·스킬, 아래에 궁극기
@@ -219,12 +275,26 @@ if isMobile then
 	skillBtn.button.Position = UDim2.new(1, -168, 0.52, -50)
 	ultBtn.button.Position = UDim2.new(1, -40, 0.52, 116)
 else
-	-- PC: 왼쪽 아래 한 줄
+	-- PC: 화면 아래 가운데 한 줄
 	for i, e in ipairs(abilityButtons) do
-		e.button.AnchorPoint = Vector2.new(0, 1)
-		e.button.Position = UDim2.new(0, 16 + (i - 1) * 76, 1, -16)
+		e.button.AnchorPoint = Vector2.new(0.5, 1)
+		e.button.Position = UDim2.new(0.5, (i - 2) * 92, 1, -20)
 	end
 end
+
+-- 궁극기 게이지 바 (살짝 기울어진 띠)
+local gaugeBar = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = isMobile and UDim2.new(0.5, 0, 1, -96) or UDim2.new(0.5, 0, 1, -112),
+	Size = isMobile and UDim2.new(0.42, 0, 0, 22) or UDim2.fromOffset(300, 24),
+	BackgroundColor3 = NAVY,
+	Rotation = -2,
+	Visible = false,
+	Parent = screen.gui,
+}, { UIKit.corner(6), UIKit.stroke(Color3.fromRGB(255, 200, 70), 2) })
+local gaugeFill = new("Frame", { Parent = gaugeBar, Size = UDim2.fromScale(0, 1), BackgroundColor3 = Color3.new(1, 1, 1) }, { UIKit.corner(6) })
+new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(255, 120, 40), Color3.fromRGB(255, 220, 90)), Parent = gaugeFill })
+local gaugeText = label({ Parent = gaugeBar, Size = UDim2.fromScale(1, 1), ZIndex = 3, Text = "", TextStrokeTransparency = 0.2 })
 
 local function setCooldown(entry, remaining, total)
 	if remaining > 0.05 then
@@ -243,7 +313,21 @@ task.spawn(function()
 		setCooldown(dashBtn, (player:GetAttribute("DashReady") or 0) - now, Config.Dash.cooldown)
 		local skillId = state and state.skill or Config.DefaultSkill
 		local skill = Config.Skills[skillId]
-		skillBtn.icon.Text = skill and string.match(skill.name, "^(%S+)") or "⚡"
+		if skillBtn.icon:IsA("TextLabel") then
+			local id = Config.Icons[skillId]
+			if id and id ~= 0 then
+				-- 스킬 그림 아이콘이 등록돼 있으면 그림으로 교체
+				local img = iconInto(skillBtn.button, skillId, "", { Size = skillBtn.icon.Size, AnchorPoint = skillBtn.icon.AnchorPoint, Position = skillBtn.icon.Position, ZIndex = 3 })
+				skillBtn.icon:Destroy()
+				skillBtn.icon = img
+				skillBtn.iconSkill = skillId
+			else
+				skillBtn.icon.Text = skill and string.match(skill.name, "^(%S+)") or "⚡"
+			end
+		elseif skillBtn.iconSkill ~= skillId and Config.Icons[skillId] and Config.Icons[skillId] ~= 0 then
+			skillBtn.icon.Image = "rbxassetid://" .. Config.Icons[skillId]
+			skillBtn.iconSkill = skillId
+		end
 		setCooldown(skillBtn, (player:GetAttribute("SkillReady") or 0) - now, skill and skill.cooldown or 10)
 		-- 궁극기: 게이지가 아래에서 위로 '비어 있는 만큼' 덮임
 		local gauge = player:GetAttribute("Gauge") or 0
@@ -255,8 +339,11 @@ task.spawn(function()
 		else
 			ultBtn.cover.Size = UDim2.fromScale(1, 1 - gauge / Config.Ultimate.gaugeMax)
 			ultBtn.cdText.Text = full and "" or (math.floor(gauge) .. "%")
-			ultBtn.button.BackgroundColor3 = full and Color3.fromRGB(255, 190, 60) or Color3.fromRGB(40, 36, 70)
+			ultBtn.button.BackgroundColor3 = full and Color3.fromRGB(255, 190, 60) or NAVY
 		end
+		-- 기울어진 궁극기 게이지 바
+		gaugeFill.Size = UDim2.fromScale(math.clamp(gauge / Config.Ultimate.gaugeMax, 0, 1), 1)
+		gaugeText.Text = string.format("%s  %s", Config.Ultimate.name, player:GetAttribute("UltActive") and "발동!" or (full and "준비 완료 [R]" or (math.floor(gauge) .. "%")))
 	end
 end)
 
@@ -264,24 +351,126 @@ local function setAbilitiesVisible(on)
 	for _, e in ipairs(abilityButtons) do
 		e.button.Visible = on
 	end
+	gaugeBar.Visible = on
+end
+
+----------------------------------------------------------------------
+-- 로비: 큰 PLAY 버튼 + 일일 미션 패널
+----------------------------------------------------------------------
+local queued = false
+local playButton = new("TextButton", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, isMobile and -96 or -104),
+	Size = UDim2.fromOffset(isMobile and 220 or 280, isMobile and 56 or 64),
+	BackgroundColor3 = Color3.new(1, 1, 1),
+	Text = "PLAY",
+	Font = UIKit.FONT_TITLE,
+	TextScaled = true,
+	TextColor3 = Color3.fromRGB(20, 60, 20),
+	Parent = screen.gui,
+}, { UIKit.corner(14), UIKit.stroke(Color3.fromRGB(20, 40, 20), 3), new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }) })
+local playGradient = new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(170, 255, 90), Color3.fromRGB(70, 200, 60)), Parent = playButton })
+local function refreshPlay(count)
+	if queued then
+		playButton.Text = string.format("대기 중 %s · 취소", count and ("(" .. count .. "명)") or "")
+		playGradient.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(240, 130, 40))
+	else
+		playButton.Text = "PLAY"
+		playGradient.Color = ColorSequence.new(Color3.fromRGB(170, 255, 90), Color3.fromRGB(70, 200, 60))
+	end
+end
+playButton.Activated:Connect(function()
+	local want = not queued
+	local ok = Action:InvokeServer("Queue", want)
+	if ok then
+		queued = want
+		refreshPlay(nil)
+		screen.toast(want and "⛳ 대기열에 들어갔어요! 인원이 모이면 시작해요" or "대기열에서 나왔어요", want and C.green or C.sub)
+	end
+end)
+
+local questPanel = new("Frame", {
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.new(0, 12, 0.45, 0),
+	Size = UDim2.fromOffset(isMobile and 190 or 240, 0),
+	AutomaticSize = Enum.AutomaticSize.Y,
+	BackgroundColor3 = NAVY,
+	BackgroundTransparency = 0.15,
+	Parent = screen.gui,
+}, {
+	UIKit.corner(12),
+	UIKit.stroke(CYAN, 1.5),
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 10), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }),
+})
+local function renderQuests()
+	for _, c in ipairs(questPanel:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	label({ Parent = questPanel, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 24), Font = UIKit.FONT_TITLE, TextXAlignment = Enum.TextXAlignment.Left, Text = "📋 일일 미션" })
+	local q = state and state.quests or {}
+	local today = os.time() // 86400
+	for i, key in ipairs(Config.QuestOrder) do
+		local def = Config.Quests[key]
+		local fresh = q.day == today
+		local n = fresh and (q[key] or 0) or 0
+		local done = fresh and q.done and q.done[key]
+		local row = new("Frame", { Parent = questPanel, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1 })
+		label({ Parent = row, Size = UDim2.new(0.62, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, Text = (done and "✅ " or "") .. def.name })
+		label({ Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0.38, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(255, 220, 120), Text = "🪙" .. (def.coins or 0) .. (def.gems and (" 💎" .. def.gems) or "") })
+		local back = new("Frame", { Parent = row, Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 0, 12), BackgroundColor3 = Color3.fromRGB(10, 12, 30) }, { UIKit.corner(6) })
+		new("Frame", { Parent = back, Size = UDim2.fromScale(math.clamp(n / def.goal, 0, 1), 1), BackgroundColor3 = done and C.green or CYAN }, { UIKit.corner(6) })
+		label({ Parent = back, Size = UDim2.fromScale(1, 1), ZIndex = 2, Text = n .. " / " .. def.goal })
+	end
+end
+
+-- 메뉴 줄 배치: 로비 = 화면 아래 가로 줄 / 경기 중 = 왼쪽 세로 (☰ 로 열기)
+local function menuHorizontal(on)
+	local f = screen.menuFrame
+	local layout = f:FindFirstChildOfClass("UIListLayout")
+	if on then
+		f.AnchorPoint = Vector2.new(0.5, 1)
+		f.Position = UDim2.new(0.5, 0, 1, -12)
+		f.Size = UDim2.fromOffset(600, 70)
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	else
+		f.AnchorPoint = Vector2.new(0, 0.5)
+		f.Position = UDim2.new(0, 10, 0.5, 0)
+		f.Size = UDim2.fromOffset(92, 480)
+		layout.FillDirection = Enum.FillDirection.Vertical
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	end
 end
 
 local wasInGame = false
+local layoutReady = false
 local function applyLayout(inGame)
-	if inGame == wasInGame then
+	if layoutReady and inGame == wasInGame then
 		return
 	end
+	layoutReady = true
 	wasInGame = inGame
 	if inGame then
 		-- 경기 시작: 메뉴 접고, 열려 있던 창 닫기
 		screen.open(nil)
+		menuHorizontal(false)
 		screen.menuFrame.Visible = false
 		menuToggle.Visible = true
+		playButton.Visible = false
+		questPanel.Visible = false
 		setAbilitiesVisible(true)
 	else
-		-- 로비: 상점·캡슐·골프채 메뉴 모두 보이기
+		-- 로비: PLAY 버튼, 미션, 아래 메뉴 줄
+		menuHorizontal(true)
 		screen.menuFrame.Visible = true
 		menuToggle.Visible = false
+		playButton.Visible = true
+		questPanel.Visible = true
 		setAbilitiesVisible(false)
 	end
 end
@@ -584,12 +773,17 @@ remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	applyLayout(inGame)
 	-- 위쪽 점수
 	local red, blue = m.teams[1], m.teams[2]
+	redNum.Text = red and tostring(red.holeWins) or "0"
+	blueNum.Text = blue and tostring(blue.holeWins) or "0"
 	if red and blue then
-		scoreLabel.Text = string.format("🔴 %d  :  %d 🔵   (%s)", red.holeWins, blue.holeWins, m.mode or "")
+		scoreLabel.Text = string.format("%s · %d/%d홀", m.mode or "", math.max(m.hole, 1), m.holes)
 	elseif red then
-		scoreLabel.Text = "🔴 연습 경기"
+		scoreLabel.Text = "연습 경기"
 	else
-		scoreLabel.Text = "⛳ 팝골프"
+		scoreLabel.Text = string.format("대기 %d명", m.queued or 0)
+	end
+	if queued then
+		refreshPlay(m.queued)
 	end
 	local myTeam = player:GetAttribute("Team")
 	if myTeam then
@@ -617,6 +811,11 @@ end)
 remotes:WaitForChild("State").OnClientEvent:Connect(function(s)
 	state = s
 	wallet.Text = string.format("🪙 %s   💎 %s   🧩 %s", Format.Short(s.coins), Format.Short(s.gems), Format.Short(s.shards))
+	if s.queued ~= nil and s.queued ~= queued then
+		queued = s.queued
+		refreshPlay(nil)
+	end
+	renderQuests()
 	screen.render()
 end)
 remotes:WaitForChild("Notify").OnClientEvent:Connect(function(text, color)
@@ -631,14 +830,15 @@ task.spawn(function()
 		task.wait(0.25)
 		local left = math.max(0, endsAt - os.clock())
 		local p = info.phase
+		timerLabel.Text = (p == "Playing" or p == "Countdown" or p == "Intermission") and Format.Time(left) or "--:--"
 		if p == "Waiting" then
-			phaseLabel.Text = "⏳ 플레이어를 기다리는 중 · 4명 2대2 / 6명 3대3 / 8명 4대4"
+			phaseLabel.Text = queued and "⏳ 인원을 기다리는 중 · 4명 2대2 / 6명 3대3 / 8명 4대4" or "▶ PLAY 를 누르면 경기 대기열에 들어가요"
 		elseif p == "Intermission" then
 			phaseLabel.Text = "⛳ 곧 경기 시작 " .. math.ceil(left) .. " · 인원에 맞춰 팀이 무작위로 나뉘어요 (최대 4대4)"
 		elseif p == "Countdown" then
 			phaseLabel.Text = string.format("%d번 홀 · %s · 준비 %d", info.hole, info.theme, math.ceil(left))
 		elseif p == "Playing" then
-			phaseLabel.Text = string.format("⛳ %d / %d 홀 · %s · ⏱ %s", info.hole, info.holes, info.theme, Format.Time(left))
+			phaseLabel.Text = string.format("⛳ %d번 홀 · %s", info.hole, info.theme)
 		elseif p == "HoleResult" then
 			phaseLabel.Text = string.format("%d번 홀 끝! 다음 홀 준비 중...", info.hole)
 		else
@@ -646,6 +846,28 @@ task.spawn(function()
 		end
 	end
 end)
+
+-- 메뉴 버튼 꾸미기: 남색 판 + 색 테두리 + 아이콘 (Config.Icons 에 그림이 있으면 그림)
+local NAV_ICON = { Gacha = "NavGacha", Clubs = "NavClubs", Skills = "NavSkills", Shop = "NavShop", Stats = "NavStats" }
+for key, m in pairs(screen.menuButtons) do
+	local b = m.button
+	local accent = b.BackgroundColor3
+	b.BackgroundColor3 = NAVY
+	local stroke = b:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = accent
+		stroke.Thickness = 2.5
+	end
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(60, 70, 140), Color3.fromRGB(18, 20, 46)), Parent = b })
+	local iconId = NAV_ICON[key] and Config.Icons[NAV_ICON[key]]
+	if iconId and iconId ~= 0 then
+		local title = string.match(b.Text, "\n(.+)$") or ""
+		b.Text = ""
+		iconInto(b, NAV_ICON[key], "", { Size = UDim2.fromScale(0.62, 0.62), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.02) })
+		label({ Parent = b, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0.32, 0), Text = title })
+	end
+end
+applyLayout(false)
 
 -- 로비 시설(캡슐 머신·진열대·스킬 보드·상점)에 다가가 E 를 누르면 해당 메뉴 열기
 game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt, who)

@@ -142,7 +142,113 @@ local function watchCharacter(p, character)
 	refreshBuffs()
 end
 
+----------------------------------------------------------------------
+-- 타격 이펙트 (서버가 Impact 로 위치·색을 보내 줌)
+--   일반: 퍼지는 고리 + 빛 파편 + 반짝임
+--   큰 타격(메테오·파워): + 하늘로 솟는 에너지 기둥 + 고리 3겹 + 파편 많이
+----------------------------------------------------------------------
+local PURPLE = Color3.fromRGB(170, 90, 255)
+
+local function glow(shape, size, cf, color, transparency)
+	local p = Instance.new("Part")
+	p.Shape = shape
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Color = color
+	p.Size = size
+	p.CFrame = cf
+	p.Transparency = transparency or 0
+	p.Parent = folder
+	return p
+end
+
+local function ring(pos, color, radius, delay, time)
+	task.delay(delay or 0, function()
+		local r = glow(Enum.PartType.Cylinder, Vector3.new(0.25, 1, 1), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), color, 0.05)
+		TweenService:Create(r, TweenInfo.new(time or 0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, radius * 2, radius * 2), Transparency = 1 }):Play()
+		Debris:AddItem(r, (time or 0.35) + 0.05)
+	end)
+end
+
+local function shards(pos, color, count, speed)
+	for _ = 1, count do
+		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.9 + 0.1, math.random() - 0.5).Unit
+		local size = 0.25 + math.random() * 0.45
+		local c = glow(Enum.PartType.Block, Vector3.one * size, CFrame.new(pos) * CFrame.Angles(math.random() * 6, math.random() * 6, 0), math.random() < 0.5 and color or Color3.new(1, 1, 1))
+		local target = pos + dir * speed * (0.6 + math.random() * 0.6)
+		TweenService:Create(c, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			CFrame = CFrame.new(target) * CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6),
+			Size = Vector3.one * 0.05,
+			Transparency = 0.6,
+		}):Play()
+		Debris:AddItem(c, 0.5)
+	end
+end
+
+local function sparkleBurst(pos, color, count)
+	local holder = glow(Enum.PartType.Block, Vector3.one * 0.1, CFrame.new(pos), color, 1)
+	local em = Instance.new("ParticleEmitter")
+	em.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	em.Color = ColorSequence.new(color, Color3.new(1, 1, 1))
+	em.Rate = 0
+	em.Lifetime = NumberRange.new(0.3, 0.6)
+	em.Speed = NumberRange.new(10, 22)
+	em.SpreadAngle = Vector2.new(180, 180)
+	em.Size = NumberSequence.new(0.9, 0)
+	em.LightEmission = 1
+	em.Drag = 4
+	em.Parent = holder
+	em:Emit(count)
+	Debris:AddItem(holder, 0.8)
+end
+
+local function impact(pos, color, big)
+	if typeof(pos) ~= "Vector3" then
+		return
+	end
+	color = typeof(color) == "Color3" and color or Color3.new(1, 1, 1)
+	ring(pos, color, big and 10 or 5)
+	shards(pos, color, big and 26 or 10, big and 14 or 7)
+	sparkleBurst(pos, color, big and 60 or 20)
+	if big then
+		ring(pos + Vector3.new(0, 1.5, 0), PURPLE, 16, 0.06, 0.5)
+		ring(pos + Vector3.new(0, 3, 0), Color3.new(1, 1, 1), 22, 0.12, 0.6)
+		-- 하늘로 솟는 에너지 기둥
+		local pillar = glow(Enum.PartType.Cylinder, Vector3.new(2, 3, 3), CFrame.new(pos + Vector3.new(0, 1, 0)) * CFrame.Angles(0, 0, math.rad(90)), PURPLE, 0.1)
+		TweenService:Create(pillar, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = Vector3.new(60, 6, 6),
+			CFrame = CFrame.new(pos + Vector3.new(0, 30, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+			Transparency = 1,
+		}):Play()
+		Debris:AddItem(pillar, 0.55)
+		local fire = glow(Enum.PartType.Block, Vector3.one * 0.1, CFrame.new(pos), PURPLE, 1)
+		local em = Instance.new("ParticleEmitter")
+		em.Texture = "rbxasset://textures/particles/fire_main.dds"
+		em.Color = ColorSequence.new(PURPLE, Color3.fromRGB(255, 120, 230))
+		em.Rate = 0
+		em.Lifetime = NumberRange.new(0.4, 0.8)
+		em.Speed = NumberRange.new(14, 26)
+		em.SpreadAngle = Vector2.new(180, 180)
+		em.Size = NumberSequence.new(3, 0)
+		em.LightEmission = 1
+		em.Drag = 3
+		em.Parent = fire
+		em:Emit(40)
+		Debris:AddItem(fire, 1)
+		-- 가까우면 화면도 흔들림
+		if (camera.CFrame.Position - pos).Magnitude < 60 then
+			shake = math.max(shake, 0.8)
+		end
+	end
+end
+
 function VFX.Start()
+	local remotes = ReplicatedStorage:WaitForChild("Remotes")
+	remotes:WaitForChild("Impact").OnClientEvent:Connect(impact)
 	local function watchPlayer(p)
 		p.CharacterAdded:Connect(function(c)
 			watchCharacter(p, c)

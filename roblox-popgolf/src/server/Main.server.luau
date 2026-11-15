@@ -26,6 +26,7 @@ DataService.Configure("PopGolfData_v2", function()
 		stats = { matches = 0, wins = 0, holesWon = 0, sinks = 0, knockouts = 0, pulls = 0 },
 		lastDailyDay = 0,
 		lastVipGemDay = 0,
+		quests = { day = 0, Play = 0, Hit = 0, Win = 0, done = {} }, -- 일일 미션
 		starterBought = false,
 		receipts = {},
 	}
@@ -37,7 +38,7 @@ end)
 local remoteFolder = Instance.new("Folder")
 remoteFolder.Name = "Remotes"
 local remotes = {}
-for _, name in ipairs({ "State", "Match", "Notify", "Announce", "ChargeStart", "Swing", "UseItem", "Dash", "Skill", "Ultimate", "GachaResult" }) do
+for _, name in ipairs({ "State", "Match", "Notify", "Announce", "ChargeStart", "Swing", "UseItem", "Dash", "Skill", "Ultimate", "GachaResult", "Impact" }) do
 	local r = Instance.new("RemoteEvent")
 	r.Name = name
 	r.Parent = remoteFolder
@@ -52,7 +53,7 @@ remoteFolder.Parent = ReplicatedStorage
 -- 로비
 ----------------------------------------------------------------------
 local LobbyBuilder = require(script.Parent.LobbyBuilder)
-local lobbySpawn, leaderboardLabel = LobbyBuilder.Build()
+local lobbySpawn, boards = LobbyBuilder.Build()
 do
 	local baseplate = workspace:FindFirstChild("Baseplate")
 	if baseplate then
@@ -150,6 +151,8 @@ local function refresh(player)
 		passes = Monetization.GetOwned(player),
 		restricted = restricted[player] == true,
 		starterBought = data.starterBought,
+		quests = data.quests,
+		queued = player:GetAttribute("Queued") == true,
 		oddsBasic = Gacha.OddsTable("Basic"),
 		oddsPremium = Gacha.OddsTable("Premium"),
 	})
@@ -178,6 +181,15 @@ local function broadcastMatch()
 		lastHole = match.lastHole,
 		need = Config.MinPlayers,
 		mode = match.mode,
+		queued = (function()
+			local n = 0
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p:GetAttribute("Queued") then
+					n += 1
+				end
+			end
+			return n
+		end)(),
 		maxPlayers = Config.MaxPlayers,
 	})
 end
@@ -221,6 +233,12 @@ Golf.Start({
 	playerStart = CourseBuilder.PlayerStart,
 	onChange = function()
 		changePending = true
+	end,
+	impact = function(position, color, big)
+		remotes.Impact:FireAllClients(position, color, big)
+	end,
+	onBallHit = function(player)
+		questProgress(player, "Hit", 1)
 	end,
 	onKnockout = function(attacker)
 		local data = DataService.Get(attacker)
@@ -323,7 +341,8 @@ end)
 local function readyPlayers()
 	local list = {}
 	for _, p in ipairs(Players:GetPlayers()) do
-		if DataService.Get(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+		-- PLAY 버튼을 눌러 대기열에 들어간 사람만
+		if p:GetAttribute("Queued") and DataService.Get(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 			table.insert(list, p)
 		end
 	end
@@ -333,6 +352,86 @@ end
 local function today()
 	return os.time() // 86400
 end
+
+-- 일일 미션: 진행도 올리고, 목표에 닿으면 바로 보상
+local function questProgress(player, key, amount)
+	local data = DataService.Get(player)
+	local q = data and data.quests
+	local def = Config.Quests[key]
+	if not (q and def) then
+		return
+	end
+	if q.day ~= today() then
+		data.quests = { day = today(), Play = 0, Hit = 0, Win = 0, done = {} }
+		q = data.quests
+	end
+	if q.done[key] then
+		return
+	end
+	q[key] = math.min(def.goal, (q[key] or 0) + amount)
+	if q[key] >= def.goal then
+		q.done[key] = true
+		data.coins += def.coins or 0
+		data.gems += def.gems or 0
+		notify(player, string.format("✅ 일일 미션 '%s' 완료! 🪙 +%d%s", def.name, def.coins or 0, def.gems and ("  💎 +" .. def.gems) or ""), Color3.fromRGB(140, 255, 160))
+	end
+end
+
+-- 전체 서버 순위 (OrderedDataStore). Studio 에서 API 접근이 꺼져 있으면 조용히 건너뜀
+local DataStoreService = game:GetService("DataStoreService")
+local winsStore, koStore
+pcall(function()
+	winsStore = DataStoreService:GetOrderedDataStore("PopGolfWins_v1")
+	koStore = DataStoreService:GetOrderedDataStore("PopGolfKO_v1")
+end)
+local nameCache = {}
+local function nameOf(userId)
+	if nameCache[userId] then
+		return nameCache[userId]
+	end
+	local ok, name = pcall(function()
+		return Players:GetNameFromUserIdAsync(userId)
+	end)
+	nameCache[userId] = ok and name or ("#" .. userId)
+	return nameCache[userId]
+end
+local function pushGlobal(player, data)
+	task.spawn(function()
+		pcall(function()
+			if winsStore then
+				winsStore:SetAsync(tostring(player.UserId), data.stats.wins)
+			end
+			if koStore then
+				koStore:SetAsync(tostring(player.UserId), data.stats.knockouts)
+			end
+		end)
+	end)
+end
+local function refreshGlobalBoards()
+	for _, entry in ipairs({ { winsStore, boards.globalWins, "🏆" }, { koStore, boards.globalKO, "💫" } }) do
+		local store, label, icon = entry[1], entry[2], entry[3]
+		if store and label then
+			local ok, pages = pcall(function()
+				return store:GetSortedAsync(false, 10)
+			end)
+			if ok and pages then
+				local lines = {}
+				for i, row in ipairs(pages:GetCurrentPage()) do
+					table.insert(lines, string.format("%d. %s   %s %d", i, nameOf(tonumber(row.key)), icon, row.value))
+				end
+				label.Text = #lines > 0 and table.concat(lines, "\n") or "아직 기록이 없어요"
+			else
+				label.Text = "순위를 불러오지 못했어요\n(게임 설정 → 보안 → API 접근 켜기)"
+			end
+		end
+	end
+end
+task.spawn(function()
+	while true do
+		refreshGlobalBoards()
+		task.wait(120)
+	end
+end)
 
 -- 무작위로 섞어서 팀 나누기 (1명이면 레드 팀만)
 local function makeTeams(list)
@@ -390,11 +489,14 @@ local function finishMatch()
 				local gems = 0
 				data.stats.matches += 1
 				data.stats.holesWon += match.holeWins[index] or 0
+				questProgress(p, "Play", 1)
 				if winnerTeam == index then
 					coins += Config.Rewards.matchWin
 					gems += Config.Rewards.winGems
 					data.stats.wins += 1
+					questProgress(p, "Win", 1)
 				end
+				pushGlobal(p, data)
 				if data.lastDailyDay < today() then
 					data.lastDailyDay = today()
 					gems += Config.Rewards.dailyGems
@@ -447,12 +549,13 @@ local function finishMatch()
 	table.sort(rows, function(a, b)
 		return a.wins > b.wins
 	end)
-	local text = "🏆 이 서버 순위\n"
-	for i = 1, math.min(6, #rows) do
-		text ..= string.format("%d. %s  🏆%d  💫%d\n", i, rows[i].name, rows[i].wins, rows[i].ko)
+	local lines = {}
+	for i = 1, math.min(10, #rows) do
+		table.insert(lines, string.format("%d. %s   🏆%d  💫%d", i, rows[i].name, rows[i].wins, rows[i].ko))
 	end
-	if leaderboardLabel then
-		leaderboardLabel.Text = text
+	boards.serverMvp.Text = #lines > 0 and table.concat(lines, "\n") or "-"
+	for place = 1, 3 do
+		boards.podium[place].Text = rows[place] and rows[place].name or "-"
 	end
 end
 
@@ -722,6 +825,12 @@ function actions.Equip(player, data, skinId)
 	data.equipped = skinId
 	Club.Give(player, skinId) -- 로비에서도 바로 바뀜
 	return true, Config.Skins[skinId].name .. " 장착! (로비에서 휘둘러 효과를 확인해 보세요)"
+end
+
+-- PLAY 버튼: 대기열 들어가기 / 나가기
+function actions.Queue(player, data, on)
+	player:SetAttribute("Queued", on == true)
+	return true, on and "⛳ 대기열에 들어갔어요! 곧 경기가 시작돼요" or "대기열에서 나왔어요"
 end
 
 function actions.SelectSkill(player, data, skillId)
