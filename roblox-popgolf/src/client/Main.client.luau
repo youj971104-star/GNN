@@ -23,6 +23,10 @@ pcall(function()
 	StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Backpack, false)
 end)
 
+local UserInputService = game:GetService("UserInputService")
+-- 휴대폰·태블릿 (터치만 있고 키보드 없음)
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
 local state
 local info = { phase = "Waiting", hole = 0, holes = 3, timeLeft = 0, teams = {}, golf = { teams = {}, players = {} }, theme = "", need = 1 }
 local endsAt = 0
@@ -50,7 +54,7 @@ end
 local hud = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 8),
-	Size = UDim2.fromOffset(440, 96),
+	Size = isMobile and UDim2.new(0.46, 0, 0, 84) or UDim2.fromOffset(440, 96),
 	BackgroundColor3 = C.bg,
 	BackgroundTransparency = 0.15,
 	Parent = screen.gui,
@@ -72,7 +76,7 @@ local wallet = label({
 local board = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -10, 0, 60),
-	Size = UDim2.fromOffset(230, 0),
+	Size = UDim2.fromOffset(isMobile and 170 or 230, 0),
 	AutomaticSize = Enum.AutomaticSize.Y,
 	BackgroundColor3 = C.bg,
 	BackgroundTransparency = 0.25,
@@ -101,7 +105,7 @@ local powerText = label({ Parent = powerBack, Size = UDim2.fromScale(1, 1), ZInd
 local hint = label({
 	AnchorPoint = Vector2.new(0.5, 1),
 	Position = UDim2.new(0.5, 0, 1, -146),
-	Size = UDim2.fromOffset(560, 26),
+	Size = isMobile and UDim2.new(0.6, 0, 0, 22) or UDim2.fromOffset(560, 26),
 	TextColor3 = Color3.new(1, 1, 1),
 	TextStrokeTransparency = 0.3,
 	Parent = screen.gui,
@@ -142,6 +146,55 @@ local itemButton = button({
 	Visible = false,
 	Parent = screen.gui,
 }, Shot.UseItem)
+
+-- 휴대폰: 로블록스 점프 버튼(오른쪽 아래)과 안 겹치게 엄지가 닿는 오른쪽 중간으로
+if isMobile then
+	shotButton.AnchorPoint = Vector2.new(1, 0.5)
+	shotButton.Position = UDim2.new(1, -24, 0.52, 0)
+	shotButton.Size = UDim2.fromOffset(130, 130)
+	itemButton.AnchorPoint = Vector2.new(1, 0.5)
+	itemButton.Position = UDim2.new(1, -24, 0.52, -112)
+	itemButton.Size = UDim2.fromOffset(150, 50)
+	powerBack.Position = UDim2.new(0.5, 0, 1, -40)
+	powerBack.Size = UDim2.new(0.5, 0, 0, 24)
+	hint.Position = UDim2.new(0.5, 0, 1, -70)
+end
+
+----------------------------------------------------------------------
+-- 경기 중에는 메뉴를 접어서 조작에 집중 (☰ 버튼으로 필요할 때만 열기)
+----------------------------------------------------------------------
+local menuToggle = button({
+	Position = UDim2.fromOffset(12, 46),
+	Size = UDim2.fromOffset(isMobile and 64 or 92, 40),
+	BackgroundColor3 = Color3.fromRGB(70, 70, 100),
+	Text = "☰ 메뉴",
+	Visible = false,
+	Parent = screen.gui,
+}, function()
+	local show = not screen.menuFrame.Visible
+	screen.menuFrame.Visible = show
+	if not show then
+		screen.open(nil)
+	end
+end)
+
+local wasInGame = false
+local function applyLayout(inGame)
+	if inGame == wasInGame then
+		return
+	end
+	wasInGame = inGame
+	if inGame then
+		-- 경기 시작: 메뉴 접고, 열려 있던 창 닫기
+		screen.open(nil)
+		screen.menuFrame.Visible = false
+		menuToggle.Visible = true
+	else
+		-- 로비: 상점·캡슐·골프채 메뉴 모두 보이기
+		screen.menuFrame.Visible = true
+		menuToggle.Visible = false
+	end
+end
 
 Shot.Start({
 	setPower = function(p, visible)
@@ -405,7 +458,8 @@ local function renderBoard()
 			order += 1
 			label({ Parent = board, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.sub, Text = status })
 			for _, p in ipairs(info.golf.players) do
-				if p.team == index then
+				-- 휴대폰은 화면이 작아서 팀 줄만 보여 줌 (내 이름 줄은 아이템 확인용으로 남김)
+				if p.team == index and (not isMobile or p.userId == player.UserId) then
 					order += 1
 					local extra = (p.item and (" " .. Config.Items[p.item].name) or "") .. (p.shield and " 🛡️" or "")
 					label({ Parent = board, LayoutOrder = order, Size = UDim2.new(1, 0, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = p.userId == player.UserId and C.gold or C.text, Text = "  · " .. p.name .. extra })
@@ -418,6 +472,8 @@ end
 remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	info = m
 	endsAt = os.clock() + m.timeLeft
+	local inGame = player:GetAttribute("Team") ~= nil and (m.phase == "Countdown" or m.phase == "Playing" or m.phase == "HoleResult")
+	applyLayout(inGame)
 	-- 위쪽 점수
 	local red, blue = m.teams[1], m.teams[2]
 	if red and blue then

@@ -212,6 +212,7 @@ function UIKit.Screen(name)
 		BackgroundTransparency = 1,
 		Parent = gui,
 	}, { new("UIListLayout", { Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center }) })
+	screen.menuFrame = menu -- 경기 중에 숨기거나 접을 때 사용
 	screen.menuButtons = {}
 	function screen.menu(key, text, color, titleText, renderer)
 		screen.titles[key] = titleText
