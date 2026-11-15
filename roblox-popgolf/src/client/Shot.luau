@@ -142,14 +142,19 @@ function Shot.Release()
 end
 
 function Shot.UseItem()
-	if enabled then
+	if enabled and not practice then
 		remotes.UseItem:FireServer()
 	end
 end
 
+local practice = false -- 로비 연습 스윙 (모션·효과만)
+
 function Shot.Update(info, aimPlus)
 	hasAimPlus = aimPlus
-	enabled = info.phase == "Playing" and player:GetAttribute("Team") ~= nil
+	local playing = info.phase == "Playing" and player:GetAttribute("Team") ~= nil
+	local c = character()
+	practice = not playing and c ~= nil and c:FindFirstChild("GolfClub") ~= nil and info.phase ~= "Countdown"
+	enabled = playing or practice
 	if not enabled and charging then
 		charging = false
 		SwingAnimator.SetLocalCharge(nil)
@@ -185,13 +190,13 @@ function Shot.Start(callbacks)
 		local dir = aimDirection()
 		local root = rootAndHumanoid()
 		local target, near = nil, false
-		if enabled then
+		if enabled and not practice then
 			target, near = ballInReach(dir)
 		end
-		ui.setMode(enabled, target ~= nil)
+		ui.setMode(enabled, target ~= nil, practice)
 
 		-- 스윙 존 표시 (공이 근처에 있거나 힘을 모을 때)
-		if enabled and root and (near or charging) then
+		if enabled and not practice and root and (near or charging) then
 			local c = zoneCenter(root, dir)
 			local groundY = root.Position.Y - 2.9
 			zoneRing.CFrame = CFrame.new(c.X, groundY, c.Z) * CFrame.Angles(0, 0, math.rad(90))
@@ -220,7 +225,7 @@ function Shot.Start(callbacks)
 		end
 
 		-- 조준 화살표: 맞을 공이 있으면 공에서, 없으면 내 발 앞에서
-		if enabled and root and (charging or target) then
+		if enabled and not practice and root and (charging or target) then
 			local base = (target and target.Position or zoneCenter(root, dir)) - Vector3.new(0, target and 1 or 2.8, 0)
 			local len = 3 + (charging and power or 0.25) * 16
 			arrow.Size = Vector3.new(0.45, 0.12, len)

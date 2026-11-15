@@ -218,14 +218,49 @@ task.spawn(function()
 	end
 end)
 
+-- 로비 연습 스윙: 모션과 골프채 효과만 (공·사람은 안 맞음)
+local practiceLast = {}
+local function practiceCharge(player)
+	local character = player.Character
+	if character and character:FindFirstChild("GolfClub") then
+		character:SetAttribute("ChargeStart", workspace:GetServerTimeNow())
+		character:SetAttribute("Charging", true)
+	end
+end
+local function practiceSwing(player, power)
+	local character = player.Character
+	if not (character and character:FindFirstChild("GolfClub")) or type(power) ~= "number" then
+		return
+	end
+	if practiceLast[player] and os.clock() - practiceLast[player] < Config.Club.cooldown then
+		return
+	end
+	practiceLast[player] = os.clock()
+	character:SetAttribute("Charging", false)
+	character:SetAttribute("SwingPower", math.clamp(power, 0, 1))
+	character:SetAttribute("SwingId", (character:GetAttribute("SwingId") or 0) + 1)
+	task.delay(Config.Club.impactDelay, function()
+		if character.Parent then
+			character:SetAttribute("HitId", (character:GetAttribute("HitId") or 0) + 1) -- 큰 폭발 효과 보여 주기
+		end
+	end)
+end
+Players.PlayerRemoving:Connect(function(p)
+	practiceLast[p] = nil
+end)
+
 remotes.ChargeStart.OnServerEvent:Connect(function(player)
-	if match.phase == "Playing" then
+	if match.phase == "Playing" and inMatch(player) then
 		Golf.ChargeStart(player)
+	elseif not inMatch(player) or match.phase ~= "Playing" then
+		practiceCharge(player)
 	end
 end)
 remotes.Swing.OnServerEvent:Connect(function(player, direction, power)
-	if match.phase == "Playing" then
+	if match.phase == "Playing" and inMatch(player) then
 		Golf.Swing(player, direction, power)
+	elseif not inMatch(player) or match.phase ~= "Playing" then
+		practiceSwing(player, power)
 	end
 end)
 remotes.UseItem.OnServerEvent:Connect(function(player)
@@ -279,7 +314,9 @@ local function sendToLobby(player)
 	end
 	player:SetAttribute("Team", nil)
 	player.Neutral = true
-	Club.Remove(player)
+	if character then
+		character:SetAttribute("Charging", false) -- 골프채는 로비에서도 계속 들고 있음
+	end
 end
 
 local function finishMatch()
@@ -542,15 +579,24 @@ local function onPlayerAdded(player)
 	if not data then
 		return
 	end
-	player.CharacterAdded:Connect(function(character)
+	local function onCharacter(character)
 		character:WaitForChild("HumanoidRootPart", 10)
-		-- 경기 중에 리스폰되면 우리 팀 공 옆으로, 골프채 다시 쥐어 주기
-		if inMatch(player) and match.phase ~= "Waiting" and match.phase ~= "Results" then
-			task.wait(0.2)
-			Golf.PlacePlayer(player, nil)
-			Club.Give(player, data.equipped)
+		character:WaitForChild("Humanoid", 10)
+		task.wait(0.3) -- 관절이 모두 만들어질 때까지
+		if not character.Parent then
+			return
 		end
-	end)
+		-- 경기 중에 리스폰되면 우리 팀 공 옆으로
+		if inMatch(player) and match.phase ~= "Waiting" and match.phase ~= "Results" then
+			Golf.PlacePlayer(player, nil)
+		end
+		-- 골프채는 로비에서도 항상 들고 있음 (장착한 스킨 바로 보이게)
+		Club.Give(player, data.equipped)
+	end
+	player.CharacterAdded:Connect(onCharacter)
+	if player.Character then
+		task.spawn(onCharacter, player.Character)
+	end
 	refresh(player)
 	task.delay(4, grantVipDaily, player)
 	broadcastMatch()
@@ -599,10 +645,8 @@ function actions.Equip(player, data, skinId)
 		return false, "가지고 있지 않은 골프채예요"
 	end
 	data.equipped = skinId
-	if inMatch(player) then
-		Club.Give(player, skinId)
-	end
-	return true, Config.Skins[skinId].name .. " 장착!"
+	Club.Give(player, skinId) -- 로비에서도 바로 바뀜
+	return true, Config.Skins[skinId].name .. " 장착! (로비에서 휘둘러 효과를 확인해 보세요)"
 end
 
 function actions.BuyShard(player, data, skinId)

@@ -70,7 +70,7 @@ local function makeClub(geo)
 	-- 클럽 머리: 앞(발끝 쪽, 로컬 -Z)으로 길게, 치는 면은 목표 쪽(-X)
 	local head = Instance.new("Part")
 	head.Name = "Head"
-	head.Size = Vector3.new(0.6, 0.6, 1.4)
+	head.Size = Vector3.new(0.75, 0.7, 1.7)
 	weldTo(shaft, head, CFrame.new(0, at(geo.headDist), -0.45))
 	head.Parent = model
 
@@ -93,12 +93,20 @@ local function applySkin(model, skinId)
 	local head = model:FindFirstChild("Head")
 	local gem = model:FindFirstChild("Gem")
 	local ferrule = model:FindFirstChild("Ferrule")
+	local shaft = model:FindFirstChild("Shaft")
 	head.Color = skin.color
 	head.Material = Enum.Material[skin.material] or Enum.Material.SmoothPlastic
 	local rarityIndex = Config.RarityById[skin.rarity].index
+	local accent = (skin.trail and skin.trail[1]) or skin.color
 	gem.Transparency = rarityIndex >= 3 and 0 or 1
 	gem.Color = (skin.trail and skin.trail[#skin.trail]) or skin.color
-	ferrule.Color = rarityIndex >= 4 and Color3.fromRGB(255, 215, 120) or Color3.fromRGB(170, 175, 185)
+	-- 샤프트: 일반은 은색, 희귀부터 스킨 색이 살짝 섞임
+	if shaft then
+		shaft.Color = rarityIndex >= 2 and Color3.fromRGB(200, 205, 215):Lerp(accent, 0.55) or Color3.fromRGB(200, 205, 215)
+	end
+	-- 금속 띠: 스킨 색, 영웅부터 빛남, 전설부터 금색 테
+	ferrule.Color = rarityIndex >= 4 and Color3.fromRGB(255, 215, 120) or accent
+	ferrule.Material = rarityIndex >= 3 and Enum.Material.Neon or Enum.Material.Foil
 	model:SetAttribute("Skin", skinId)
 end
 

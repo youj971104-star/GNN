@@ -150,10 +150,12 @@ Shot.Start({
 		powerFill.BackgroundColor3 = Color3.fromHSV(0.33 - p * 0.33, 0.85, 0.95)
 		powerText.Text = math.floor(p * 100) .. "%"
 	end,
-	setMode = function(playing, ballNear)
+	setMode = function(playing, ballNear, practice)
 		shotButton.Visible = playing
 		shotButton.BackgroundColor3 = ballNear and C.green or Color3.fromRGB(255, 130, 80)
-		if not playing then
+		if practice then
+			hint.Text = "🏌️ 연습 스윙: 꾹 눌렀다 떼서 장착한 골프채 효과를 확인해 보세요 (🏌️ 골프채 메뉴에서 장착)"
+		elseif not playing then
 			hint.Text = ""
 		elseif player:GetAttribute("Stunned") then
 			hint.Text = "💫 넘어졌어요! 잠깐만..."
