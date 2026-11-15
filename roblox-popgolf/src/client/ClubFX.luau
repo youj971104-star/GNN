@@ -225,6 +225,7 @@ local function attach(tool)
 		end))
 	end
 	active[tool] = e
+	print(string.format("[ClubFX] %s 골프채 효과 적용: %s (%s)", character and character.Name or "?", skinId, (Config.Skins[skinId] or {}).rarity or "?"))
 end
 
 -- 장착되어 화면에 보이는 골프채만 연출 (가방 속은 제외)
@@ -248,6 +249,12 @@ local function watchTool(tool)
 	watched[tool] = update
 	tool:GetAttributeChangedSignal("Skin"):Connect(update)
 	tool.AncestryChanged:Connect(update)
+	-- 스트리밍 때문에 클럽 머리가 모델보다 늦게 도착할 수 있음 → 도착하면 다시 붙이기
+	tool.ChildAdded:Connect(function(child)
+		if child.Name == "Head" and not active[tool] then
+			update()
+		end
+	end)
 	tool.Destroying:Connect(function()
 		detach(tool)
 		watched[tool] = nil
@@ -405,6 +412,17 @@ function ClubFX.Start()
 		watchTool(d)
 	end
 	workspace.DescendantAdded:Connect(watchTool)
+	-- 안전장치: 0.5초마다 효과가 빠진 골프채가 있으면 다시 붙이기
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			for tool, update in pairs(watched) do
+				if not active[tool] and tool:IsDescendantOf(workspace) and tool:GetAttribute("Skin") and tool:FindFirstChild("Head") then
+					update()
+				end
+			end
+		end
+	end)
 	RunService.RenderStepped:Connect(function(dt)
 		step()
 		for i = #shines, 1, -1 do

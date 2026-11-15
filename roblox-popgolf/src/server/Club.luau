@@ -31,6 +31,10 @@ end
 local function makeClub(geo)
 	local model = Instance.new("Model")
 	model.Name = "GolfClub"
+	-- 스트리밍이 켜져 있어도 골프채 부품이 한꺼번에 도착하게
+	pcall(function()
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	end)
 
 	-- 샤프트: 손잡이 위끝(grip - 0.5) ~ 클럽 머리(headDist)
 	local top = geo.grip - 0.5
