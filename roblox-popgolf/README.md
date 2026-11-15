@@ -22,11 +22,13 @@
 | └ Client | ModuleScript | `Shot` | `src/client/Shot.luau` |
 | └ Client | ModuleScript | `ClubFX` | `src/client/ClubFX.luau` |
 | └ Client | ModuleScript | `SwingAnimator` | `src/client/SwingAnimator.luau` |
+| └ Client | ModuleScript | `VFX` | `src/client/VFX.luau` |
 | └ Client | ModuleScript | `UIKit` | `src/client/UIKit.luau` |
 
 Rojo 를 쓰면 이 폴더에서 `rojo serve` → Studio 플러그인에서 Connect.
 
 ## 출시 전 체크리스트
+- **그래픽:** 탐색기 → Lighting 선택 → 속성 `Technology` 를 **Future** 로 (빛·그림자 품질, 스크립트로는 못 바꿈). 나머지 조명·색 보정·구름은 코드가 자동 설정
 0. 아바타는 **R6·R15 모두 지원**(키에 맞춰 골프채 길이 자동). 허리 비틀기·팔꿈치까지 자연스러운 건 **R15** 라서 게임 설정 → 아바타 → R15 권장
 1. 게임 설정 → 장소(Places) → **최대 플레이어 수 8** (4대4까지. 관전 자리를 두려면 10)
 2. 게임패스 2개, 개발자 상품 4개 만들고 ID 를 `Config.luau` 의 `id = 0` 자리에 입력

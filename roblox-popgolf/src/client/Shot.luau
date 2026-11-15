@@ -1,5 +1,6 @@
 -- 조작 (휘두르기 하나로 공치기 + 사람 치기)
--- PC: 마우스 왼쪽 꾹 → 힘 모으기 (골프채가 뒤로 올라감) → 떼면 휘두르기. E: 아이템
+-- PC: 마우스 왼쪽 꾹 → 힘 모으기 (골프채가 뒤로 올라감) → 떼면 휘두르기
+--     Q 대시 · E 스킬 · R 궁극기 · F 아이템
 --     공은 카메라가 보는 방향으로 날아감. 힘을 모으면 진짜 골퍼처럼 목표를 왼쪽에 두고 옆으로 섬
 --     → 공을 '내 오른쪽 앞'(바닥의 스윙 존 원)에 두고 치면 됨
 -- 모바일: 화면의 ⛳ 버튼 꾹 → 떼기, 아이템 버튼
@@ -147,6 +148,33 @@ function Shot.UseItem()
 	end
 end
 
+-- Q: 대시 (이동 키를 누르는 방향, 아니면 앞으로)
+function Shot.Dash()
+	if not enabled or practice then
+		return
+	end
+	local _, humanoid = rootAndHumanoid()
+	local move = humanoid and humanoid.MoveDirection or Vector3.zero
+	if move.Magnitude < 0.1 then
+		move = aimDirection()
+	end
+	remotes.Dash:FireServer(move)
+end
+
+-- E: 스킬 (카메라 방향으로)
+function Shot.Skill()
+	if enabled and not practice then
+		remotes.Skill:FireServer(aimDirection())
+	end
+end
+
+-- R: 궁극기
+function Shot.Ultimate()
+	if enabled and not practice then
+		remotes.Ultimate:FireServer()
+	end
+end
+
 local practice = false -- 로비 연습 스윙 (모션·효과만)
 
 function Shot.Update(info, aimPlus)
@@ -176,7 +204,13 @@ function Shot.Start(callbacks)
 		end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			Shot.BeginCharge()
+		elseif input.KeyCode == Enum.KeyCode.Q then
+			Shot.Dash()
 		elseif input.KeyCode == Enum.KeyCode.E then
+			Shot.Skill()
+		elseif input.KeyCode == Enum.KeyCode.R then
+			Shot.Ultimate()
+		elseif input.KeyCode == Enum.KeyCode.F then
 			Shot.UseItem()
 		end
 	end)

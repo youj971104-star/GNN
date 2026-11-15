@@ -21,7 +21,8 @@ local ctx
 local hole
 local teams = {} -- [teamIndex] = { members, ball, sunk, lastSafe, restTimer, frozenUntil, lastHitter }
 local playerTeam = {} -- [Player] = teamIndex
-local pstate = {} -- [Player] = { stunUntil, shieldUntil, item, lastSwing, dashUntil }
+local pstate = {} -- [Player] = { stunUntil, item, lastSwing, dodgeUntil, dashReady, skillReady, gauge, ultUntil, powerUntil, bubbleUntil, slowUntil }
+local zones = {} -- 서리 지대 { part, center, radius, untilTime, owner }
 local winner = nil
 local active = false
 local ballsFolder
@@ -76,21 +77,53 @@ local function fling(player, velocity)
 	end)
 end
 
-local function stun(player, velocity, by)
+local UL = Config.Ultimate
+
+-- 쿨다운 표시용: 다시 쓸 수 있는 서버 시각을 선수 속성으로 (클라이언트 버튼에 남은 시간 표시)
+local function setReady(player, name, seconds)
+	player:SetAttribute(name .. "Ready", workspace:GetServerTimeNow() + seconds)
+end
+
+local function addGauge(player, amount)
+	local ps = pstate[player]
+	if not ps or ps.ultUntil > os.clock() then
+		return
+	end
+	ps.gauge = math.min(UL.gaugeMax, ps.gauge + amount)
+	player:SetAttribute("Gauge", math.floor(ps.gauge))
+end
+
+local function bump(instance, attr)
+	instance:SetAttribute(attr, (instance:GetAttribute(attr) or 0) + 1)
+end
+
+-- 넘어뜨리기. 대시 회피 중이면 피하고, 버블 쉴드면 막음
+local function stun(player, velocity, by, duration)
 	local ps = pstate[player]
 	local root, humanoid = rootOf(player)
 	if not (ps and root and humanoid) then
 		return false
 	end
-	if ps.shieldUntil > os.clock() then
-		ctx.notify(player, "🛡️ 방패가 막아 줬어요!", Color3.fromRGB(140, 220, 255))
+	local now = os.clock()
+	if ps.dodgeUntil > now then
+		ctx.notify(player, "💨 회피!", Color3.fromRGB(180, 240, 255))
+		if by then
+			ctx.notify(by, "💨 " .. player.DisplayName .. " 님이 대시로 피했어요!", Color3.fromRGB(200, 200, 200))
+		end
 		return false
 	end
-	ps.stunUntil = os.clock() + CL.stunTime
+	if ps.bubbleUntil > now then
+		return false
+	end
+	duration = duration or CL.stunTime
+	ps.stunUntil = now + duration
 	humanoid.PlatformStand = true
 	fling(player, velocity)
 	player:SetAttribute("Stunned", true)
-	task.delay(CL.stunTime, function()
+	if player.Character then
+		bump(player.Character, "KnockedId") -- 맞은 사람 화면 흔들기
+	end
+	task.delay(duration, function()
 		if ps.stunUntil <= os.clock() + 0.05 then
 			local _, h = rootOf(player)
 			if h then
@@ -103,6 +136,7 @@ local function stun(player, velocity, by)
 	if by then
 		ctx.notify(player, "💫 " .. by.DisplayName .. " 님에게 맞았어요!", Color3.fromRGB(255, 160, 120))
 		ctx.onKnockout(by)
+		addGauge(by, UL.perKnock)
 	end
 	return true
 end
@@ -201,7 +235,22 @@ function Golf.BeginHole(newHole, teamLists)
 		}
 		for slot, p in ipairs(members) do
 			playerTeam[p] = index
-			pstate[p] = { stunUntil = 0, shieldUntil = 0, item = nil, lastSwing = 0, dashUntil = 0 }
+			pstate[p] = {
+				stunUntil = 0,
+				item = nil,
+				lastSwing = 0,
+				dodgeUntil = 0,
+				dashReady = 0,
+				skillReady = 0,
+				gauge = 0,
+				ultUntil = 0,
+				powerUntil = 0,
+				bubbleUntil = 0,
+				slowUntil = 0,
+			}
+			p:SetAttribute("Gauge", 0)
+			p:SetAttribute("DashReady", 0)
+			p:SetAttribute("SkillReady", 0)
 			Golf.PlacePlayer(p, slot)
 		end
 	end
@@ -266,6 +315,10 @@ end
 
 function Golf.Clear()
 	active = false
+	for _, z in ipairs(zones) do
+		z.part:Destroy()
+	end
+	table.clear(zones)
 	teams = {}
 	playerTeam = {}
 	winner = nil
@@ -304,7 +357,7 @@ function Golf.Snapshot()
 			name = p.DisplayName,
 			team = index,
 			item = ps and ps.item,
-			shield = ps and ps.shieldUntil > os.clock(),
+			shield = ps and ps.bubbleUntil > os.clock(),
 		})
 	end
 	return { teams = teamInfo, players = players, length = hole and hole.length or 0 }
@@ -324,9 +377,9 @@ function Golf.ChargeStart(player)
 	character:SetAttribute("Charging", true)
 end
 
-local function launchBall(t, dir, power, hitter)
+local function launchBall(t, dir, power, hitter, mult)
 	local pos = t.ball.Position
-	local speed = B.maxSpeed * math.max(power, CL.minPower)
+	local speed = B.maxSpeed * math.max(power, CL.minPower) * (mult or 1)
 	local angle = B.launchAngle
 	if onGreen(pos) then
 		speed *= B.puttPower
@@ -376,31 +429,59 @@ function Golf.Swing(player, direction, power)
 		end
 		local origin = root.Position
 		local hitSomething = false
+		local t0 = os.clock()
+		-- 파워 드라이브 / 메테오 스윙
+		local mult = 1
+		if ps.powerUntil > t0 then
+			mult = 1.45
+			ps.powerUntil = 0
+			player:SetAttribute("Powered", false)
+		end
+		local ult = ps.ultUntil > t0
+		if ult then
+			ps.ultUntil = 0
+			player:SetAttribute("UltActive", false)
+			ctx.shockwave(origin, UL.radius, Config.Teams[index].color)
+			ctx.announce("☄️ " .. player.DisplayName .. " 님의 메테오 스윙!", 2)
+		end
 		-- 선수는 목표(dir)를 왼쪽에 두고 옆으로 섬 → 얼굴 방향 = dir × 위
 		local facing = dir:Cross(UP)
 		local zone = origin + facing * CL.stanceOffset
 
-		-- 공 (우리 팀 공이든 상대 팀 공이든): 발 앞 스윙 존 안에 있으면 목표 방향으로 날아감
+		-- 공 (우리 팀 공이든 상대 팀 공이든): 발 앞 스윙 존 안이면 목표 방향으로 (메테오는 반경 전체)
 		for _, t in pairs(teams) do
 			if not t.sunk and t.frozenUntil <= os.clock() then
 				local pos = t.ball.Position
 				local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - origin).Magnitude <= 2.2
-				if inZone and math.abs(pos.Y - origin.Y) < 5 then
-					launchBall(t, dir, power, player)
+				if ult then
+					inZone = flat(pos - origin).Magnitude <= UL.radius
+				end
+				if inZone and math.abs(pos.Y - origin.Y) < 6 then
+					launchBall(t, dir, ult and math.max(power, 0.8) or power, player, ult and UL.launchMult or mult)
+					addGauge(player, UL.perBallHit)
 					hitSomething = true
 				end
 			end
 		end
 
-		-- 상대 선수: 골프채가 크게 도는 반경 안이면 맞음 (목표 방향으로 날아감)
+		-- 상대 선수: 골프채가 크게 도는 반경 안이면 맞음 (버블 쉴드면 내가 튕겨 나감)
+		local reach = ult and UL.radius or CL.reach
 		for _, enemy in ipairs(enemiesOf(player)) do
 			local er = rootOf(enemy)
-			if er then
+			local eps = pstate[enemy]
+			if er and eps then
 				local offset = er.Position - origin
-				if flat(offset).Magnitude <= CL.reach and math.abs(offset.Y) < 6 then
-					local k = CL.knockback * (0.6 + power)
-					stun(enemy, dir * k + UP * (20 + 25 * power), player)
-					hitSomething = true
+				if flat(offset).Magnitude <= reach and math.abs(offset.Y) < 6 then
+					if eps.bubbleUntil > os.clock() then
+						-- 버블 쉴드 반사
+						stun(player, -dir * 55 + UP * 30, enemy)
+						ctx.notify(player, "🫧 " .. enemy.DisplayName .. " 님의 버블에 튕겨 나갔어요!", Color3.fromRGB(150, 230, 255))
+					else
+						local k = CL.knockback * (0.6 + power) * (ult and 1.6 or mult)
+						local away = ult and flat(offset).Magnitude > 0.1 and flat(offset).Unit or dir
+						stun(enemy, away * k + UP * (20 + 25 * power), player, ult and UL.stunTime or nil)
+						hitSomething = true
+					end
 				end
 			end
 		end
@@ -544,28 +625,6 @@ function Golf.UseItem(player)
 				end
 			end
 		end
-	elseif item == "Dash" then
-		ps.dashUntil = os.clock() + 6
-		if humanoid then
-			humanoid.WalkSpeed = 40
-		end
-		task.delay(6, function()
-			local _, h = rootOf(player)
-			if h and pstate[player] and pstate[player].dashUntil <= os.clock() + 0.05 then
-				h.WalkSpeed = CL.walkSpeed
-			end
-		end)
-	elseif item == "Shield" then
-		ps.shieldUntil = os.clock() + 8
-		local character = player.Character
-		if character then
-			local ff = Instance.new("ForceField")
-			ff.Visible = true
-			ff.Parent = character
-			task.delay(8, function()
-				ff:Destroy()
-			end)
-		end
 	elseif item == "Gust" then
 		for _, enemy in ipairs(enemiesOf(player)) do
 			local a = math.random() * math.pi * 2
@@ -579,6 +638,231 @@ end
 ----------------------------------------------------------------------
 -- 매 프레임
 ----------------------------------------------------------------------
+----------------------------------------------------------------------
+-- 대시 (Q)
+----------------------------------------------------------------------
+local DS = Config.Dash
+
+function Golf.Dash(player, moveDir)
+	local ps = pstate[player]
+	local root, humanoid = rootOf(player)
+	if not (active and ps and root and humanoid) then
+		return
+	end
+	local now = os.clock()
+	if now < ps.dashReady or ps.stunUntil > now then
+		return
+	end
+	local dir = typeof(moveDir) == "Vector3" and flat(moveDir) or Vector3.zero
+	if dir.Magnitude < 0.1 then
+		dir = flat(root.CFrame.LookVector)
+	end
+	dir = dir.Unit
+	ps.dashReady = now + DS.cooldown
+	ps.dodgeUntil = now + DS.dodge
+	setReady(player, "Dash", DS.cooldown)
+	local inAir = humanoid.FloorMaterial == Enum.Material.Air
+	local speed = DS.speed * (inAir and DS.airBonus or 1)
+	local att = Instance.new("Attachment")
+	att.Parent = root
+	local lv = Instance.new("LinearVelocity")
+	lv.Attachment0 = att
+	lv.MaxForce = 1e6
+	lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Plane -- 위아래는 그대로, 앞뒤좌우만 밀기
+	lv.PrimaryTangentAxis = Vector3.new(1, 0, 0)
+	lv.SecondaryTangentAxis = Vector3.new(0, 0, 1)
+	lv.PlaneVelocity = Vector2.new(dir.X * speed, dir.Z * speed)
+	lv.RelativeTo = Enum.ActuatorRelativeTo.World
+	lv.Parent = root
+	task.delay(DS.duration, function()
+		lv:Destroy()
+		att:Destroy()
+	end)
+	if player.Character then
+		bump(player.Character, "DashId") -- 잔상 효과
+	end
+end
+
+----------------------------------------------------------------------
+-- 스킬 (E)
+----------------------------------------------------------------------
+local function tackle(player, dir)
+	local root = rootOf(player)
+	if not root then
+		return
+	end
+	local att = Instance.new("Attachment")
+	att.Parent = root
+	local lv = Instance.new("LinearVelocity")
+	lv.Attachment0 = att
+	lv.MaxForce = 1e6
+	lv.VectorVelocity = dir * 85 + UP * 4
+	lv.RelativeTo = Enum.ActuatorRelativeTo.World
+	lv.Parent = root
+	local hit = {}
+	task.spawn(function()
+		local start = os.clock()
+		while os.clock() - start < 0.32 do
+			task.wait(0.03)
+			local r = rootOf(player)
+			if not r then
+				break
+			end
+			for _, enemy in ipairs(enemiesOf(player)) do
+				local er = rootOf(enemy)
+				if er and not hit[enemy] and (er.Position - r.Position).Magnitude < 5 then
+					hit[enemy] = true
+					stun(enemy, dir * 70 + UP * 35, player)
+				end
+			end
+		end
+		lv:Destroy()
+		att:Destroy()
+	end)
+	if player.Character then
+		bump(player.Character, "DashId")
+	end
+end
+
+local function recall(player)
+	local index = playerTeam[player]
+	local t = teams[index]
+	local root = rootOf(player)
+	if not (t and root) or t.sunk or t.frozenUntil > os.clock() then
+		return false
+	end
+	local offset = flat(root.Position - t.ball.Position)
+	if offset.Magnitude > 45 then
+		ctx.notify(player, "🧲 우리 공이 너무 멀어요 (45 안)", Color3.fromRGB(255, 160, 160))
+		return false
+	end
+	t.ball:SetAttribute("Resting", false)
+	t.restTimer = 0
+	local speed = math.min(offset.Magnitude * 1.6, 70)
+	t.ball.AssemblyLinearVelocity = (offset.Magnitude > 0.1 and offset.Unit or Vector3.zero) * speed + UP * 22
+	return true
+end
+
+local function bubble(player, ps)
+	ps.bubbleUntil = os.clock() + 3
+	local root = rootOf(player)
+	if not root then
+		return
+	end
+	local orb = Instance.new("Part")
+	orb.Name = "Bubble"
+	orb.Shape = Enum.PartType.Ball
+	orb.Size = Vector3.one * 8
+	orb.Material = Enum.Material.ForceField
+	orb.Color = Config.Skills.Bubble.color
+	orb.CanCollide = false
+	orb.CanQuery = false
+	orb.CanTouch = false
+	orb.Massless = true
+	orb.CFrame = root.CFrame
+	local w = Instance.new("Weld")
+	w.Part0 = root
+	w.Part1 = orb
+	w.Parent = orb
+	orb.Parent = player.Character
+	task.delay(3, function()
+		orb:Destroy()
+	end)
+end
+
+local function frostZone(player, dir)
+	local root = rootOf(player)
+	if not root then
+		return
+	end
+	local center = flat(root.Position + dir * 14) + Vector3.new(0, root.Position.Y - 2.8, 0)
+	local radius = 10
+	local part = Instance.new("Part")
+	part.Name = "FrostZone"
+	part.Shape = Enum.PartType.Cylinder
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.Size = Vector3.new(0.3, radius * 2, radius * 2)
+	part.CFrame = CFrame.new(center) * CFrame.Angles(0, 0, math.rad(90))
+	part.Material = Enum.Material.Ice
+	part.Color = Config.Skills.FrostZone.color
+	part.Transparency = 0.3
+	part.Parent = ballsFolder
+	table.insert(zones, { part = part, center = center, radius = radius, untilTime = os.clock() + 4, owner = player })
+end
+
+function Golf.UseSkill(player, aim)
+	local ps = pstate[player]
+	local root = rootOf(player)
+	if not (active and ps and root) then
+		return
+	end
+	local now = os.clock()
+	if now < ps.skillReady or ps.stunUntil > now then
+		return
+	end
+	local skillId = ctx.skillOf(player)
+	local skill = Config.Skills[skillId]
+	if not skill then
+		return
+	end
+	local dir = typeof(aim) == "Vector3" and flat(aim) or Vector3.zero
+	if dir.Magnitude < 0.1 then
+		dir = flat(root.CFrame.LookVector)
+	end
+	dir = dir.Unit
+
+	local ok = true
+	if skillId == "Tackle" then
+		tackle(player, dir)
+	elseif skillId == "Recall" then
+		ok = recall(player)
+	elseif skillId == "Bubble" then
+		bubble(player, ps)
+	elseif skillId == "FrostZone" then
+		frostZone(player, dir)
+	elseif skillId == "PowerDrive" then
+		ps.powerUntil = now + 5
+		player:SetAttribute("Powered", true)
+		task.delay(5, function()
+			if ps.powerUntil <= os.clock() then
+				player:SetAttribute("Powered", false)
+			end
+		end)
+	end
+	if ok then
+		ps.skillReady = now + skill.cooldown
+		setReady(player, "Skill", skill.cooldown)
+		if player.Character then
+			bump(player.Character, "SkillId")
+		end
+		ctx.notify(player, skill.name .. "!", skill.color)
+		ctx.onChange()
+	end
+end
+
+----------------------------------------------------------------------
+-- 궁극기 (R): 게이지가 다 차면 켜고, 다음 스윙이 메테오 스윙
+----------------------------------------------------------------------
+function Golf.UseUltimate(player)
+	local ps = pstate[player]
+	if not (active and ps) or ps.gauge < UL.gaugeMax or ps.stunUntil > os.clock() then
+		return
+	end
+	ps.gauge = 0
+	player:SetAttribute("Gauge", 0)
+	ps.ultUntil = os.clock() + UL.window
+	player:SetAttribute("UltActive", true)
+	ctx.notify(player, UL.name .. " 준비! " .. UL.window .. "초 안에 휘둘러요!", Color3.fromRGB(255, 200, 80))
+	task.delay(UL.window, function()
+		if ps.ultUntil > 0 and ps.ultUntil <= os.clock() then
+			ps.ultUntil = 0
+			player:SetAttribute("UltActive", false)
+		end
+	end)
+end
+
 local function resetBall(t, message)
 	stopBall(t.ball)
 	t.ball.CFrame = CFrame.new(t.lastSafe + UP * 1.5)
@@ -604,8 +888,55 @@ local function sink(index, t)
 	ctx.onChange()
 end
 
+local gaugeTimer = 0
+local function tickZones()
+	local now = os.clock()
+	for i = #zones, 1, -1 do
+		local z = zones[i]
+		if now > z.untilTime or not z.part.Parent then
+			z.part:Destroy()
+			table.remove(zones, i)
+		else
+			-- 상대 선수 느리게
+			for _, enemy in ipairs(enemiesOf(z.owner)) do
+				local er, eh = rootOf(enemy)
+				local eps = pstate[enemy]
+				if er and eh and eps and flat(er.Position - z.center).Magnitude < z.radius then
+					eps.slowUntil = now + 0.3
+					eh.WalkSpeed = CL.walkSpeed * 0.45
+				end
+			end
+			-- 구역 안의 공은 금방 멈춤
+			for _, t in pairs(teams) do
+				if not t.sunk and not t.ball.Anchored and flat(t.ball.Position - z.center).Magnitude < z.radius then
+					local v = t.ball.AssemblyLinearVelocity
+					t.ball.AssemblyLinearVelocity = Vector3.new(v.X * 0.7, v.Y, v.Z * 0.7)
+				end
+			end
+		end
+	end
+	-- 느려짐 풀기
+	for p, ps in pairs(pstate) do
+		if ps.slowUntil > 0 and ps.slowUntil < now then
+			ps.slowUntil = 0
+			local _, h = rootOf(p)
+			if h then
+				h.WalkSpeed = CL.walkSpeed
+			end
+		end
+	end
+end
+
 local function tick(dt)
 	local changed = false
+	tickZones()
+	gaugeTimer += dt
+	if gaugeTimer >= 1 then
+		gaugeTimer -= 1
+		for p in pairs(playerTeam) do
+			addGauge(p, UL.perSecond)
+		end
+	end
 
 	for index, t in pairs(teams) do
 		local ball = t.ball

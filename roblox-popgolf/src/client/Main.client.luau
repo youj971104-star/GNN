@@ -10,6 +10,7 @@ local Format = require(ReplicatedStorage.Shared.Format)
 local UIKit = require(script.Parent.UIKit)
 local Shot = require(script.Parent.Shot)
 local ClubFX = require(script.Parent.ClubFX)
+local VFX = require(script.Parent.VFX)
 
 local C = UIKit.C
 local new, label, button = UIKit.new, UIKit.label, UIKit.button
@@ -31,6 +32,7 @@ local state
 local info = { phase = "Waiting", hole = 0, holes = 3, timeLeft = 0, teams = {}, golf = { teams = {}, players = {} }, theme = "", need = 1 }
 local endsAt = 0
 ClubFX.Start()
+VFX.Start()
 local screen = UIKit.Screen("PopGolfUI")
 screen.isReady = function()
 	return state ~= nil
@@ -178,6 +180,92 @@ local menuToggle = button({
 	end
 end)
 
+----------------------------------------------------------------------
+-- 능력 버튼: 대시(Q) · 스킬(E) · 궁극기(R) — 쿨다운이 버튼 위에 덮였다 줄어듦
+----------------------------------------------------------------------
+local abilityButtons = {}
+local function abilityButton(key, icon, onPress)
+	local size = isMobile and 74 or 66
+	local b = new("TextButton", {
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = Color3.fromRGB(40, 36, 70),
+		Text = "",
+		AutoButtonColor = true,
+		Visible = false,
+		Parent = screen.gui,
+	}, { UIKit.corner(size / 2), UIKit.stroke(Color3.new(1, 1, 1), 2) })
+	local iconLabel = label({ Parent = b, Size = UDim2.fromScale(1, 0.62), Position = UDim2.fromScale(0, 0.08), Text = icon, ZIndex = 3 })
+	local keyLabel = label({ Parent = b, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -4), Size = UDim2.new(1, 0, 0.3, 0), Text = isMobile and "" or key, TextColor3 = C.sub, ZIndex = 3 })
+	-- 쿨다운 덮개 (아래에서 위로 차 있는 어두운 막)
+	local clip = new("Frame", { Parent = b, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 2 }, { UIKit.corner(size / 2) })
+	local cover = new("Frame", { Parent = clip, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.35, ZIndex = 2 })
+	local cdText = label({ Parent = b, Size = UDim2.fromScale(1, 1), Text = "", Font = UIKit.FONT_TITLE, ZIndex = 4, TextStrokeTransparency = 0.2 })
+	b.Activated:Connect(onPress)
+	local entry = { button = b, icon = iconLabel, key = keyLabel, cover = cover, cdText = cdText }
+	table.insert(abilityButtons, entry)
+	return entry
+end
+
+local dashBtn = abilityButton("Q", "💨", Shot.Dash)
+local skillBtn = abilityButton("E", "💥", Shot.Skill)
+local ultBtn = abilityButton("R", "☄️", Shot.Ultimate)
+
+if isMobile then
+	-- 샷 버튼(오른쪽 중간) 주변: 왼쪽에 대시·스킬, 아래에 궁극기
+	for _, e in ipairs(abilityButtons) do
+		e.button.AnchorPoint = Vector2.new(1, 0.5)
+	end
+	dashBtn.button.Position = UDim2.new(1, -168, 0.52, 34)
+	skillBtn.button.Position = UDim2.new(1, -168, 0.52, -50)
+	ultBtn.button.Position = UDim2.new(1, -40, 0.52, 116)
+else
+	-- PC: 왼쪽 아래 한 줄
+	for i, e in ipairs(abilityButtons) do
+		e.button.AnchorPoint = Vector2.new(0, 1)
+		e.button.Position = UDim2.new(0, 16 + (i - 1) * 76, 1, -16)
+	end
+end
+
+local function setCooldown(entry, remaining, total)
+	if remaining > 0.05 then
+		entry.cover.Size = UDim2.fromScale(1, math.clamp(remaining / total, 0, 1))
+		entry.cdText.Text = tostring(math.ceil(remaining))
+	else
+		entry.cover.Size = UDim2.fromScale(1, 0)
+		entry.cdText.Text = ""
+	end
+end
+
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		local now = workspace:GetServerTimeNow()
+		setCooldown(dashBtn, (player:GetAttribute("DashReady") or 0) - now, Config.Dash.cooldown)
+		local skillId = state and state.skill or Config.DefaultSkill
+		local skill = Config.Skills[skillId]
+		skillBtn.icon.Text = skill and string.match(skill.name, "^(%S+)") or "⚡"
+		setCooldown(skillBtn, (player:GetAttribute("SkillReady") or 0) - now, skill and skill.cooldown or 10)
+		-- 궁극기: 게이지가 아래에서 위로 '비어 있는 만큼' 덮임
+		local gauge = player:GetAttribute("Gauge") or 0
+		local full = gauge >= Config.Ultimate.gaugeMax
+		if player:GetAttribute("UltActive") then
+			ultBtn.cover.Size = UDim2.fromScale(1, 0)
+			ultBtn.cdText.Text = "GO!"
+			ultBtn.button.BackgroundColor3 = Color3.fromRGB(255, 120, 40)
+		else
+			ultBtn.cover.Size = UDim2.fromScale(1, 1 - gauge / Config.Ultimate.gaugeMax)
+			ultBtn.cdText.Text = full and "" or (math.floor(gauge) .. "%")
+			ultBtn.button.BackgroundColor3 = full and Color3.fromRGB(255, 190, 60) or Color3.fromRGB(40, 36, 70)
+		end
+	end
+end)
+
+local function setAbilitiesVisible(on)
+	for _, e in ipairs(abilityButtons) do
+		e.button.Visible = on
+	end
+end
+
 local wasInGame = false
 local function applyLayout(inGame)
 	if inGame == wasInGame then
@@ -189,10 +277,12 @@ local function applyLayout(inGame)
 		screen.open(nil)
 		screen.menuFrame.Visible = false
 		menuToggle.Visible = true
+		setAbilitiesVisible(true)
 	else
 		-- 로비: 상점·캡슐·골프채 메뉴 모두 보이기
 		screen.menuFrame.Visible = true
 		menuToggle.Visible = false
+		setAbilitiesVisible(false)
 	end
 end
 
@@ -215,7 +305,7 @@ Shot.Start({
 		elseif ballNear then
 			hint.Text = "⛳ 공이 초록 원 안에! 꾹 눌러 힘을 모았다가 떼면 카메라 방향으로 날아가요"
 		else
-			hint.Text = "🏃 카메라를 칠 방향으로 돌리고, 공이 바닥의 원(내 오른쪽 앞)에 오게 서요 · 상대 근처에서 휘두르면 넘어뜨리기 · E: 아이템"
+			hint.Text = "🏃 카메라를 칠 방향으로 돌리고, 공이 바닥의 원(내 오른쪽 앞)에 오게 서요 · 휘둘러서 상대 넘어뜨리기 · Q 대시 · E 스킬 · R 궁극기 · F 아이템"
 		end
 	end,
 })
@@ -336,6 +426,21 @@ end)
 ----------------------------------------------------------------------
 -- 메뉴: 상점 / 기록 / 조작법
 ----------------------------------------------------------------------
+screen.menu("Skills", "⚡\n스킬", Color3.fromRGB(255, 170, 50), "⚡ 스킬 고르기 (E)", function(parent)
+	UIKit.paragraph(parent, "스킬은 모두 무료예요! 하나를 골라 장착하면 경기에서 E 키(모바일은 버튼)로 써요. 대시(Q)와 궁극기(R)는 모두 같아요.", 1, 44)
+	for i, id in ipairs(Config.SkillOrder) do
+		local skill = Config.Skills[id]
+		local equipped = state.skill == id
+		UIKit.row(parent, i + 1, skill.name .. "  ⏱" .. skill.cooldown .. "초", skill.desc, equipped and "장착 중" or "장착", equipped and C.gray or C.green, function()
+			if not equipped then
+				act("SelectSkill", id)
+			end
+		end)
+	end
+	UIKit.section(parent, Config.Ultimate.name .. " (R)", 20)
+	UIKit.paragraph(parent, Config.Ultimate.desc .. ". 공을 치거나(+" .. Config.Ultimate.perBallHit .. ") 상대를 넘어뜨리면(+" .. Config.Ultimate.perKnock .. ") 게이지가 차요.", 21, 44)
+end)
+
 screen.menu("Shop", "💎\n상점", Color3.fromRGB(230, 80, 170), "💎 상점", function(parent)
 	local hidden = {}
 	if state.restricted then
@@ -373,7 +478,10 @@ screen.menu("Help", "❔\n방법", Color3.fromRGB(120, 120, 150), "❔ 하는 �
 		"💥 휘두르면 앞에 있는 건 다 맞아요: 공은 카메라 방향으로 높이 날아가고(그린 위에선 굴러가는 퍼팅), 상대 선수는 날아가 넘어져요.",
 		"😈 상대 팀 공도 칠 수 있어요! 홀컵에서 멀리 쳐 내 버리세요. 대신 잘못 쳐서 넣어 주면 상대 팀 득점!",
 		"👫 한 명은 우리 공을 몰고 가고, 한 명은 상대를 넘어뜨리거나 상대 공을 쳐 내는 작전이 좋아요.",
-		"❓ 페어웨이 위 상자 = 아이템! E 키로 사용: 💣 물풍선 · 🧊 얼음(상대 공 정지) · 👟 대시 · 🛡️ 방패 · 🌬️ 돌풍",
+		"💨 Q 대시: 순간 돌진! 대시 직후 잠깐은 휘두르기를 피할 수 있어요 (회피). 공중에서 쓰면 더 멀리.",
+		"⚡ E 스킬: 로비의 ⚡ 스킬 메뉴에서 하나를 골라요 — 돌진 태클 · 볼 리콜 · 버블 쉴드 · 서리 지대 · 파워 드라이브",
+		"☄️ R 궁극기: 공을 치거나 상대를 넘어뜨리면 게이지가 차요. 가득 차면 R → 다음 스윙이 주변 전부를 날려 버리는 메테오 스윙!",
+		"❓ 페어웨이 위 상자 = 아이템! F 키로 사용: 💣 물풍선 · 🧊 얼음(상대 공 정지) · 🌬️ 돌풍",
 		"🌳 러프(진한 풀)·🏖️ 벙커(모래)에선 공이 잘 안 굴러가요. 💦 연못에 빠지면 마지막으로 멈췄던 자리로!",
 		"⏱️ 시간이 끝나면 홀컵에 우리 공이 더 가까운 팀 승리. 홀 3개 중 더 많이 이긴 팀 우승!",
 		"💡 Shift 키(마우스 고정)를 켜면 조준이 편해요.",
@@ -500,7 +608,7 @@ remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	end
 	itemButton.Visible = m.phase == "Playing" and myItem ~= nil
 	if myItem then
-		itemButton.Text = "E  " .. Config.Items[myItem].name
+		itemButton.Text = (isMobile and "" or "F  ") .. Config.Items[myItem].name
 	end
 	Shot.Update(m, state and state.passes and state.passes.AimPlus == true)
 	renderBoard()

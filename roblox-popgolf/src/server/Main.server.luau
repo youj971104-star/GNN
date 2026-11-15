@@ -21,6 +21,7 @@ DataService.Configure("PopGolfData_v2", function()
 		shards = 0,
 		skins = { White = true },
 		equipped = "White",
+		skill = Config.DefaultSkill, -- 장착한 스킬 (E)
 		pity = { sinceLegendary = 0 },
 		stats = { matches = 0, wins = 0, holesWon = 0, sinks = 0, knockouts = 0, pulls = 0 },
 		lastDailyDay = 0,
@@ -36,7 +37,7 @@ end)
 local remoteFolder = Instance.new("Folder")
 remoteFolder.Name = "Remotes"
 local remotes = {}
-for _, name in ipairs({ "State", "Match", "Notify", "Announce", "ChargeStart", "Swing", "UseItem", "GachaResult" }) do
+for _, name in ipairs({ "State", "Match", "Notify", "Announce", "ChargeStart", "Swing", "UseItem", "Dash", "Skill", "Ultimate", "GachaResult" }) do
 	local r = Instance.new("RemoteEvent")
 	r.Name = name
 	r.Parent = remoteFolder
@@ -90,6 +91,39 @@ do
 end
 
 ----------------------------------------------------------------------
+-- 그래픽: 밝고 선명한 만화풍 조명 (빛 번짐, 색 보정, 햇살, 구름)
+-- ※ Studio 에서 Lighting.Technology 를 'Future' 로 바꾸면 빛·그림자가 더 좋아짐 (스크립트로는 못 바꿈)
+----------------------------------------------------------------------
+do
+	local Lighting = game:GetService("Lighting")
+	Lighting.Brightness = 3
+	Lighting.ExposureCompensation = 0.15
+	Lighting.Ambient = Color3.fromRGB(110, 115, 135)
+	Lighting.OutdoorAmbient = Color3.fromRGB(140, 150, 170)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
+	Lighting.ShadowSoftness = 0.25
+	local function ensure(className, props)
+		local inst = Lighting:FindFirstChildOfClass(className) or Instance.new(className)
+		for k, v in pairs(props) do
+			inst[k] = v
+		end
+		inst.Parent = Lighting
+	end
+	ensure("Atmosphere", { Density = 0.28, Offset = 0.1, Color = Color3.fromRGB(200, 225, 255), Decay = Color3.fromRGB(120, 150, 200), Glare = 0.25, Haze = 1.2 })
+	ensure("BloomEffect", { Intensity = 0.6, Size = 26, Threshold = 1.05 })
+	ensure("ColorCorrectionEffect", { Saturation = 0.18, Contrast = 0.1, Brightness = 0.02 })
+	ensure("SunRaysEffect", { Intensity = 0.07, Spread = 0.6 })
+	pcall(function()
+		local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
+		clouds.Cover = 0.55
+		clouds.Density = 0.6
+		clouds.Color = Color3.fromRGB(255, 255, 255)
+		clouds.Parent = workspace.Terrain
+	end)
+end
+
+----------------------------------------------------------------------
 -- 상태
 ----------------------------------------------------------------------
 local restricted = {}
@@ -140,6 +174,7 @@ local function refresh(player)
 		shards = data.shards,
 		skins = data.skins,
 		equipped = data.equipped,
+		skill = data.skill,
 		pity = data.pity.sinceLegendary,
 		stats = data.stats,
 		passes = Monetization.GetOwned(player),
@@ -180,8 +215,36 @@ end
 ----------------------------------------------------------------------
 -- 골프 규칙 연결
 ----------------------------------------------------------------------
+-- 메테오 스윙 충격파 연출 (모두에게 보임)
+local function shockwave(position, radius, color)
+	local ring = Instance.new("Part")
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanQuery = false
+	ring.Material = Enum.Material.Neon
+	ring.Color = color
+	ring.Transparency = 0.1
+	ring.Size = Vector3.new(0.4, 2, 2)
+	ring.CFrame = CFrame.new(position - Vector3.new(0, 2.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Parent = workspace
+	game:GetService("TweenService"):Create(ring, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.1, radius * 2.4, radius * 2.4), Transparency = 1 }):Play()
+	game:GetService("Debris"):AddItem(ring, 0.5)
+	local fx = Instance.new("Explosion")
+	fx.Position = position
+	fx.BlastRadius = 0
+	fx.BlastPressure = 0
+	fx.DestroyJointRadiusPercent = 0
+	fx.Parent = workspace
+end
+
 local changePending = false
 Golf.Start({
+	shockwave = shockwave,
+	skillOf = function(player)
+		local data = DataService.Get(player)
+		return data and data.skill or Config.DefaultSkill
+	end,
 	notify = notify,
 	announce = announce,
 	ballStart = CourseBuilder.BallStart,
@@ -263,6 +326,21 @@ remotes.Swing.OnServerEvent:Connect(function(player, direction, power)
 		practiceSwing(player, power)
 	end
 end)
+remotes.Dash.OnServerEvent:Connect(function(player, moveDir)
+	if match.phase == "Playing" and inMatch(player) then
+		Golf.Dash(player, moveDir)
+	end
+end)
+remotes.Skill.OnServerEvent:Connect(function(player, aim)
+	if match.phase == "Playing" and inMatch(player) then
+		Golf.UseSkill(player, aim)
+	end
+end)
+remotes.Ultimate.OnServerEvent:Connect(function(player)
+	if match.phase == "Playing" and inMatch(player) then
+		Golf.UseUltimate(player)
+	end
+end)
 remotes.UseItem.OnServerEvent:Connect(function(player)
 	if match.phase == "Playing" then
 		Golf.UseItem(player)
@@ -313,6 +391,9 @@ local function sendToLobby(player)
 		character:PivotTo(lobbySpawn.CFrame + Vector3.new(math.random(-12, 12), 4, math.random(-12, 12)))
 	end
 	player:SetAttribute("Team", nil)
+	player:SetAttribute("UltActive", false)
+	player:SetAttribute("Powered", false)
+	player:SetAttribute("Gauge", 0)
 	player.Neutral = true
 	if character then
 		character:SetAttribute("Charging", false) -- 골프채는 로비에서도 계속 들고 있음
@@ -647,6 +728,15 @@ function actions.Equip(player, data, skinId)
 	data.equipped = skinId
 	Club.Give(player, skinId) -- 로비에서도 바로 바뀜
 	return true, Config.Skins[skinId].name .. " 장착! (로비에서 휘둘러 효과를 확인해 보세요)"
+end
+
+function actions.SelectSkill(player, data, skillId)
+	local skill = type(skillId) == "string" and Config.Skills[skillId]
+	if not skill then
+		return false
+	end
+	data.skill = skillId
+	return true, skill.name .. " 장착!"
 end
 
 function actions.BuyShard(player, data, skinId)
