@@ -1,0 +1,12 @@
+newmtl Bush
+Kd 0.330 0.620 0.300
+Ka 0 0 0
+
+newmtl LeavesLight
+Kd 0.450 0.780 0.360
+Ka 0 0 0
+
+newmtl Flower
+Kd 1.000 0.450 0.600
+Ka 0 0 0
+

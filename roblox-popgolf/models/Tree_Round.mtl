@@ -1,0 +1,16 @@
+newmtl Trunk
+Kd 0.420 0.280 0.170
+Ka 0 0 0
+
+newmtl Leaves
+Kd 0.300 0.660 0.300
+Ka 0 0 0
+
+newmtl LeavesLight
+Kd 0.450 0.780 0.360
+Ka 0 0 0
+
+newmtl LeavesDark
+Kd 0.200 0.500 0.260
+Ka 0 0 0
+

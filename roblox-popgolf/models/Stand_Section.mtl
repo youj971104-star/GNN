@@ -1,0 +1,42 @@
+newmtl Concrete
+Kd 0.360 0.380 0.520
+Ka 0 0 0
+
+newmtl SeatRed
+Kd 1.000 0.310 0.310
+Ka 0 0 0
+
+newmtl SeatWhite
+Kd 0.920 0.930 0.970
+Ka 0 0 0
+
+newmtl SeatBlue
+Kd 0.310 0.590 1.000
+Ka 0 0 0
+
+newmtl ConcreteLight
+Kd 0.480 0.500 0.660
+Ka 0 0 0
+
+newmtl Rail
+Kd 0.800 0.820 0.880
+Ka 0 0 0
+
+newmtl Neon
+Kd 0.240 0.900 1.000
+Ka 0 0 0
+Ke 0.240 0.900 1.000
+
+newmtl NeonPink
+Kd 1.000 0.280 0.750
+Ka 0 0 0
+Ke 1.000 0.280 0.750
+
+newmtl Roof
+Kd 0.200 0.220 0.340
+Ka 0 0 0
+
+newmtl Metal
+Kd 0.300 0.320 0.380
+Ka 0 0 0
+

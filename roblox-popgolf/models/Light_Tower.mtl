@@ -1,0 +1,18 @@
+newmtl Concrete
+Kd 0.360 0.380 0.520
+Ka 0 0 0
+
+newmtl Metal
+Kd 0.300 0.320 0.380
+Ka 0 0 0
+
+newmtl Neon
+Kd 0.240 0.900 1.000
+Ka 0 0 0
+Ke 0.240 0.900 1.000
+
+newmtl Lamp
+Kd 1.000 0.970 0.850
+Ka 0 0 0
+Ke 1.000 0.970 0.850
+
