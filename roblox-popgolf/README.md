@@ -8,6 +8,7 @@
 | ReplicatedStorage | Folder | `Shared` | |
 | └ Shared | ModuleScript | `Config` | `src/shared/Config.luau` |
 | └ Shared | ModuleScript | `Format` | `src/shared/Format.luau` |
+| └ Shared | ModuleScript | `ClubRig` | `src/shared/ClubRig.luau` |
 | ServerScriptService | Folder | `Server` | |
 | └ Server | **Script** | `Main` | `src/server/Main.server.luau` |
 | └ Server | ModuleScript | `DataService` | `src/server/DataService.luau` |
@@ -26,7 +27,7 @@
 Rojo 를 쓰면 이 폴더에서 `rojo serve` → Studio 플러그인에서 Connect.
 
 ## 출시 전 체크리스트
-0. **게임 설정 → 아바타 → 아바타 유형 R15** (스윙 모션이 R15 팔·허리 관절을 움직임)
+0. 아바타는 **R6·R15 모두 지원**(키에 맞춰 골프채 길이 자동). 허리 비틀기·팔꿈치까지 자연스러운 건 **R15** 라서 게임 설정 → 아바타 → R15 권장
 1. 게임 설정 → 장소(Places) → **최대 플레이어 수 8** (4대4까지. 관전 자리를 두려면 10)
 2. 게임패스 2개, 개발자 상품 4개 만들고 ID 를 `Config.luau` 의 `id = 0` 자리에 입력
 3. 성숙도 질문지: **폭력 "가벼움·비현실적"**, **유료 확률형 아이템 "예"** (GAME_DESIGN.md 6장)
@@ -35,7 +36,7 @@ Rojo 를 쓰면 이 폴더에서 `rojo serve` → Studio 플러그인에서 Conn
 ## 테스트 팁
 - 혼자서도 연습 경기가 시작돼요 (`Config.MinPlayers = 1`). 팀전은 **테스트 탭 → 클라이언트 및 서버 → 플레이어 4명(2대2) / 6명(3대3) / 8명(4대4)** 으로 확인
 - 팀 최대 인원은 `Config.MaxTeamSize`, 인원별 코스 폭·아이템 수는 `Config.Course.widthPerExtraPlayer`, `boxesPerExtraPlayer`
-- 골프채 위치가 어색하면 `Club.luau` 맨 위 `PIVOT`(관절 위치)·`SHAFT_OFFSET`, 스윙 크기·속도는 `SwingAnimator.luau` 맨 위 숫자(ADDRESS_TILT, BACK_MAX, FOLLOW, SWING_TIME, WAIST_TWIST)를 조절하세요. 공이 발에서 너무 멀거나 가까우면 `Config.Club.stanceOffset`
+- 골프채 위치가 어색하면 `ClubRig.luau` 의 `PIVOT_Z`(스윙 중심 앞뒤)·`HEAD_HEIGHT`(클럽 머리 높이)·Geometry 의 `armLen * 0.85`(손 위치), 스윙 크기·속도는 `SwingAnimator.luau` 맨 위 숫자(BACK_MAX, FOLLOW, SWING_TIME, WAIST_TWIST, HAND_GAP)를 조절하세요. 공이 발에서 너무 멀거나 가까우면 `Config.Club.stanceOffset`
 - 공이 너무 멀리/가까이 가면 `Config.Ball.maxSpeed`, 너무 높이/낮게 뜨면 `launchAngle`
 - 프리미엄 캡슐 테스트: 상품 ID 를 넣고 Studio 에서 젬 상품을 '테스트 구매'(실제 로벅스 차감 없음)
 - 공이 너무 빨리/늦게 멈추면 `Config.Ball.rollingDrag`, 샷이 약하면 `maxShotSpeed`, 넘어뜨리기가 너무 세면 `Config.Club` 조절
