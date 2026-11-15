@@ -86,7 +86,9 @@ local function pointOnPath(path, t)
 	return path[#path], Vector3.new(0, 0, 1)
 end
 
-function CourseBuilder.Build(holeNumber, seed)
+-- teamSize: 한 팀 인원 (2~4). 많을수록 페어웨이를 넓히고 아이템 상자를 늘림
+function CourseBuilder.Build(holeNumber, seed, teamSize)
+	local extra = math.max(0, (teamSize or 2) - 2)
 	CourseBuilder.Clear()
 	local rng = Random.new(seed)
 	local theme = THEMES[((holeNumber - 1 + seed) % #THEMES) + 1]
@@ -130,7 +132,7 @@ function CourseBuilder.Build(holeNumber, seed)
 	end
 
 	-- 3) 페어웨이: 20스터드마다 줄무늬, 꺾이는 곳은 원판으로 매끄럽게
-	local W = CC.fairwayWidth
+	local W = CC.fairwayWidth + extra * CC.widthPerExtraPlayer
 	local stripe = 0
 	for i = 1, #path - 1 do
 		local a, b = path[i], path[i + 1]
@@ -232,8 +234,9 @@ function CourseBuilder.Build(holeNumber, seed)
 
 	-- 9) ❓ 아이템 상자 (페어웨이 위)
 	local boxes = {}
-	for i = 1, CC.itemBoxes do
-		local p, dir = pointOnPath(path, (i - 0.5) / CC.itemBoxes * 0.85 + 0.05)
+	local boxCount = CC.itemBoxes + extra * CC.boxesPerExtraPlayer
+	for i = 1, boxCount do
+		local p, dir = pointOnPath(path, (i - 0.5) / boxCount * 0.85 + 0.05)
 		local side = Vector3.new(dir.Z, 0, -dir.X) * rng:NextNumber(-W / 2 + 5, W / 2 - 5)
 		local box = part({ Name = "ItemBox", Size = Vector3.new(3, 3, 3), CFrame = CFrame.new(p + side + UP * 3) * CFrame.Angles(math.rad(45), math.rad(45), 0), Color = Color3.fromRGB(255, 210, 60), Material = Enum.Material.Neon, Transparency = 0.15, CanCollide = false }, folder)
 		local bg = Instance.new("BillboardGui")
@@ -262,6 +265,7 @@ function CourseBuilder.Build(holeNumber, seed)
 		boxes = boxes,
 		boosters = {},
 		length = math.floor(length),
+		teamSize = teamSize or 2,
 		alive = true,
 	}
 	current = hole
@@ -282,15 +286,16 @@ end
 -- 팀 공 출발 위치: 티 위 좌우
 function CourseBuilder.BallStart(hole, teamIndex, teamCount)
 	local side = Vector3.new(hole.startDir.Z, 0, -hole.startDir.X)
-	local spread = (teamIndex - (teamCount + 1) / 2) * 9
+	-- 팀 인원이 많을수록 두 팀 공 사이를 넓혀서 출발 때 안 겹치게
+	local spread = (teamIndex - (teamCount + 1) / 2) * (9 + math.max(0, (hole.teamSize or 2) - 2) * 4)
 	return hole.tee + side * spread + hole.startDir * 2 + UP * (Config.Ball.diameter / 2 + 0.2)
 end
 
 -- 선수 출발 위치: 우리 팀 공 바로 뒤
-function CourseBuilder.PlayerStart(hole, teamIndex, teamCount, slot)
+function CourseBuilder.PlayerStart(hole, teamIndex, teamCount, slot, slotCount)
 	local ballPos = CourseBuilder.BallStart(hole, teamIndex, teamCount)
 	local side = Vector3.new(hole.startDir.Z, 0, -hole.startDir.X)
-	local pos = ballPos - hole.startDir * 4 + side * ((slot - 1.5) * 3) + UP * 3
+	local pos = ballPos - hole.startDir * 4 + side * ((slot - ((slotCount or 2) + 1) / 2) * 3) + UP * 3
 	return CFrame.lookAt(pos, pos + hole.startDir)
 end
 

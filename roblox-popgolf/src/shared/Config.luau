@@ -7,9 +7,9 @@ local Config = {}
 ----------------------------------------------------------------------
 -- 경기
 ----------------------------------------------------------------------
-Config.TeamSize = 2 -- 2대2
+Config.MaxTeamSize = 4 -- 한 팀 최대 인원 (인원에 따라 2대2·3대3·4대4 자동)
 Config.MinPlayers = 1 -- 혼자서도 연습 가능 (1명이면 레드 팀만)
-Config.MaxPlayers = 4 -- 한 경기 인원 (서버 최대 인원도 4~6 추천, 넘치면 관전 후 다음 판)
+Config.MaxPlayers = Config.MaxTeamSize * 2 -- 한 경기 최대 8명 (넘치면 관전 후 다음 판)
 Config.Intermission = 15
 Config.HolesPerMatch = 3
 Config.HoleTime = 180 -- 홀 제한 시간. 끝나면 홀컵에 더 가까운 팀이 승리
@@ -53,12 +53,14 @@ Config.Club = {
 -- 코스 생성 (실제 골프장처럼: 티 → 페어웨이 → 그린, 주변에 러프·벙커·연못·나무)
 Config.Course = {
 	length = { 260, 380 }, -- 티에서 그린까지 거리 범위
-	fairwayWidth = 46,
+	fairwayWidth = 46, -- 2대2 기준 페어웨이 폭
+	widthPerExtraPlayer = 6, -- 한 팀 인원이 1명 늘 때마다 넓어지는 폭 (3대3 +6, 4대4 +12)
 	greenRadius = 26,
 	bunkers = { 2, 4 },
 	ponds = { 0, 2 },
 	trees = 40,
-	itemBoxes = 6,
+	itemBoxes = 6, -- 2대2 기준 아이템 상자 수
+	boxesPerExtraPlayer = 2, -- 한 팀 인원이 1명 늘 때마다 추가되는 상자
 	itemBoxRespawn = 8,
 }
 

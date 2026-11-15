@@ -218,7 +218,7 @@ function Golf.PlacePlayer(player, slot)
 	end
 	local cf
 	if slot then
-		cf = ctx.playerStart(hole, index, #teams, slot)
+		cf = ctx.playerStart(hole, index, #teams, slot, #teams[index].members)
 	else
 		cf = CFrame.new(teams[index].ball.Position + UP * 4 + Vector3.new(math.random(-4, 4), 0, math.random(-4, 4)))
 	end

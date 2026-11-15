@@ -312,7 +312,7 @@ end)
 
 screen.menu("Help", "❔\n방법", Color3.fromRGB(120, 120, 150), "❔ 하는 방법", function(parent)
 	local lines = {
-		"🔴🔵 2대2 팀전! 팀마다 공이 하나. 타수는 없어요 — 우리 공을 먼저 홀컵에 넣는 팀이 그 홀을 이겨요.",
+		"🔴🔵 팀전! 인원에 맞춰 2대2 · 3대3 · 4대4로 자동으로 나뉘어요. 팀마다 공이 하나, 타수는 없어요 — 우리 공을 먼저 홀컵에 넣는 팀이 그 홀을 이겨요.",
 		"🏌️ 마우스 왼쪽(모바일은 버튼)을 꾹 누르면 진짜 골퍼처럼 옆으로 서서 골프채를 뒤로 올리고, 떼면 휘둘러요. 힘 게이지가 왔다 갔다 하니 타이밍!",
 		"🎯 공은 카메라가 보는 방향으로 날아가요. 카메라를 칠 방향으로 돌리고, 공이 바닥에 보이는 원(내 오른쪽 앞) 안에 오게 서세요. 원이 초록색이면 맞아요!",
 		"💥 휘두르면 앞에 있는 건 다 맞아요: 공은 카메라 방향으로 높이 날아가고(그린 위에선 굴러가는 퍼팅), 상대 선수는 날아가 넘어져요.",
@@ -419,7 +419,7 @@ remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	-- 위쪽 점수
 	local red, blue = m.teams[1], m.teams[2]
 	if red and blue then
-		scoreLabel.Text = string.format("🔴 %d  :  %d 🔵", red.holeWins, blue.holeWins)
+		scoreLabel.Text = string.format("🔴 %d  :  %d 🔵   (%s)", red.holeWins, blue.holeWins, m.mode or "")
 	elseif red then
 		scoreLabel.Text = "🔴 연습 경기"
 	else
@@ -466,9 +466,9 @@ task.spawn(function()
 		local left = math.max(0, endsAt - os.clock())
 		local p = info.phase
 		if p == "Waiting" then
-			phaseLabel.Text = "⏳ 플레이어를 기다리는 중 (2대2는 4명)"
+			phaseLabel.Text = "⏳ 플레이어를 기다리는 중 · 4명 2대2 / 6명 3대3 / 8명 4대4"
 		elseif p == "Intermission" then
-			phaseLabel.Text = "⛳ 곧 경기 시작 " .. math.ceil(left) .. " · 팀은 무작위로 나뉘어요"
+			phaseLabel.Text = "⛳ 곧 경기 시작 " .. math.ceil(left) .. " · 인원에 맞춰 팀이 무작위로 나뉘어요 (최대 4대4)"
 		elseif p == "Countdown" then
 			phaseLabel.Text = string.format("%d번 홀 · %s · 준비 %d", info.hole, info.theme, math.ceil(left))
 		elseif p == "Playing" then

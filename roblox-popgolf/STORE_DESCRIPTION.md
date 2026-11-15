@@ -6,11 +6,11 @@
 
 ## 🇰🇷 한국어
 
-**이름:** ⛳ 팝골프 [2대2 팀 배틀 골프]
+**이름:** ⛳ 팝골프 [팀 배틀 골프 2v2~4v4]
 
 **설명:**
 ```
-⛳ 휘두르면 펑! 공도 사람도 날아가는 2대2 팀 배틀 골프!
+⛳ 휘두르면 펑! 공도 사람도 날아가는 팀 배틀 골프! (2대2 · 3대3 · 4대4)
 
 🔴 레드 팀 vs 🔵 블루 팀, 팀마다 공은 딱 하나!
 타수는 세지 않아요. 우리 공을 먼저 홀컵에 넣는 팀이 이겨요.
@@ -30,17 +30,17 @@
 🎨 골프채 꾸미기 21종: 빛 입자, 회전 고리, 무지개 연출
 (뽑기 확률은 게임 안에 공개, 꾸미기만 바뀌고 실력에는 영향 없음)
 
-👫 친구와 팀을 짜서 뒤엉켜 보세요!
+👫 친구 8명까지 함께 뒤엉켜 보세요!
 👍 재밌었다면 좋아요와 즐겨찾기 부탁해요!
 ```
 
 ## 🇺🇸 English
 
-**Name:** ⛳ Pop Golf [2v2 Team Battle Golf]
+**Name:** ⛳ Pop Golf [Team Battle Golf 2v2~4v4]
 
 **Description:**
 ```
-⛳ Swing and POP! Balls AND players go flying in this 2v2 team battle golf!
+⛳ Swing and POP! Balls AND players go flying in this team battle golf! (2v2 · 3v3 · 4v4)
 
 🔴 Red Team vs 🔵 Blue Team, one ball per team!
 No stroke counting. First team to sink their own ball wins the hole.
@@ -60,10 +60,10 @@ No stroke counting. First team to sink their own ball wins the hole.
 🎨 21 club skins with glowing particles, spinning rings and rainbow effects
 (Capsule odds are shown in-game. Skins are cosmetic only.)
 
-👫 Team up with friends and get chaotic!
+👫 Up to 8 friends — get chaotic!
 👍 Like and favorite if you had fun!
 ```
 
 ## 짧은 소개 문구 (광고·SNS용)
-- 🇰🇷 휘두르면 펑! 공도 사람도 날아가는 2대2 골프 대난투 ⛳
-- 🇺🇸 Swing and POP! 2v2 golf chaos where balls and players fly ⛳
+- 🇰🇷 휘두르면 펑! 공도 사람도 날아가는 최대 4대4 골프 대난투 ⛳
+- 🇺🇸 Swing and POP! Up to 4v4 golf chaos where balls and players fly ⛳

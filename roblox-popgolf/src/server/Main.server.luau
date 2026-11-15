@@ -100,6 +100,8 @@ local match = {
 	teams = {}, -- { {Player, Player}, {Player, Player} }
 	holeWins = {}, -- [teamIndex] = 이긴 홀 수
 	lastHole = nil, -- { winner, reason }
+	teamSize = 2, -- 이번 경기 한 팀 최대 인원
+	mode = "", -- "2대2" / "3대3" / "3대2" ...
 	theme = "",
 }
 
@@ -170,6 +172,8 @@ local function broadcastMatch()
 		theme = match.theme,
 		lastHole = match.lastHole,
 		need = Config.MinPlayers,
+		mode = match.mode,
+		maxPlayers = Config.MaxPlayers,
 	})
 end
 
@@ -339,6 +343,8 @@ local function finishMatch()
 	match.holeWins = {}
 	match.lastHole = nil
 	match.hole = 0
+	match.mode = ""
+	match.teamSize = 2
 	match.phase = "Waiting"
 	broadcastMatch()
 end
@@ -346,6 +352,13 @@ end
 local function playMatch(participants)
 	match.teams = makeTeams(participants)
 	match.holeWins = {}
+	local a, b = #match.teams[1], match.teams[2] and #match.teams[2] or 0
+	match.teamSize = math.max(a, b)
+	match.mode = b > 0 and string.format("%d대%d", a, b) or "연습"
+	if b > 0 then
+		announce(string.format("⚔️ %s 경기 시작!", match.mode), 3)
+		task.wait(1.5)
+	end
 	for index, members in ipairs(match.teams) do
 		match.holeWins[index] = 0
 		for _, p in ipairs(members) do
@@ -376,7 +389,7 @@ local function playMatch(participants)
 
 		match.hole = holeNumber
 		match.lastHole = nil
-		local hole = CourseBuilder.Build(holeNumber, seed + holeNumber)
+		local hole = CourseBuilder.Build(holeNumber, seed + holeNumber, match.teamSize)
 		match.theme = hole.theme.name
 		Golf.BeginHole(hole, match.teams)
 
