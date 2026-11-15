@@ -18,9 +18,12 @@ local function weldTo(base, part, offset)
 	part.Massless = true
 	part.CastShadow = false
 	part.CFrame = base.CFrame * offset
-	local w = Instance.new("WeldConstraint")
+	-- Weld(C0 고정): 샤프트를 나중에 옮겨도 부품이 항상 같은 자리에 붙어 있음
+	-- (WeldConstraint 는 게임 세계에 들어갈 때의 위치를 기록해서, 먼저 붙이고 샤프트를 옮기면 부품이 떨어져 나감)
+	local w = Instance.new("Weld")
 	w.Part0 = base
 	w.Part1 = part
+	w.C0 = offset
 	w.Parent = part
 end
 
