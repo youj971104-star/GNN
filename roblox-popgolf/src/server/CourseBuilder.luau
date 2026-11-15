@@ -120,7 +120,36 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	minX, maxX, minZ, maxZ = minX - margin, maxX + margin, minZ - 60, maxZ + 70
 	local center = Vector3.new((minX + maxX) / 2, 0, (minZ + maxZ) / 2)
 	local size = Vector3.new(maxX - minX, 4, maxZ - minZ)
-	part({ Name = "Rough", Size = size, CFrame = CFrame.new(center - UP * 2), Color = theme.rough, Material = Enum.Material.Grass }, folder)
+	-- 러프 = 로블록스 지형 잔디 (풀잎 장식이 흔들림). 윗면 높이 0
+	local terrain = workspace.Terrain
+	pcall(function()
+		terrain.Decoration = true
+	end)
+	terrain:SetMaterialColor(Enum.Material.Grass, theme.rough)
+	terrain:SetMaterialColor(Enum.Material.Sand, Color3.fromRGB(240, 220, 160))
+	terrain:SetMaterialColor(Enum.Material.Rock, Color3.fromRGB(125, 120, 115))
+	terrain.WaterColor = Color3.fromRGB(60, 170, 220)
+	terrain.WaterTransparency = 0.6
+	terrain.WaterWaveSize = 0.15
+	terrain.WaterWaveSpeed = 8
+	terrain:FillBlock(CFrame.new(center - UP * 4), Vector3.new(size.X + 120, 8, size.Z + 120), Enum.Material.Grass)
+	-- 코스 바깥 언덕 (지평선이 밋밋하지 않게)
+	local hillRng = Random.new(seed + 99)
+	for _ = 1, 26 do
+		local side = hillRng:NextInteger(1, 4)
+		local hx, hz
+		if side <= 2 then
+			hx = (side == 1) and (minX - hillRng:NextNumber(30, 70)) or (maxX + hillRng:NextNumber(30, 70))
+			hz = hillRng:NextNumber(minZ - 40, maxZ + 40)
+		else
+			hz = (side == 3) and (minZ - hillRng:NextNumber(30, 70)) or (maxZ + hillRng:NextNumber(30, 70))
+			hx = hillRng:NextNumber(minX - 40, maxX + 40)
+		end
+		terrain:FillBall(Vector3.new(hx, -hillRng:NextNumber(4, 14), hz), hillRng:NextNumber(20, 40), Enum.Material.Grass)
+		if hillRng:NextNumber() < 0.3 then
+			terrain:FillBall(Vector3.new(hx, hillRng:NextNumber(2, 8), hz), hillRng:NextNumber(6, 12), Enum.Material.Rock)
+		end
+	end
 	-- 투명 울타리 (선수가 밖으로 못 나가게, 공은 튕겨 나옴)
 	for _, side in ipairs({
 		{ Vector3.new(size.X / 2, 30, 0), Vector3.new(2, 60, size.Z) },
@@ -202,7 +231,8 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 			local side = Vector3.new(dir.Z, 0, -dir.X) * (rng:NextNumber() < 0.5 and -1 or 1)
 			pos = p + side * (W / 2 - 4)
 		end
-		disc("Sand", pos, rng:NextNumber(8, 13), 0.3, 0.6, Color3.fromRGB(240, 220, 160), Enum.Material.Sand, folder)
+		-- 지형 모래로 바꿈 (표면 재질만 교체)
+		terrain:FillCylinder(CFrame.new(pos.X, -1, pos.Z), 2.2, rng:NextNumber(8, 13), Enum.Material.Sand)
 	end
 
 	-- 7) 연못 (페어웨이 옆이나 일부를 가로지름)
@@ -211,25 +241,70 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local p, dir = pointOnPath(path, rng:NextNumber(0.3, 0.75))
 		local side = Vector3.new(dir.Z, 0, -dir.X) * (rng:NextNumber() < 0.5 and -1 or 1)
 		local pos = p + side * rng:NextNumber(W / 2, W / 2 + 18)
-		local water = disc("Water", pos, rng:NextNumber(14, 22), 0.35, 0.7, Color3.fromRGB(70, 160, 230), Enum.Material.Glass, folder)
-		water.Transparency = 0.25
+		-- 땅을 파고 진짜 물을 채움 (가장자리는 모래)
+		local r = rng:NextNumber(14, 22)
+		terrain:FillCylinder(CFrame.new(pos.X, -1, pos.Z), 2.2, r + 3, Enum.Material.Sand)
+		terrain:FillCylinder(CFrame.new(pos.X, -2, pos.Z), 4.2, r, Enum.Material.Air)
+		terrain:FillCylinder(CFrame.new(pos.X, -3, pos.Z), 2.4, r, Enum.Material.Water)
 	end
 
-	-- 8) 나무 (페어웨이·그린에서 떨어진 곳)
+	-- 8) 나무·덤불·꽃·바위 (페어웨이·그린에서 떨어진 곳)
+	local leafShades = { theme.leaves, theme.leaves:Lerp(Color3.new(1, 1, 1), 0.18), theme.leaves:Lerp(Color3.new(0, 0, 0), 0.2) }
+	local function treeAt(pos, scale)
+		local h = rng:NextNumber(9, 15) * scale
+		part({ Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, 1.8 * scale, 1.8 * scale), CFrame = CFrame.new(pos + UP * (h / 2)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(105, 72, 45), Material = Enum.Material.Wood }, folder)
+		-- 잎 덩어리 여러 개를 겹쳐서 풍성하게
+		for k = 1, 4 do
+			local off = Vector3.new(rng:NextNumber(-2.5, 2.5), rng:NextNumber(-1.5, 2.5), rng:NextNumber(-2.5, 2.5)) * scale
+			local sz = rng:NextNumber(6, 10) * scale
+			part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.one * sz, CFrame = CFrame.new(pos + UP * (h + 1) + off), Color = leafShades[(k % 3) + 1], Material = Enum.Material.Grass }, folder)
+		end
+	end
 	local placed = 0
-	for _ = 1, CC.trees * 4 do
+	for _ = 1, CC.trees * 5 do
 		if placed >= CC.trees then
 			break
 		end
 		local pos = Vector3.new(rng:NextNumber(minX + 6, maxX - 6), 0, rng:NextNumber(minZ + 6, maxZ - 6))
 		local d = distToPath(pos, path)
 		if d > W / 2 + 8 and (pos - greenCenter).Magnitude > R + 14 and pos.Magnitude > 30 then
-			local h = rng:NextNumber(10, 18)
-			part({ Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, 2.2, 2.2), CFrame = CFrame.new(pos + UP * (h / 2)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(110, 75, 45), Material = Enum.Material.Wood }, folder)
-			local leafSize = rng:NextNumber(9, 14)
-			part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.one * leafSize, CFrame = CFrame.new(pos + UP * (h + leafSize * 0.3)), Color = theme.leaves, Material = Enum.Material.Grass }, folder)
+			treeAt(pos, rng:NextNumber(0.8, 1.3))
+			-- 나무 옆 덤불
+			for _ = 1, rng:NextInteger(1, 3) do
+				local bpos = pos + Vector3.new(rng:NextNumber(-6, 6), 0, rng:NextNumber(-6, 6))
+				part({ Name = "Bush", Shape = Enum.PartType.Ball, Size = Vector3.one * rng:NextNumber(2.5, 4), CFrame = CFrame.new(bpos + UP * 0.8), Color = leafShades[rng:NextInteger(1, 3)], Material = Enum.Material.Grass }, folder)
+			end
 			placed += 1
 		end
+	end
+	-- 꽃 무리 (러프 곳곳)
+	local flowerColors = { Color3.fromRGB(255, 120, 150), Color3.fromRGB(255, 230, 90), Color3.fromRGB(190, 150, 255), Color3.new(1, 1, 1) }
+	for _ = 1, 40 do
+		local c = Vector3.new(rng:NextNumber(minX + 4, maxX - 4), 0, rng:NextNumber(minZ + 4, maxZ - 4))
+		if distToPath(c, path) > W / 2 + 4 and (c - greenCenter).Magnitude > R + 6 then
+			local col = flowerColors[rng:NextInteger(1, #flowerColors)]
+			for _ = 1, 6 do
+				local f = c + Vector3.new(rng:NextNumber(-2, 2), 0.35, rng:NextNumber(-2, 2))
+				part({ Name = "Flower", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.6, CFrame = CFrame.new(f), Color = col, Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false }, folder)
+			end
+		end
+	end
+	-- 바위
+	for _ = 1, 12 do
+		local c = Vector3.new(rng:NextNumber(minX + 4, maxX - 4), 0, rng:NextNumber(minZ + 4, maxZ - 4))
+		if distToPath(c, path) > W / 2 + 6 and (c - greenCenter).Magnitude > R + 8 then
+			local sz = rng:NextNumber(2, 5)
+			part({ Name = "Rock", Size = Vector3.new(sz, sz * 0.7, sz * 1.2), CFrame = CFrame.new(c + UP * sz * 0.25) * CFrame.Angles(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, math.pi), rng:NextNumber(-0.3, 0.3)), Color = Color3.fromRGB(135, 130, 125), Material = Enum.Material.Rock }, folder)
+		end
+	end
+	-- 카트 길 (페어웨이 옆을 따라가는 포장길)
+	local cartSide = rng:NextNumber() < 0.5 and 1 or -1
+	for k = 1, #path - 1 do
+		local a, b = path[k], path[k + 1]
+		local dir = (b - a).Unit
+		local side = Vector3.new(dir.Z, 0, -dir.X) * cartSide * (W / 2 + 7)
+		local mid = (a + b) / 2 + side
+		part({ Name = "CartPath", Size = Vector3.new(5, 0.2, (b - a).Magnitude + 5), CFrame = CFrame.lookAt(mid + UP * 0.05, mid + UP * 0.05 + dir), Color = Color3.fromRGB(175, 170, 160), Material = Enum.Material.Concrete }, folder)
 	end
 
 	-- 9) ❓ 아이템 상자 (페어웨이 위)
@@ -300,6 +375,7 @@ function CourseBuilder.PlayerStart(hole, teamIndex, teamCount, slot, slotCount)
 end
 
 function CourseBuilder.Clear()
+	workspace.Terrain:Clear() -- 지형도 지움 (로비는 지형을 쓰지 않음)
 	if current then
 		current.alive = false
 		current.folder:Destroy()

@@ -43,9 +43,23 @@ local function flat(v)
 end
 
 -- 공 아래 바닥 종류 (없으면 nil = 공중)
+-- 지형 재질 → 바닥 종류 (러프=잔디 지형, 벙커=모래 지형, 연못=물)
+local TERRAIN_SURFACE = {
+	[Enum.Material.Grass] = "Rough",
+	[Enum.Material.Sand] = "Sand",
+	[Enum.Material.Water] = "Water",
+	[Enum.Material.Rock] = "Rough",
+}
+
 local function surfaceUnder(ball)
 	local hit = workspace:Raycast(ball.Position, Vector3.new(0, -(B.diameter / 2 + 0.7), 0), rayParams)
-	return hit and hit.Instance.Name or nil
+	if not hit then
+		return nil
+	end
+	if hit.Instance:IsA("Terrain") then
+		return TERRAIN_SURFACE[hit.Material] or "Rough"
+	end
+	return hit.Instance.Name
 end
 
 local function stopBall(ball)
@@ -219,7 +233,7 @@ function Golf.BeginHole(newHole, teamLists)
 	winner = nil
 	active = false
 	ballsFolder:ClearAllChildren()
-	rayParams.FilterDescendantsInstances = { hole.folder }
+	rayParams.FilterDescendantsInstances = { hole.folder, workspace.Terrain }
 
 	local teamCount = #teamLists
 	for index, members in ipairs(teamLists) do

@@ -17,6 +17,7 @@
 | └ Server | ModuleScript | `Golf` | `src/server/Golf.luau` |
 | └ Server | ModuleScript | `Gacha` | `src/server/Gacha.luau` |
 | └ Server | ModuleScript | `Club` | `src/server/Club.luau` |
+| └ Server | ModuleScript | `LobbyBuilder` | `src/server/LobbyBuilder.luau` |
 | StarterPlayer → StarterPlayerScripts | Folder | `Client` | |
 | └ Client | **LocalScript** | `Main` | `src/client/Main.client.luau` |
 | └ Client | ModuleScript | `Shot` | `src/client/Shot.luau` |

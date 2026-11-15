@@ -150,6 +150,53 @@ function Club.Give(player, skinId)
 	applySkin(model, skinId)
 end
 
+-- 팀 색 골프 모자 (경기 중에만). 둥근 윗부분 + 앞 챙
+function Club.GiveCap(player, color)
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	if not head then
+		return
+	end
+	Club.RemoveCap(player)
+	local cap = Instance.new("Model")
+	cap.Name = "TeamCap"
+	local crown = Instance.new("Part")
+	crown.Name = "Crown"
+	crown.Size = Vector3.new(1.35, 0.7, 1.35)
+	crown.Color = color
+	crown.Material = Enum.Material.Fabric
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Parent = crown
+	local brim = Instance.new("Part")
+	brim.Name = "Brim"
+	brim.Size = Vector3.new(1.1, 0.12, 0.8)
+	brim.Color = color:Lerp(Color3.new(0, 0, 0), 0.25)
+	brim.Material = Enum.Material.Fabric
+	local button = Instance.new("Part")
+	button.Name = "Button"
+	button.Shape = Enum.PartType.Ball
+	button.Size = Vector3.one * 0.25
+	button.Color = Color3.new(1, 1, 1)
+	button.Material = Enum.Material.SmoothPlastic
+	local top = head.Size.Y * 0.42
+	weldTo(head, crown, CFrame.new(0, top, 0.05))
+	weldTo(head, brim, CFrame.new(0, top - 0.22, -0.72))
+	weldTo(head, button, CFrame.new(0, top + 0.36, 0.05))
+	crown.Parent = cap
+	brim.Parent = cap
+	button.Parent = cap
+	cap.Parent = character
+end
+
+function Club.RemoveCap(player)
+	local character = player.Character
+	local cap = character and character:FindFirstChild("TeamCap")
+	if cap then
+		cap:Destroy()
+	end
+end
+
 function Club.Remove(player)
 	local character = player.Character
 	if not character then

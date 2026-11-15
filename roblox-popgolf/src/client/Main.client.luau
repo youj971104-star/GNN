@@ -647,6 +647,18 @@ task.spawn(function()
 	end
 end)
 
+-- 로비 시설(캡슐 머신·진열대·스킬 보드·상점)에 다가가 E 를 누르면 해당 메뉴 열기
+game:GetService("ProximityPromptService").PromptTriggered:Connect(function(prompt, who)
+	if who ~= player then
+		return
+	end
+	local key = prompt:GetAttribute("OpenMenu")
+	if key and screen.renderers[key] then
+		screen.menuFrame.Visible = true
+		screen.open(key)
+	end
+end)
+
 TextChatService.OnIncomingMessage = function(message)
 	local props = Instance.new("TextChatMessageProperties")
 	local source = message.TextSource

@@ -51,43 +51,13 @@ remoteFolder.Parent = ReplicatedStorage
 ----------------------------------------------------------------------
 -- 로비
 ----------------------------------------------------------------------
-local LOBBY = Vector3.new(0, 400, 0)
-local lobbySpawn
+local LobbyBuilder = require(script.Parent.LobbyBuilder)
+local lobbySpawn, leaderboardLabel = LobbyBuilder.Build()
 do
 	local baseplate = workspace:FindFirstChild("Baseplate")
 	if baseplate then
 		baseplate:Destroy()
 	end
-	local lobby = Instance.new("Folder")
-	lobby.Name = "Lobby"
-	lobby.Parent = workspace
-	local floor = Instance.new("Part")
-	floor.Anchored = true
-	floor.Size = Vector3.new(90, 2, 90)
-	floor.Position = LOBBY - Vector3.new(0, 1, 0)
-	floor.Color = Color3.fromRGB(110, 200, 90)
-	floor.Material = Enum.Material.Grass
-	floor.Parent = lobby
-	-- 팀 색 바닥 장식 (왼쪽 레드, 오른쪽 블루)
-	for i, team in ipairs(Config.Teams) do
-		local pad = Instance.new("Part")
-		pad.Anchored = true
-		pad.Size = Vector3.new(30, 0.2, 60)
-		pad.Position = LOBBY + Vector3.new(i == 1 and -25 or 25, 0.1, 0)
-		pad.Color = team.color
-		pad.Material = Enum.Material.SmoothPlastic
-		pad.Transparency = 0.5
-		pad.CanCollide = false
-		pad.Parent = lobby
-	end
-	lobbySpawn = Instance.new("SpawnLocation")
-	lobbySpawn.Anchored = true
-	lobbySpawn.Size = Vector3.new(10, 1, 10)
-	lobbySpawn.Position = LOBBY + Vector3.new(0, 0.5, 0)
-	lobbySpawn.Neutral = true
-	lobbySpawn.Duration = 0
-	lobbySpawn.Color = Color3.fromRGB(255, 255, 255)
-	lobbySpawn.Parent = lobby
 end
 
 ----------------------------------------------------------------------
@@ -390,6 +360,7 @@ local function sendToLobby(player)
 		end
 		character:PivotTo(lobbySpawn.CFrame + Vector3.new(math.random(-12, 12), 4, math.random(-12, 12)))
 	end
+	Club.RemoveCap(player)
 	player:SetAttribute("Team", nil)
 	player:SetAttribute("UltActive", false)
 	player:SetAttribute("Powered", false)
@@ -465,6 +436,24 @@ local function finishMatch()
 	match.teamSize = 2
 	match.phase = "Waiting"
 	broadcastMatch()
+	-- 로비 순위 게시판 갱신 (지금 서버에 있는 사람 중 승리 순)
+	local rows = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		local d = DataService.Get(p)
+		if d then
+			table.insert(rows, { name = p.DisplayName, wins = d.stats.wins, ko = d.stats.knockouts })
+		end
+	end
+	table.sort(rows, function(a, b)
+		return a.wins > b.wins
+	end)
+	local text = "🏆 이 서버 순위\n"
+	for i = 1, math.min(6, #rows) do
+		text ..= string.format("%d. %s  🏆%d  💫%d\n", i, rows[i].name, rows[i].wins, rows[i].ko)
+	end
+	if leaderboardLabel then
+		leaderboardLabel.Text = text
+	end
 end
 
 local function playMatch(participants)
@@ -485,6 +474,7 @@ local function playMatch(participants)
 			p.TeamColor = Config.Teams[index].brick
 			local data = DataService.Get(p)
 			Club.Give(p, data and data.equipped or "White")
+			Club.GiveCap(p, Config.Teams[index].color)
 			notify(p, "당신은 " .. Config.Teams[index].name .. "!", Config.Teams[index].color)
 		end
 	end
@@ -670,6 +660,10 @@ local function onPlayerAdded(player)
 		-- 경기 중에 리스폰되면 우리 팀 공 옆으로
 		if inMatch(player) and match.phase ~= "Waiting" and match.phase ~= "Results" then
 			Golf.PlacePlayer(player, nil)
+			local team = player:GetAttribute("Team")
+			if team then
+				Club.GiveCap(player, Config.Teams[team].color)
+			end
 		end
 		-- 골프채는 로비에서도 항상 들고 있음 (장착한 스킨 바로 보이게)
 		Club.Give(player, data.equipped)
