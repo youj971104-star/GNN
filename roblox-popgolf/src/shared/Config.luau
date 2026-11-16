@@ -175,6 +175,7 @@ end
 
 -- 골프채 스킨 (꾸미기 전용 — 성능 차이 없음). 팀 공은 팀 색깔로 고정해서 누구 공인지 헷갈리지 않게
 -- effect: "Sparkles" | "Fire" | "Smoke" | "Light" | nil, trail: 휘두를 때 남는 꼬리 색
+-- head: 모델러 헤드 모양 (Assets 의 Club_Head_*). 없으면 기본형 Club_Head_Basic
 Config.SkinOrder = {
 	"White", "Lime", "Sky", "Peach", "Lemon", "Mint",
 	"Watermelon", "Ocean", "Choco", "Bubblegum", "Panda",
@@ -199,13 +200,13 @@ Config.Skins = {
 	Galaxy = { name = "은하", rarity = "Epic", color = Color3.fromRGB(70, 40, 140), material = "Glass", effect = "Sparkles", trail = { Color3.fromRGB(120, 80, 255), Color3.fromRGB(255, 120, 220) } },
 	Neon = { name = "네온", rarity = "Epic", color = Color3.fromRGB(60, 255, 200), material = "Neon", effect = "Light", trail = { Color3.fromRGB(60, 255, 200), Color3.fromRGB(60, 120, 255) } },
 	Frost = { fx = { texture = "smoke" }, name = "서리", rarity = "Epic", color = Color3.fromRGB(200, 240, 255), material = "Ice", effect = "Smoke", trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(160, 220, 255) } },
-	Sun = { name = "태양", rarity = "Legendary", color = Color3.fromRGB(255, 200, 40), material = "Neon", effect = "Fire", trail = { Color3.fromRGB(255, 255, 160), Color3.fromRGB(255, 120, 0) } },
-	Rainbow = { fx = { rainbow = true }, name = "무지개", rarity = "Legendary", color = Color3.fromRGB(255, 255, 255), material = "Neon", effect = "Sparkles", trail = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 80), Color3.fromRGB(80, 220, 120), Color3.fromRGB(80, 160, 255), Color3.fromRGB(190, 100, 255) } },
-	Gold = { name = "황금", rarity = "Legendary", color = Color3.fromRGB(255, 200, 80), material = "Foil", effect = "Sparkles", trail = { Color3.fromRGB(255, 240, 160), Color3.fromRGB(220, 150, 30) } },
-	Comet = { name = "혜성", rarity = "Mythic", color = Color3.fromRGB(150, 220, 255), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(120, 200, 255), Color3.fromRGB(80, 60, 255) } },
-	Aurora = { name = "오로라", rarity = "Mythic", color = Color3.fromRGB(120, 255, 200), material = "Glass", effect = "Sparkles", trail = { Color3.fromRGB(90, 255, 190), Color3.fromRGB(110, 140, 255), Color3.fromRGB(230, 120, 255) } },
+	Sun = { head = "Club_Head_Leg2", name = "태양", rarity = "Legendary", color = Color3.fromRGB(255, 200, 40), material = "Neon", effect = "Fire", trail = { Color3.fromRGB(255, 255, 160), Color3.fromRGB(255, 120, 0) } },
+	Rainbow = { head = "Club_Head_Leg1", fx = { rainbow = true }, name = "무지개", rarity = "Legendary", color = Color3.fromRGB(255, 255, 255), material = "Neon", effect = "Sparkles", trail = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 220, 80), Color3.fromRGB(80, 220, 120), Color3.fromRGB(80, 160, 255), Color3.fromRGB(190, 100, 255) } },
+	Gold = { head = "Club_Head_Leg3", name = "황금", rarity = "Legendary", color = Color3.fromRGB(255, 200, 80), material = "Foil", effect = "Sparkles", trail = { Color3.fromRGB(255, 240, 160), Color3.fromRGB(220, 150, 30) } },
+	Comet = { head = "Club_Head_Myth2", name = "혜성", rarity = "Mythic", color = Color3.fromRGB(150, 220, 255), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(120, 200, 255), Color3.fromRGB(80, 60, 255) } },
+	Aurora = { head = "Club_Head_Myth1", name = "오로라", rarity = "Mythic", color = Color3.fromRGB(120, 255, 200), material = "Glass", effect = "Sparkles", trail = { Color3.fromRGB(90, 255, 190), Color3.fromRGB(110, 140, 255), Color3.fromRGB(230, 120, 255) } },
 	-- 뽑기로 나오지 않는 VIP 전용 스킨 (게임패스는 확률형 아이템을 줄 수 없음)
-	VIPCrown = { name = "👑 VIP 왕관", rarity = "Legendary", color = Color3.fromRGB(255, 215, 90), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 240, 150), Color3.fromRGB(255, 180, 40) }, exclusive = "VIP" },
+	VIPCrown = { head = "Club_Head_Leg3", name = "👑 VIP 왕관", rarity = "Legendary", color = Color3.fromRGB(255, 215, 90), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 240, 150), Color3.fromRGB(255, 180, 40) }, exclusive = "VIP" },
 }
 
 ----------------------------------------------------------------------

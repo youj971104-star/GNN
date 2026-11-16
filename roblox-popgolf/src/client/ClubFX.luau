@@ -302,6 +302,15 @@ local function step()
 		end
 		if rainbowColor then
 			head.Color = rainbowColor -- 내 화면에서만 바뀜
+			-- 모델러 헤드 메시가 붙어 있으면 그 몸통도 같이 무지개색
+			local mesh = tool:FindFirstChild("HeadMesh")
+			if mesh then
+				for _, p in ipairs(mesh:GetChildren()) do
+					if p:IsA("BasePart") and string.sub(p.Name, 1, 9) == "Head_Base" then
+						p.Color = rainbowColor
+					end
+				end
+			end
 			if e.aura then
 				e.aura.Color = ColorSequence.new(rainbowColor, Color3.fromHSV(((t * 0.25) + 0.3) % 1, 0.8, 1))
 			end

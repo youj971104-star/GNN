@@ -7,6 +7,7 @@ local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local AssetLib = require(ReplicatedStorage.Shared.AssetLib)
 
 local CourseBuilder = {}
 
@@ -105,6 +106,23 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	folder.Name = "Hole"
 	folder.Parent = workspace
 
+	-- 모델러 에셋 (ReplicatedStorage > Assets). 없으면 아래 기본 도형을 씀
+	local function asset(name, cf, opts)
+		opts = opts or {}
+		opts.parent = folder
+		return AssetLib.Spawn(name, cf, opts)
+	end
+	local TREES = AssetLib.Available({ "Tree_Round_A", "Tree_Round_B", "Tree_Pine", "Tree_Palm" })
+	local BUSHES = AssetLib.Available({ "Bush_A", "Bush_B" })
+	local FLOWERS = AssetLib.Available({ "Flower_A", "Flower_B" })
+	local ROCKS = AssetLib.Available({ "Rock_A", "Rock_B", "Rock_C" })
+	local function pick(list)
+		return list[rng:NextInteger(1, #list)]
+	end
+	local function spin(pos)
+		return CFrame.new(pos) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
+	end
+
 	-- 1) 페어웨이 경로: 티(0,0,0) 에서 +Z 방향으로, 중간에 좌우로 휘어짐 (도그레그)
 	local length = rng:NextNumber(CC.length[1], CC.length[2])
 	local path = { Vector3.new(0, 0, 0) }
@@ -194,10 +212,16 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- 4) 티(출발대)
 	local startDir = (path[2] - path[1]).Unit
 	part({ Name = "Tee", Size = Vector3.new(30, 0.3, 18), CFrame = CFrame.lookAt(Vector3.new(0, 0.15, 0), startDir * 10 + Vector3.new(0, 0.15, 0)), Color = Color3.fromRGB(150, 225, 120), Material = Enum.Material.Grass }, folder)
-	for _, sx in ipairs({ -12, 12 }) do
+	for i, sx in ipairs({ -12, 12 }) do
 		local marker = CFrame.lookAt(Vector3.zero, startDir) * CFrame.new(sx, 0.8, 0)
-		part({ Name = "TeeMarker", Shape = Enum.PartType.Ball, Size = Vector3.one * 1.2, CFrame = marker, Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.SmoothPlastic, CanCollide = false }, folder)
+		local teamColor = Config.Teams[i] and Config.Teams[i].color
+		if not asset("Tee_Marker", marker * CFrame.new(0, -0.5, 0), { teamColor = teamColor, collide = false }) then
+			part({ Name = "TeeMarker", Shape = Enum.PartType.Ball, Size = Vector3.one * 1.2, CFrame = marker, Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.SmoothPlastic, CanCollide = false }, folder)
+		end
 	end
+
+	-- 티 뒤 네온 아치 (출발 입구 장식)
+	asset("Neon_Arch_Gate", CFrame.lookAt(-startDir * 15, -startDir * 30), { teamColor = Color3.fromRGB(255, 200, 70) })
 
 	-- 5) 그린 + 홀컵 + 깃발
 	local R = CC.greenRadius
@@ -207,8 +231,20 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	local cupAngle = rng:NextNumber(0, math.pi * 2)
 	local cup = greenCenter + Vector3.new(math.cos(cupAngle), 0, math.sin(cupAngle)) * rng:NextNumber(0, R * 0.55)
 	disc("Cup", cup, Config.Ball.cupRadius, 0.27, 0.1, Color3.fromRGB(15, 15, 15), Enum.Material.SmoothPlastic, folder).CanCollide = false
-	part({ Name = "FlagPole", Size = Vector3.new(0.35, 16, 0.35), CFrame = CFrame.new(cup + UP * 8), Color = Color3.new(1, 1, 1), CanCollide = false }, folder)
-	local flag = part({ Name = "Flag", Size = Vector3.new(0.2, 3.6, 5.5), CFrame = CFrame.new(cup + UP * 14 + Vector3.new(0, 0, 2.7)), Color = Color3.fromRGB(255, 60, 60), Material = Enum.Material.Fabric, CanCollide = false }, folder)
+	local flag
+	-- 깃발 에셋: 홀컵 가운데가 기준점. 공이 깃대에 막히지 않게 충돌 끔
+	local flagAsset = asset("Flag_Cup", CFrame.new(cup + UP * 0.25), { collide = false, teamColor = Color3.fromRGB(255, 60, 60) })
+	if flagAsset then
+		flag = flagAsset.parts.TeamColor_Flag or flagAsset.model:FindFirstChildWhichIsA("BasePart", true)
+		for _, d in ipairs(flagAsset.model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.CanQuery = false
+			end
+		end
+	else
+		part({ Name = "FlagPole", Size = Vector3.new(0.35, 16, 0.35), CFrame = CFrame.new(cup + UP * 8), Color = Color3.new(1, 1, 1), CanCollide = false }, folder)
+		flag = part({ Name = "Flag", Size = Vector3.new(0.2, 3.6, 5.5), CFrame = CFrame.new(cup + UP * 14 + Vector3.new(0, 0, 2.7)), Color = Color3.fromRGB(255, 60, 60), Material = Enum.Material.Fabric, CanCollide = false }, folder)
+	end
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 120, 120)
 	light.Range = 24
@@ -258,6 +294,9 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- 8) 나무·덤불·꽃·바위 (페어웨이·그린에서 떨어진 곳)
 	local leafShades = { theme.leaves, theme.leaves:Lerp(Color3.new(1, 1, 1), 0.18), theme.leaves:Lerp(Color3.new(0, 0, 0), 0.2) }
 	local function treeAt(pos, scale)
+		if TREES and asset(pick(TREES), spin(pos), { scale = scale }) then
+			return
+		end
 		local h = rng:NextNumber(9, 15) * scale
 		part({ Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, 1.8 * scale, 1.8 * scale), CFrame = CFrame.new(pos + UP * (h / 2)) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(105, 72, 45), Material = Enum.Material.Wood }, folder)
 		-- 잎 덩어리 여러 개를 겹쳐서 풍성하게
@@ -279,6 +318,10 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 			-- 나무 옆 덤불
 			for _ = 1, rng:NextInteger(1, 3) do
 				local bpos = pos + Vector3.new(rng:NextNumber(-6, 6), 0, rng:NextNumber(-6, 6))
+				if BUSHES then
+					asset(pick(BUSHES), spin(bpos), { scale = rng:NextNumber(0.6, 0.95) })
+					continue
+				end
 				part({ Name = "Bush", Shape = Enum.PartType.Ball, Size = Vector3.one * rng:NextNumber(2.5, 4), CFrame = CFrame.new(bpos + UP * 0.8), Color = leafShades[rng:NextInteger(1, 3)], Material = Enum.Material.Grass }, folder)
 			end
 			placed += 1
@@ -289,6 +332,10 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	for _ = 1, 40 do
 		local c = Vector3.new(rng:NextNumber(minX + 4, maxX - 4), 0, rng:NextNumber(minZ + 4, maxZ - 4))
 		if distToPath(c, path) > W / 2 + 4 and (c - greenCenter).Magnitude > R + 6 then
+			if FLOWERS then
+				asset(pick(FLOWERS), spin(c), { scale = rng:NextNumber(0.9, 1.4), collide = false })
+				continue
+			end
 			local col = flowerColors[rng:NextInteger(1, #flowerColors)]
 			for _ = 1, 6 do
 				local f = c + Vector3.new(rng:NextNumber(-2, 2), 0.35, rng:NextNumber(-2, 2))
@@ -300,6 +347,10 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	for _ = 1, 12 do
 		local c = Vector3.new(rng:NextNumber(minX + 4, maxX - 4), 0, rng:NextNumber(minZ + 4, maxZ - 4))
 		if distToPath(c, path) > W / 2 + 6 and (c - greenCenter).Magnitude > R + 8 then
+			if ROCKS then
+				asset(pick(ROCKS), spin(c), { scale = rng:NextNumber(0.8, 1.3) })
+				continue
+			end
 			local sz = rng:NextNumber(2, 5)
 			part({ Name = "Rock", Size = Vector3.new(sz, sz * 0.7, sz * 1.2), CFrame = CFrame.new(c + UP * sz * 0.25) * CFrame.Angles(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, math.pi), rng:NextNumber(-0.3, 0.3)), Color = Color3.fromRGB(135, 130, 125), Material = Enum.Material.Rock }, folder)
 		end
@@ -312,6 +363,13 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local side = Vector3.new(dir.Z, 0, -dir.X) * cartSide * (W / 2 + 7)
 		local mid = (a + b) / 2 + side
 		part({ Name = "CartPath", Size = Vector3.new(5, 0.2, (b - a).Magnitude + 5), CFrame = CFrame.lookAt(mid + UP * 0.05, mid + UP * 0.05 + dir), Color = Color3.fromRGB(175, 170, 160), Material = Enum.Material.Concrete }, folder)
+	end
+
+	-- 카트 길 시작점 옆에 세워 둔 골프 카트
+	do
+		local d0 = (path[2] - path[1]).Unit
+		local cartPos = path[1] + Vector3.new(d0.Z, 0, -d0.X) * cartSide * (W / 2 + 7) + d0 * 8
+		asset("Golf_Cart", CFrame.lookAt(cartPos, cartPos + d0), { teamColor = Color3.fromRGB(80, 200, 255) })
 	end
 
 	-- 8.5) 경기장 연출: 네온 테두리 · 조명탑 · LED 전광판 · 관중석
@@ -331,6 +389,20 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local p, dir = pointOnPath(path, (k - 0.5) / 6)
 		local side = Vector3.new(dir.Z, 0, -dir.X) * ((k % 2 == 0) and 1 or -1)
 		local base = p + side * (W / 2 + 26)
+		local tower = asset("Light_Tower", CFrame.lookAt(base, Vector3.new(p.X, base.Y, p.Z)))
+		if tower then
+			-- 램프 자리(Point_Spot)에서 페어웨이를 비추는 스포트라이트
+			local spotPos = (tower.points.Point_Spot and tower.points.Point_Spot.Position) or (base + UP * 43)
+			local lamp = part({ Name = "LampLight", Size = Vector3.one * 0.5, CFrame = CFrame.lookAt(spotPos, p), Transparency = 1, CanCollide = false, CanQuery = false }, folder)
+			local spot = Instance.new("SpotLight")
+			spot.Face = Enum.NormalId.Front
+			spot.Range = 60
+			spot.Angle = 75
+			spot.Brightness = theme.night and 5 or 1
+			spot.Color = Color3.fromRGB(255, 245, 225)
+			spot.Parent = lamp
+			continue
+		end
 		part({ Name = "Tower", Size = Vector3.new(1.6, 44, 1.6), CFrame = CFrame.new(base + UP * 22), Color = Color3.fromRGB(70, 75, 90), Material = Enum.Material.Metal }, folder)
 		local head = part({ Name = "LampHead", Size = Vector3.new(9, 4, 1.5), CFrame = CFrame.lookAt(base + UP * 45, p) , Color = Color3.fromRGB(40, 44, 60), Material = Enum.Material.Metal }, folder)
 		local panel = part({ Name = "LampPanel", Size = Vector3.new(8, 3, 0.3), CFrame = head.CFrame * CFrame.new(0, 0, -0.85), Color = Color3.fromRGB(255, 250, 225), Material = Enum.Material.Neon, CanCollide = false }, folder)
@@ -345,12 +417,21 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- LED 전광판 (티 뒤, 그린 옆)
 	local function ledBoard(pos, lookAt, line1, line2)
 		local cf = CFrame.lookAt(pos, Vector3.new(lookAt.X, pos.Y, lookAt.Z))
-		local screen = part({ Name = "LED", Size = Vector3.new(30, 9, 0.8), CFrame = cf, Color = Color3.fromRGB(10, 14, 30) }, folder)
-		for _, e in ipairs({ { Vector3.new(0, 4.8, 0), Vector3.new(31, 0.6, 1) }, { Vector3.new(0, -4.8, 0), Vector3.new(31, 0.6, 1) } }) do
-			part({ Name = "LEDFrame", Size = e[2], CFrame = cf * CFrame.new(e[1]), Color = NEON_CYAN, Material = Enum.Material.Neon, CanCollide = false }, folder)
-		end
-		for _, x in ipairs({ -12, 12 }) do
-			part({ Name = "LEDLeg", Size = Vector3.new(1, pos.Y, 1), CFrame = CFrame.new(cf.Position.X + cf.RightVector.X * x, pos.Y / 2 - 4.5, cf.Position.Z + cf.RightVector.Z * x), Color = Color3.fromRGB(60, 65, 80), Material = Enum.Material.Metal }, folder)
+		local screen
+		local led = asset("LED_Board", CFrame.lookAt(Vector3.new(pos.X, 0, pos.Z), Vector3.new(lookAt.X, 0, lookAt.Z)))
+		if led and led.parts.Screen_LED then
+			screen = led.parts.Screen_LED
+		else
+			if led then
+				led.model:Destroy()
+			end
+			screen = part({ Name = "LED", Size = Vector3.new(30, 9, 0.8), CFrame = cf, Color = Color3.fromRGB(10, 14, 30) }, folder)
+			for _, e in ipairs({ { Vector3.new(0, 4.8, 0), Vector3.new(31, 0.6, 1) }, { Vector3.new(0, -4.8, 0), Vector3.new(31, 0.6, 1) } }) do
+				part({ Name = "LEDFrame", Size = e[2], CFrame = cf * CFrame.new(e[1]), Color = NEON_CYAN, Material = Enum.Material.Neon, CanCollide = false }, folder)
+			end
+			for _, x in ipairs({ -12, 12 }) do
+				part({ Name = "LEDLeg", Size = Vector3.new(1, pos.Y, 1), CFrame = CFrame.new(cf.Position.X + cf.RightVector.X * x, pos.Y / 2 - 4.5, cf.Position.Z + cf.RightVector.Z * x), Color = Color3.fromRGB(60, 65, 80), Material = Enum.Material.Metal }, folder)
+			end
 		end
 		local sg = Instance.new("SurfaceGui")
 		sg.Face = Enum.NormalId.Front
@@ -378,7 +459,23 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	local standBase = greenCenter - greenSide * (R + 20)
 	local standCf = CFrame.lookAt(standBase, Vector3.new(greenCenter.X, standBase.Y, greenCenter.Z))
 	local crowdColors = { Color3.fromRGB(255, 90, 90), Color3.fromRGB(90, 150, 255), Color3.fromRGB(255, 220, 90), Color3.new(1, 1, 1), Color3.fromRGB(120, 230, 140) }
-	for row = 0, 3 do
+	local standAsset = AssetLib.Has("Stand_Straight20")
+	if standAsset then
+		-- 직선 관중석 2개를 나란히 (앞줄 가운데가 기준점, 뒤로 계단이 올라감) + 자리 곳곳에 관중
+		for _, sx in ipairs({ -10, 10 }) do
+			asset("Stand_Straight20", standCf * CFrame.new(sx, 0, 0))
+		end
+		for tier = 0, 4 do
+			for c = -18.5, 18.5, 2.4 do
+				if rng:NextNumber() < 0.55 then
+					local body = standCf * CFrame.new(c, (tier + 1) * 3 + 1.4, tier * 3.2 + 1.6)
+					part({ Name = "Fan", Size = Vector3.new(1.3, 1.6, 0.9), CFrame = body, Color = crowdColors[rng:NextInteger(1, #crowdColors)], Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false }, folder)
+					part({ Name = "FanHead", Shape = Enum.PartType.Ball, Size = Vector3.one * 1, CFrame = body * CFrame.new(0, 1.25, 0), Color = Color3.fromRGB(245, 205, 160), Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false }, folder)
+				end
+			end
+		end
+	end
+	for row = 0, standAsset and -1 or 3 do
 		part({ Name = "Stand", Size = Vector3.new(34, 1.6, 4), CFrame = standCf * CFrame.new(0, 0.8 + row * 1.6, 2 + row * 4), Color = Color3.fromRGB(60, 65, 95), Material = Enum.Material.Concrete }, folder)
 		for c = -15, 15, 3 do
 			if rng:NextNumber() < 0.8 then

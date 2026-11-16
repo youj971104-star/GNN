@@ -8,6 +8,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local ClubRig = require(ReplicatedStorage.Shared.ClubRig)
+local AssetLib = require(ReplicatedStorage.Shared.AssetLib)
 
 local Club = {}
 
@@ -92,7 +93,37 @@ local function makeClub(geo)
 
 	model.PrimaryPart = shaft
 	model:SetAttribute("ShaftCenter", center)
+	model:SetAttribute("HeadY", at(geo.headDist))
 	return model
+end
+
+-- 모델러 헤드 메시 (Assets 에 있을 때). 스킨에 head 가 지정돼 있으면 그 모양, 아니면 기본형
+-- 헤드 기준점(샤프트가 끼워지는 자리)을 샤프트 끝보다 0.48 위에 두면 헤드 몸통 높이가 기존 Head 와 같아짐
+local HEAD_RAISE = 0.48
+local function setHeadMesh(model, skin)
+	local old = model:FindFirstChild("HeadMesh")
+	local want = skin.head or "Club_Head_Basic"
+	if old and old:GetAttribute("Asset") == want then
+		return old
+	end
+	if old then
+		old:Destroy()
+	end
+	local list = AssetLib.Parts(want) or (want ~= "Club_Head_Basic" and AssetLib.Parts("Club_Head_Basic"))
+	if not list then
+		return nil
+	end
+	local shaft = model.PrimaryPart
+	local holder = Instance.new("Model")
+	holder.Name = "HeadMesh"
+	holder:SetAttribute("Asset", want)
+	local originOffset = CFrame.new(0, (model:GetAttribute("HeadY") or 0) + HEAD_RAISE, 0)
+	for _, item in ipairs(list) do
+		weldTo(shaft, item.part, originOffset * item.offset)
+		item.part.Parent = holder
+	end
+	holder.Parent = model
+	return holder
 end
 
 local function applySkin(model, skinId)
@@ -105,8 +136,42 @@ local function applySkin(model, skinId)
 	head.Material = Enum.Material[skin.material] or Enum.Material.SmoothPlastic
 	local rarityIndex = Config.RarityById[skin.rarity].index
 	local accent = (skin.trail and skin.trail[1]) or skin.color
+	local glow = (skin.trail and skin.trail[#skin.trail]) or skin.color
 	gem.Transparency = rarityIndex >= 3 and 0 or 1
-	gem.Color = (skin.trail and skin.trail[#skin.trail]) or skin.color
+	-- 헤드 메시가 있으면: 기존 Head 는 투명하게 남겨 두고(이펙트 기준점) 메시를 스킨 색으로 칠함
+	local mesh = setHeadMesh(model, skin)
+	if mesh then
+		head.Transparency = 1
+		local meshGem = false
+		for _, p in ipairs(mesh:GetChildren()) do
+			local n = p.Name
+			if string.sub(n, 1, 9) == "Head_Base" then
+				p.Color = skin.color
+				p.Material = head.Material
+			elseif string.sub(n, 1, 11) == "Head_Accent" then
+				p.Color = accent:Lerp(Color3.new(0, 0, 0), 0.25)
+				p.Material = rarityIndex >= 4 and Enum.Material.Foil or Enum.Material.Metal
+			elseif string.sub(n, 1, 5) == "Neon_" then
+				p.Color = glow
+			elseif string.sub(n, 1, 8) == "Club_Gem" then
+				p.Color = glow
+				p.Transparency = rarityIndex >= 3 and 0 or 1
+				meshGem = true
+			end
+			local sa = p:FindFirstChildOfClass("SurfaceAppearance")
+			if sa and (n:sub(1, 9) == "Head_Base" or n:sub(1, 11) == "Head_Accent") then
+				pcall(function()
+					sa.Color = p.Color
+				end)
+			end
+		end
+		if meshGem then
+			gem.Transparency = 1
+		end
+	else
+		head.Transparency = 0
+	end
+	gem.Color = glow
 	-- 샤프트: 일반은 은색, 희귀부터 스킨 색이 살짝 섞임
 	if shaft then
 		shaft.Color = rarityIndex >= 2 and Color3.fromRGB(200, 205, 215):Lerp(accent, 0.55) or Color3.fromRGB(200, 205, 215)
@@ -180,6 +245,22 @@ function Club.GiveCap(player, color)
 	button.Color = Color3.new(1, 1, 1)
 	button.Material = Enum.Material.SmoothPlastic
 	local top = head.Size.Y * 0.42
+	-- 모델러 모자 (Assets > Team_Cap): 윗부분은 팀 색, 챙은 조금 어둡게
+	local meshCap = AssetLib.Parts("Team_Cap", { teamColor = color })
+	if meshCap then
+		for _, item in ipairs(meshCap) do
+			if string.sub(item.part.Name, 1, 8) == "Cap_Brim" then
+				item.part.Color = color:Lerp(Color3.new(0, 0, 0), 0.35)
+			end
+			weldTo(head, item.part, CFrame.new(0, top - 0.3, 0.05) * item.offset)
+			item.part.Parent = cap
+		end
+		crown:Destroy()
+		brim:Destroy()
+		button:Destroy()
+		cap.Parent = character
+		return
+	end
 	weldTo(head, crown, CFrame.new(0, top, 0.05))
 	weldTo(head, brim, CFrame.new(0, top - 0.22, -0.72))
 	weldTo(head, button, CFrame.new(0, top + 0.36, 0.05))
