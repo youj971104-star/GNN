@@ -34,6 +34,21 @@ local endsAt = 0
 ClubFX.Start()
 VFX.Start()
 local screen = UIKit.Screen("PopGolfUI")
+-- 빌드 표시 (테스트할 때 최신 코드가 들어갔는지 확인용, 왼쪽 아래 작은 글씨)
+do
+	local tag = Instance.new("TextLabel")
+	tag.Name = "BuildTag"
+	tag.BackgroundTransparency = 1
+	tag.AnchorPoint = Vector2.new(0, 1)
+	tag.Position = UDim2.new(0, 6, 1, -2)
+	tag.Size = UDim2.fromOffset(120, 14)
+	tag.TextXAlignment = Enum.TextXAlignment.Left
+	tag.TextSize = 11
+	tag.TextColor3 = Color3.new(1, 1, 1)
+	tag.TextTransparency = 0.4
+	tag.Text = "build " .. tostring(Config.Build)
+	tag.Parent = screen.gui
+end
 screen.isReady = function()
 	return state ~= nil
 end

@@ -15,13 +15,15 @@ local UP = Vector3.new(0, 1, 0)
 local CC = Config.Course
 
 local THEMES = {
-	{ name = "봄 골프장", fairA = Color3.fromRGB(120, 205, 90), fairB = Color3.fromRGB(105, 190, 80), rough = Color3.fromRGB(70, 140, 60), green = Color3.fromRGB(140, 225, 110), leaves = Color3.fromRGB(70, 160, 70), clock = 13 },
-	{ name = "바닷가 코스", fairA = Color3.fromRGB(150, 200, 100), fairB = Color3.fromRGB(135, 185, 90), rough = Color3.fromRGB(200, 190, 130), green = Color3.fromRGB(160, 220, 120), leaves = Color3.fromRGB(60, 150, 90), clock = 15 },
-	{ name = "가을 단풍 코스", fairA = Color3.fromRGB(150, 190, 80), fairB = Color3.fromRGB(135, 175, 70), rough = Color3.fromRGB(110, 120, 50), green = Color3.fromRGB(160, 210, 100), leaves = Color3.fromRGB(230, 120, 50), clock = 16 },
-	{ name = "노을 코스", fairA = Color3.fromRGB(110, 180, 90), fairB = Color3.fromRGB(95, 165, 80), rough = Color3.fromRGB(60, 110, 60), green = Color3.fromRGB(130, 200, 110), leaves = Color3.fromRGB(200, 90, 120), clock = 17.2 },
+	{ name = "봄 골프장", fairA = Color3.fromRGB(120, 205, 90), fairB = Color3.fromRGB(90, 165, 65), rough = Color3.fromRGB(70, 140, 60), green = Color3.fromRGB(140, 225, 110), leaves = Color3.fromRGB(70, 160, 70), clock = 13 },
+	{ name = "바닷가 코스", fairA = Color3.fromRGB(150, 200, 100), fairB = Color3.fromRGB(115, 165, 75), rough = Color3.fromRGB(200, 190, 130), green = Color3.fromRGB(160, 220, 120), leaves = Color3.fromRGB(60, 150, 90), clock = 15 },
+	{ name = "가을 단풍 코스", fairA = Color3.fromRGB(150, 190, 80), fairB = Color3.fromRGB(118, 158, 58), rough = Color3.fromRGB(110, 120, 50), green = Color3.fromRGB(160, 210, 100), leaves = Color3.fromRGB(230, 120, 50), clock = 16 },
+	{ name = "노을 코스", fairA = Color3.fromRGB(110, 180, 90), fairB = Color3.fromRGB(80, 145, 68), rough = Color3.fromRGB(60, 110, 60), green = Color3.fromRGB(130, 200, 110), leaves = Color3.fromRGB(200, 90, 120), clock = 17.2 },
 }
 -- 마지막 홀 전용: 밤 경기장 (조명탑·네온이 가장 돋보임)
-local NIGHT = { name = "🌙 네온 나이트", fairA = Color3.fromRGB(45, 125, 70), fairB = Color3.fromRGB(38, 110, 62), rough = Color3.fromRGB(30, 75, 50), green = Color3.fromRGB(70, 175, 100), leaves = Color3.fromRGB(110, 70, 170), clock = 21, night = true }
+local NIGHT = { name = "🌙 네온 나이트", fairA = Color3.fromRGB(45, 125, 70), fairB = Color3.fromRGB(32, 95, 54), rough = Color3.fromRGB(30, 75, 50), green = Color3.fromRGB(70, 175, 100), leaves = Color3.fromRGB(110, 70, 170), clock = 21, night = true }
+-- 페어웨이·티 재질. Grass 재질은 휴대폰 화질에서 지형 잔디와 똑같아 보여서 구분이 안 됨 → 매끈한 재질 + 줄무늬 색 대비
+local FAIR_MAT = Enum.Material.SmoothPlastic
 local NEON_CYAN = Color3.fromRGB(60, 230, 255)
 local NEON_PINK = Color3.fromRGB(255, 70, 190)
 
@@ -212,13 +214,14 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 			bareBox(CFrame.lookAt(mid, mid + dir), Vector3.new(W, 1, (s1 - s0) + 0.05))
 			part({
 				Name = "Fairway",
-				Size = Vector3.new(W, 1, (s1 - s0) + 0.05),
-				CFrame = CFrame.lookAt(mid, mid + dir), -- 두께 1, 윗면 높이 0.5 (지형 표면 굴곡에 묻히지 않게)
+				Size = Vector3.new(W, 4, (s1 - s0) + 0.05),
+				-- 두께 4, 윗면 높이 0.5 (지형 속까지 꽉 채워서 어떤 화질에서도 지형에 묻히지 않게)
+				CFrame = CFrame.lookAt(mid - UP * 1.5, mid - UP * 1.5 + dir),
 				Color = stripe % 2 == 0 and theme.fairA or theme.fairB,
-				Material = Enum.Material.Grass,
+				Material = FAIR_MAT,
 			}, folder)
 		end
-		disc("Fairway", b, W / 2, 0.51, 1, theme.fairA, Enum.Material.Grass, folder)
+		disc("Fairway", b, W / 2, 0.51, 4, theme.fairA, FAIR_MAT, folder)
 		bareDisc(b, W / 2)
 	end
 	bareDisc(path[1], W / 2)
@@ -226,7 +229,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- 4) 티(출발대)
 	local startDir = (path[2] - path[1]).Unit
 	bareBox(CFrame.lookAt(Vector3.zero, startDir), Vector3.new(30, 0.3, 18))
-	part({ Name = "Tee", Size = Vector3.new(30, 1.2, 18), CFrame = CFrame.lookAt(Vector3.new(0, 0.2, 0), startDir * 10 + Vector3.new(0, 0.2, 0)), Color = Color3.fromRGB(150, 225, 120), Material = Enum.Material.Grass }, folder)
+	part({ Name = "Tee", Size = Vector3.new(30, 4, 18), CFrame = CFrame.lookAt(Vector3.new(0, -1.2, 0), startDir * 10 + Vector3.new(0, -1.2, 0)), Color = Color3.fromRGB(175, 235, 140), Material = FAIR_MAT }, folder)
 	for i, sx in ipairs({ -12, 12 }) do
 		local marker = CFrame.lookAt(Vector3.zero, startDir) * CFrame.new(sx, 0.8, 0)
 		local teamColor = Config.Teams[i] and Config.Teams[i].color
@@ -241,9 +244,9 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- 5) 그린 + 홀컵 + 깃발
 	local R = CC.greenRadius
 	bareDisc(greenCenter, R + 3)
-	local green = disc("Green", greenCenter, R, 0.7, 1.2, theme.green, Enum.Material.SmoothPlastic, folder)
+	local green = disc("Green", greenCenter, R, 0.7, 4, theme.green, Enum.Material.SmoothPlastic, folder)
 	green.CustomPhysicalProperties = PhysicalProperties.new(1, 0.15, 0.2, 1, 1)
-	disc("GreenFringe", greenCenter, R + 3, 0.6, 1.1, theme.fairA, Enum.Material.Grass, folder).Name = "Fairway"
+	disc("GreenFringe", greenCenter, R + 3, 0.6, 4, theme.fairB, FAIR_MAT, folder).Name = "Fairway"
 	-- 그린 테두리 네온 링 (노을·밤 홀에서도 그린 경계가 보이게). 공·레이캐스트에는 안 걸림
 	local ringN = 64
 	for k = 1, ringN do
