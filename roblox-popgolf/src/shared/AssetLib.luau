@@ -245,6 +245,10 @@ AssetLib.POINTS = {
 	Hero_Leo = { Point_Head = Vector3.new(0.098, 2.999, -0.382), Point_Back = Vector3.new(0.098, 0.999, 0.068) },
 	Hero_Yuki = { Point_Head = Vector3.new(-0.081, 3.260, -0.206), Point_Back = Vector3.new(-0.081, 1.260, 0.244), Point_Float = Vector3.new(1.069, 2.260, -0.306) },
 	Hero_Gale = { Point_Head = Vector3.new(0.270, 3.260, -0.467), Point_Back = Vector3.new(0.270, 1.260, -0.017) },
+	Hero_Volt = { Point_Head = Vector3.new(-0.065, 2.690, -0.386), Point_Back = Vector3.new(-0.065, 0.690, 0.064) },
+	Hero_Bolt = { Point_Head = Vector3.new(-0.065, 2.690, -0.386), Point_Back = Vector3.new(-0.065, 0.690, 0.064) },
+	Hero_Shade = { Point_Head = Vector3.new(-0.001, 2.519, -0.568), Point_Back = Vector3.new(-0.001, 0.519, -0.118) },
+	Hero_Titan = { Point_Head = Vector3.new(-0.001, 3.200, -0.410), Point_Back = Vector3.new(-0.001, 1.200, 0.040) },
 }
 
 -- 가져올 때 크기가 정해지지 않은 모델: 이 높이(스터드)로 자동 맞춤 (opts.scale 은 그 위에 곱해짐)

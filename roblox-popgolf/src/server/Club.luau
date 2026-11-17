@@ -409,6 +409,11 @@ local PART_COLORS = {
 	{ "ScrollWood", Color3.fromRGB(110, 70, 40), "Wood" },
 	{ "ScrollPaper", Color3.fromRGB(235, 218, 175), "SmoothPlastic" },
 	{ "SnowBand", Color3.fromRGB(235, 245, 255), "SmoothPlastic" },
+	{ "Headset", Color3.fromRGB(28, 30, 38), "SmoothPlastic" },
+	{ "NinjaMask", Color3.fromRGB(26, 24, 34), "Fabric" },
+	{ "Mask", Color3.fromRGB(26, 24, 34), "Fabric" },
+	{ "Flower", Color3.fromRGB(85, 200, 110), "SmoothPlastic" },
+	{ "Leaf", Color3.fromRGB(85, 200, 110), "SmoothPlastic" },
 	{ "Wood", Color3.fromRGB(110, 70, 40), "Wood" },
 	{ "Paper", Color3.fromRGB(235, 218, 175), "SmoothPlastic" },
 	{ "Gold", Color3.fromRGB(255, 205, 80), "Foil" },
@@ -435,6 +440,9 @@ function Club.GiveHeroLook(player, heroId, teamColor)
 	Club.RemoveHeroLook(player)
 	local hero = Config.Heroes[heroId]
 	local h = hero and AssetLib.Spawn("Hero_" .. heroId, CFrame.new(), { anchored = false, collide = false })
+	if not h and hero and hero.lookAlt then
+		h = AssetLib.Spawn(hero.lookAlt, CFrame.new(), { anchored = false, collide = false }) -- 다른 이름으로 납품된 경우
+	end
 	if not h then
 		return
 	end

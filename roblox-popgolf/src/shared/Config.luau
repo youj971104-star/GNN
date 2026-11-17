@@ -55,7 +55,7 @@ Config.StudioUnlockAllSkins = true
 -- 게임 주인(그룹 게임이면 그룹 소유자)은 자동으로 운영자. 다른 사람을 추가하려면 로블록스 UserId 를 넣기
 Config.Admins = {}
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1124a"
+Config.Build = "1124b"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
@@ -347,6 +347,7 @@ Config.Heroes = {
 		ult = { kind = "tornado", name = "🌪️ 토네이도", desc = "주변 25 안의 상대를 모두 회오리로 하늘 높이 날려요", radius = 25 },
 	},
 	Volt = {
+		lookAlt = "Hero_Bolt", -- 외형 모델이 Hero_Bolt 이름으로 와도 인식
 		emoji = "⚡", name = "볼트", title = "번개 배달 캐디", rarity = "Epic", color = Color3.fromRGB(255, 230, 60),
 		lore = "번개보다 빨리 골프백을 배달하던 캐디. 폭풍 속 배달 중 낙뢰를 맞고 전기를 다루게 됐다. 시끄럽고 성격 급하지만 약속 시간은 절대 어기지 않는다.",
 		ult = { kind = "thunder", name = "⚡ 천둥 낙뢰", desc = "어디 있든 상대 최대 3명에게 번개를 내리꽂아 기절시켜요", targets = 3 },
