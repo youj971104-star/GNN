@@ -1304,7 +1304,18 @@ local function makeAdminMenu()
 			end)
 			UIKit.stroke(rarityColor(skin.rarity), 1.5).Parent = gb
 		end
-		UIKit.paragraph(parent, "지급 기록은 서버 Output 에 [Admin] 으로 남아요. 받은 사람에게는 '운영자 선물' 알림이 떠요.", 8, 40)
+		-- 4) 테스트
+		UIKit.section(parent, "4. 테스트", 8)
+		button({ Parent = parent, LayoutOrder = 9, Size = UDim2.new(1, -8, 0, 44), BackgroundColor3 = C.green, Text = "▶ 게임 즉시 시작 (대기 시간 건너뛰기)" }, function()
+			adminAct({ cmd = "startnow" })
+		end)
+		local tp = Players:GetPlayerByUserId(adminTarget)
+		local on = tp and tp:GetAttribute("NoCooldown") == true
+		button({ Parent = parent, LayoutOrder = 10, Size = UDim2.new(1, -8, 0, 44), BackgroundColor3 = on and Color3.fromRGB(255, 170, 50) or C.card, Text = on and "⚡ 쿨타임 없음: 켜짐 (누르면 끔)" or "⚡ 쿨타임 없음: 꺼짐 (누르면 켬 · 대시·스킬·궁극기 무한)" }, function()
+			adminAct({ cmd = "nocd" })
+			task.delay(0.3, screen.render)
+		end)
+		UIKit.paragraph(parent, "지급·테스트 기록은 서버 Output 에 [Admin] 으로 남아요. 받은 사람에게는 '운영자 선물' 알림이 떠요. 쿨타임 없음은 위에서 고른 사람에게 적용돼요.", 11, 56)
 	end)
 	if isMobile then
 		b.Size = UDim2.fromOffset(60, 50)

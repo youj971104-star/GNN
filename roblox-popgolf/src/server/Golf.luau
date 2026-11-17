@@ -130,7 +130,15 @@ end
 local UL = Config.Ultimate
 
 -- 쿨다운 표시용: 다시 쓸 수 있는 서버 시각을 선수 속성으로 (클라이언트 버튼에 남은 시간 표시)
+-- 운영자 '쿨타임 없음' 모드 (Main 의 운영자 명령이 선수 속성 NoCooldown 을 켬)
+local function noCd(player)
+	return player:GetAttribute("NoCooldown") == true
+end
+
 local function setReady(player, name, seconds)
+	if noCd(player) then
+		seconds = 0
+	end
 	player:SetAttribute(name .. "Ready", workspace:GetServerTimeNow() + seconds)
 end
 
@@ -985,7 +993,7 @@ function Golf.Dash(player, moveDir)
 		dir = flat(root.CFrame.LookVector)
 	end
 	dir = dir.Unit
-	ps.dashReady = now + DS.cooldown
+	ps.dashReady = noCd(player) and now or now + DS.cooldown
 	ps.dodgeUntil = now + DS.dodge
 	setReady(player, "Dash", DS.cooldown)
 	local inAir = humanoid.FloorMaterial == Enum.Material.Air
@@ -1159,7 +1167,7 @@ function Golf.UseSkill(player, aim)
 		end)
 	end
 	if ok then
-		ps.skillReady = now + skill.cooldown
+		ps.skillReady = noCd(player) and now or now + skill.cooldown
 		setReady(player, "Skill", skill.cooldown)
 		if player.Character then
 			bump(player.Character, "SkillId")
@@ -1174,11 +1182,14 @@ end
 ----------------------------------------------------------------------
 function Golf.UseUltimate(player)
 	local ps = pstate[player]
+	if ps and noCd(player) then
+		ps.gauge = UL.gaugeMax -- 쿨타임 없음: 궁극기 게이지 항상 가득
+	end
 	if not (active and ps) or ps.gauge < UL.gaugeMax or ps.stunUntil > os.clock() then
 		return
 	end
-	ps.gauge = 0
-	player:SetAttribute("Gauge", 0)
+	ps.gauge = noCd(player) and UL.gaugeMax or 0
+	player:SetAttribute("Gauge", math.floor(ps.gauge))
 	ps.ultUntil = os.clock() + UL.window
 	player:SetAttribute("UltActive", true)
 	ctx.notify(player, UL.name .. " 준비! " .. UL.window .. "초 안에 휘둘러요!", Color3.fromRGB(255, 200, 80))
@@ -1413,6 +1424,19 @@ local function setupCollisionGroups()
 	for _, p in ipairs(Players:GetPlayers()) do
 		onPlayer(p)
 	end
+end
+
+-- 운영자: 대시·스킬 쿨타임을 지금 바로 끝내고 궁극기 게이지를 가득 채움
+function Golf.ResetCooldowns(player)
+	local ps = pstate[player]
+	if ps then
+		ps.dashReady = 0
+		ps.skillReady = 0
+		ps.gauge = UL.gaugeMax
+	end
+	player:SetAttribute("DashReady", 0)
+	player:SetAttribute("SkillReady", 0)
+	player:SetAttribute("Gauge", UL.gaugeMax)
 end
 
 function Golf.Start(context)

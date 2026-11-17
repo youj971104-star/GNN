@@ -260,6 +260,44 @@ local function pollAssignments()
 	end
 end
 
+-- 운영자 '즉시 시작': 이 로비 서버의 선수들로 바로 경기 서버를 만들어 보냄 (대기열·매칭 담당을 거치지 않음)
+function Matchmaker.ForceStart(size, players)
+	local entries = {}
+	for _, p in ipairs(players) do
+		local q = queuedAt[p]
+		queuedAt[p] = nil
+		if q then
+			task.spawn(try, function()
+				queues[q.size]:RemoveAsync(tostring(p.UserId))
+			end)
+		end
+		table.insert(entries, { u = p.UserId })
+	end
+	local ok, code = try(function()
+		return TeleportService:ReserveServer(game.PlaceId)
+	end)
+	if not ok then
+		return false
+	end
+	local data = { matchId = HttpService:GenerateGUID(false), size = size, teams = makeTeams(entries) }
+	for _, p in ipairs(players) do
+		p:SetAttribute("Queued", nil)
+		ctx.prepareTeleport(p)
+	end
+	local options = Instance.new("TeleportOptions")
+	options.ReservedServerAccessCode = code
+	options:SetTeleportData(data)
+	local sent = try(function()
+		TeleportService:TeleportAsync(game.PlaceId, players, options)
+	end)
+	if not sent then
+		for _, p in ipairs(players) do
+			ctx.onTeleportFailed(p, size)
+		end
+	end
+	return sent
+end
+
 ----------------------------------------------------------------------
 -- 경기 서버 → 로비로 돌려보내기
 ----------------------------------------------------------------------

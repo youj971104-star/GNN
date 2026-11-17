@@ -705,6 +705,9 @@ end
 
 -- 매칭: 모드마다 대기열이 따로 있음. 꽉 찬 모드는 바로(짧은 카운트다운) 시작,
 -- 아니면 가장 많이 모인 모드를 골라 대기 시간이 끝나면 모인 인원으로 시작 (코스가 하나라 한 번에 한 경기)
+-- 운영자 '즉시 시작': 대기 카운트다운을 건너뜀
+local forceStart = false
+
 local function pickMode()
 	local best, bestN = nil, 0
 	for _, size in ipairs(Config.MatchModes) do
@@ -746,6 +749,10 @@ local function localMatchLoop()
 				end
 				if #readyPlayers(size) >= size * 2 then
 					match.endsAt = math.min(match.endsAt, os.clock() + Config.FullStartDelay)
+				end
+				if forceStart then
+					forceStart = false
+					match.endsAt = os.clock()
 				end
 				match.pendingSize = size
 				broadcastMatch()
@@ -802,6 +809,10 @@ local function matchServerLoop()
 	match.endsAt = os.clock() + Config.CrossServer.gatherTime
 	while os.clock() < match.endsAt do
 		local _, missing = arrived()
+		if forceStart then
+			forceStart = false
+			match.endsAt = os.clock()
+		end
 		if missing == 0 then
 			match.endsAt = math.min(match.endsAt, os.clock() + 3)
 		end
@@ -1068,6 +1079,46 @@ function actions.Admin(player, data, req)
 		end
 		tdata.skins[req.skin] = true
 		what = "🏌️ " .. skin.name
+	elseif req.cmd == "startnow" then
+		-- 게임 즉시 시작
+		if match.phase ~= "Waiting" and match.phase ~= "Intermission" then
+			return false, "이미 경기 중이에요"
+		end
+		if Matchmaker.IsMatchServer() then
+			forceStart = true
+			return true, "▶ 모인 선수로 바로 시작해요"
+		end
+		local size = player:GetAttribute("Queued") or 2
+		if Matchmaker.Enabled() then
+			-- 이 로비 서버에서 같은 모드를 기다리는 사람 + 나 → 바로 경기 서버로
+			local list = { player }
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p ~= player and p:GetAttribute("Queued") == size and #list < size * 2 then
+					table.insert(list, p)
+				end
+			end
+			print(string.format("[Admin] %s 즉시 시작: %d대%d, %d명", player.Name, size, size, #list))
+			if Matchmaker.ForceStart(size, list) then
+				return true, string.format("▶ %d대%d 경기장으로 이동해요 (%d명)", size, size, #list)
+			end
+			return false, "경기 서버를 만들지 못했어요"
+		end
+		-- 한 서버 안 매칭 (Studio): 나를 대기열에 넣고 카운트다운 건너뛰기
+		if not player:GetAttribute("Queued") then
+			player:SetAttribute("Queued", size)
+		end
+		forceStart = true
+		print(string.format("[Admin] %s 즉시 시작", player.Name))
+		return true, "▶ 곧바로 경기를 시작해요"
+	elseif req.cmd == "nocd" then
+		-- 쿨타임 없음 모드 켜기/끄기 (대상 선수)
+		local on = not target:GetAttribute("NoCooldown")
+		target:SetAttribute("NoCooldown", on or nil)
+		if on then
+			Golf.ResetCooldowns(target)
+		end
+		print(string.format("[Admin] %s → %s : 쿨타임 없음 %s", player.Name, target.Name, on and "켬" or "끔"))
+		return true, string.format("⚡ %s 님 쿨타임 없음: %s", target.DisplayName, on and "켬" or "끔")
 	elseif req.cmd == "allskins" then
 		for id in pairs(Config.Skins) do
 			tdata.skins[id] = true
