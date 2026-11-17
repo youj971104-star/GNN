@@ -545,8 +545,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		-- 관중 자리는 놓인 관중석 모델에서 직접 잼 (모델 방향이 어떻게 들어와도 의자와 맞게):
 		--   하얀 의자 줄(가운데 3번째 줄) = 기준, 뒤 난간(금속) 쪽 = 뒤, 줄마다 뒤로 3.2 · 위로 3.0, 의자 간격 2.4 (모델러 스크립트 값)
 		for _, sx in ipairs({ -10, 10 }) do
-			-- 모델러 관중석은 의자 정면이 +Z 라서 180° 돌려야 그린을 봄
-			local stand = asset("Stand_Straight20", standCf * CFrame.new(sx, 0, 0) * CFrame.Angles(0, math.pi, 0))
+			local stand = asset("Stand_Straight20", standCf * CFrame.new(sx, 0, 0))
 			local white, trim
 			if stand then
 				for _, d in ipairs(stand.model:GetDescendants()) do
@@ -582,7 +581,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local outward = Vector3.new(greenCenter.X - last.X, 0, greenCenter.Z - last.Z)
 		outward = outward.Magnitude > 0.1 and outward.Unit or Vector3.new(0, 0, 1)
 		local front = greenCenter + outward * 30
-		local curve = asset("Stand_Curve30", CFrame.lookAt(front, front + outward)) -- 정면(+Z)이 그린 쪽
+		local curve = asset("Stand_Curve30", CFrame.lookAt(front, Vector3.new(greenCenter.X, front.Y, greenCenter.Z))) -- 정면(-Z)이 그린 쪽
 		if curve then
 			local baseY = curve.model:GetPivot().Position.Y
 			for tier = 0, 4 do

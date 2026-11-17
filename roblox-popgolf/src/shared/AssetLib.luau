@@ -286,7 +286,10 @@ function AssetLib.Spawn(name, cf, opts)
 
 	-- 가져온 모델에 대표 부품(PrimaryPart)이 잡혀 있으면 기준점 설정이 무시될 수 있어서 비움
 	model.PrimaryPart = nil
-	local offset = AssetLib.ORIGIN[name] or Vector3.zero
+	-- ORIGIN 표는 블렌더 좌표 그대로 잰 값이라, 로블록스로 가져오면 좌우(X)·앞뒤(Z) 부호가 반대
+	-- (모자가 뒤로 밀리고, 깃발·관중석이 어긋나던 원인) → 여기서 X·Z 부호를 뒤집어 씀
+	local o = AssetLib.ORIGIN[name] or Vector3.zero
+	local offset = Vector3.new(-o.X, o.Y, -o.Z)
 	local bottomCenter = boundsBottomCenter(parts)
 	model.WorldPivot = CFrame.new(bottomCenter - offset)
 	local scale = opts.scale or 1

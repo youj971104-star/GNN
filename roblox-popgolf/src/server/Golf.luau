@@ -79,6 +79,10 @@ local function serverOwn(ball)
 	end
 	-- 공은 다른 부품과 붙어 있으면 안 됨 (고정된 바닥과 붙으면 공 전체가 고정된 것처럼 꼼짝 안 함)
 	for _, joint in ipairs(ball:GetJoints()) do
+		-- 공 겉모습 메시(BallLook)를 붙이는 용접은 남김 (지우면 겉모습만 바닥으로 떨어짐)
+		if joint:IsA("WeldConstraint") and ((joint.Part0 and joint.Part0.Name == "BallLook") or (joint.Part1 and joint.Part1.Name == "BallLook")) then
+			continue
+		end
 		if Config.DebugShots then
 			print("[Shot] 공에 붙은 연결 제거:", joint:GetFullName(), joint.ClassName)
 		end
