@@ -11,6 +11,8 @@ Config.MaxTeamSize = 4 -- 한 팀 최대 인원 (인원에 따라 2대2·3대3·
 Config.MinPlayers = 1 -- 혼자서도 연습 가능 (1명이면 레드 팀만)
 Config.MaxPlayers = Config.MaxTeamSize * 2 -- 한 경기 최대 8명 (넘치면 관전 후 다음 판)
 Config.Intermission = 15
+Config.MatchModes = { 2, 3, 4 } -- PLAY 에서 고르는 모드 (한 팀 인원): 2대2 · 3대3 · 4대4
+Config.FullStartDelay = 5 -- 고른 모드 인원이 꽉 차면 이 초 뒤 바로 시작
 Config.HolesPerMatch = 3
 Config.HoleTime = 180 -- 홀 제한 시간. 끝나면 홀컵에 더 가까운 팀이 승리
 Config.Countdown = 3
@@ -41,7 +43,7 @@ Config.Ball = {
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1118g"
+Config.Build = "1119a"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀

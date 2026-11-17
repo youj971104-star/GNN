@@ -107,6 +107,7 @@ local match = {
 	holeWins = {}, -- [teamIndex] = 이긴 홀 수
 	lastHole = nil, -- { winner, reason }
 	teamSize = 2, -- 이번 경기 한 팀 최대 인원
+	pendingSize = nil, -- 곧 시작할 모드 (2/3/4 = 2대2/3대3/4대4)
 	mode = "", -- "2대2" / "3대3" / "3대2" ...
 	theme = "",
 }
@@ -153,7 +154,7 @@ local function refresh(player)
 		restricted = restricted[player] == true,
 		starterBought = data.starterBought,
 		quests = data.quests,
-		queued = player:GetAttribute("Queued") == true,
+		queued = player:GetAttribute("Queued") or false, -- 고른 모드 (2/3/4) 또는 false
 		oddsBasic = Gacha.OddsTable("Basic"),
 		oddsPremium = Gacha.OddsTable("Premium"),
 	})
@@ -191,6 +192,21 @@ local function broadcastMatch()
 			end
 			return n
 		end)(),
+		-- 모드별 대기 인원 { ["2"] = n, ["3"] = n, ["4"] = n } (리모트로 보낼 때 숫자 키는 문자열로)
+		queuedBy = (function()
+			local by = {}
+			for _, size in ipairs(Config.MatchModes) do
+				by[tostring(size)] = 0
+			end
+			for _, p in ipairs(Players:GetPlayers()) do
+				local q = p:GetAttribute("Queued")
+				if q and by[tostring(q)] then
+					by[tostring(q)] += 1
+				end
+			end
+			return by
+		end)(),
+		pendingSize = match.pendingSize,
 		maxPlayers = Config.MaxPlayers,
 	})
 end
@@ -341,11 +357,12 @@ end)
 ----------------------------------------------------------------------
 -- 경기 진행
 ----------------------------------------------------------------------
-local function readyPlayers()
+-- size 모드(2/3/4)를 고른 대기열 인원
+local function readyPlayers(size)
 	local list = {}
 	for _, p in ipairs(Players:GetPlayers()) do
-		-- PLAY 버튼을 눌러 대기열에 들어간 사람만
-		if p:GetAttribute("Queued") and DataService.Get(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+		-- PLAY 에서 이 모드를 골라 대기열에 들어간 사람만
+		if p:GetAttribute("Queued") == size and DataService.Get(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 			table.insert(list, p)
 		end
 	end
@@ -644,26 +661,60 @@ local function playMatch(participants)
 	finishMatch()
 end
 
+-- 매칭: 모드마다 대기열이 따로 있음. 꽉 찬 모드는 바로(짧은 카운트다운) 시작,
+-- 아니면 가장 많이 모인 모드를 골라 대기 시간이 끝나면 모인 인원으로 시작 (코스가 하나라 한 번에 한 경기)
+local function pickMode()
+	local best, bestN = nil, 0
+	for _, size in ipairs(Config.MatchModes) do
+		local n = #readyPlayers(size)
+		if n >= size * 2 then
+			return size, n, true
+		end
+		if n > bestN then
+			best, bestN = size, n
+		end
+	end
+	return best, bestN, false
+end
+
 task.spawn(function()
 	while true do
-		local list = readyPlayers()
-		if #list < Config.MinPlayers then
+		local size, n = pickMode()
+		if not size or n < Config.MinPlayers then
 			match.phase = "Waiting"
+			match.pendingSize = nil
 			broadcastMatch()
-			task.wait(2)
+			task.wait(1)
 		else
 			match.phase = "Intermission"
 			match.endsAt = os.clock() + Config.Intermission
 			while os.clock() < match.endsAt do
+				-- 다른 모드가 꽉 차면 그 모드로 바꾸고, 지금 모드가 꽉 차면 곧바로 시작
+				local nowSize, nowN, full = pickMode()
+				if not nowSize then
+					break
+				end
+				if nowSize ~= size then
+					if full then
+						size = nowSize
+					elseif #readyPlayers(size) == 0 then
+						size = nowSize
+					end
+				end
+				if #readyPlayers(size) >= size * 2 then
+					match.endsAt = math.min(match.endsAt, os.clock() + Config.FullStartDelay)
+				end
+				match.pendingSize = size
 				broadcastMatch()
 				task.wait(1)
 			end
-			list = readyPlayers()
+			local list = readyPlayers(size)
 			if #list >= Config.MinPlayers then
 				local participants = {}
-				for i = 1, math.min(#list, Config.MaxPlayers) do
+				for i = 1, math.min(#list, size * 2) do
 					table.insert(participants, list[i])
 				end
+				match.pendingSize = nil
 				playMatch(participants)
 			end
 		end
@@ -832,9 +883,16 @@ function actions.Equip(player, data, skinId)
 end
 
 -- PLAY 버튼: 대기열 들어가기 / 나가기
-function actions.Queue(player, data, on)
-	player:SetAttribute("Queued", on == true)
-	return true, on and "⛳ 대기열에 들어갔어요! 곧 경기가 시작돼요" or "대기열에서 나왔어요"
+-- PLAY → 모드 고르기: size = 2/3/4 (2대2/3대3/4대4) 로 대기열 들어가기, false 면 나가기
+function actions.Queue(player, data, size)
+	if size and not table.find(Config.MatchModes, size) then
+		return false, "모드를 다시 골라 주세요"
+	end
+	player:SetAttribute("Queued", size or nil)
+	if size then
+		return true, string.format("⛳ %d대%d 대기열에 들어갔어요! 인원이 모이면 시작해요", size, size)
+	end
+	return true, "대기열에서 나왔어요"
 end
 
 function actions.SelectSkill(player, data, skillId)

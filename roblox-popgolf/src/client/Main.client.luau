@@ -428,22 +428,171 @@ local playButton = new("TextButton", {
 	Parent = screen.gui,
 }, { UIKit.corner(14), UIKit.stroke(Color3.fromRGB(20, 40, 20), 3), new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }) })
 local playGradient = new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(170, 255, 90), Color3.fromRGB(70, 200, 60)), Parent = playButton })
-local function refreshPlay(count)
+-- 모드별 대기 인원 (서버가 보내 줌, 키는 "2"/"3"/"4")
+local function waitingIn(size)
+	local by = info.queuedBy
+	return by and by[tostring(size)] or 0
+end
+
+local function refreshPlay()
 	if queued then
-		playButton.Text = string.format("대기 %s· 취소", count and (count .. "명 ") or "")
+		playButton.Text = string.format("%d대%d %d/%d · 취소", queued, queued, waitingIn(queued), queued * 2)
 		playGradient.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(240, 130, 40))
 	else
 		playButton.Text = "PLAY"
 		playGradient.Color = ColorSequence.new(Color3.fromRGB(170, 255, 90), Color3.fromRGB(70, 200, 60))
 	end
 end
-playButton.Activated:Connect(function()
-	local want = not queued
-	local ok = Action:InvokeServer("Queue", want)
+
+----------------------------------------------------------------------
+-- 모드 고르기 창: 2대2 · 3대3 · 4대4 카드 (PLAY 를 누르면 열림)
+----------------------------------------------------------------------
+local MODE_STYLE = {
+	[2] = { Color3.fromRGB(255, 140, 90), Color3.fromRGB(235, 70, 80) },
+	[3] = { Color3.fromRGB(90, 225, 190), Color3.fromRGB(30, 150, 190) },
+	[4] = { Color3.fromRGB(215, 120, 255), Color3.fromRGB(140, 60, 220) },
+}
+local GOLD_NUM = ColorSequence.new(Color3.fromRGB(255, 225, 90), Color3.fromRGB(255, 150, 40))
+local modeOverlay = new("TextButton", { -- 바깥(어두운 곳)을 누르면 닫힘
+	Size = UDim2.fromScale(1, 1),
+	BackgroundColor3 = Color3.new(0, 0, 0),
+	BackgroundTransparency = 0.45,
+	Text = "",
+	AutoButtonColor = false,
+	Visible = false,
+	ZIndex = 40,
+	Parent = screen.gui,
+})
+local CARD_W, CARD_H = isMobile and 150 or 210, isMobile and 120 or 160
+local modePanel = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(CARD_W * 3 + 16 * 4, CARD_H + (isMobile and 70 or 90)),
+	BackgroundColor3 = Color3.fromRGB(150, 170, 190),
+	BackgroundTransparency = 0.25,
+	ZIndex = 41,
+	Parent = modeOverlay,
+}, { UIKit.corner(18), UIKit.stroke(Color3.new(1, 1, 1), 3) })
+new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(120, 140, 170), Color3.fromRGB(60, 75, 100)), Parent = modePanel })
+local modeTitle = label({
+	Parent = modePanel,
+	Position = UDim2.fromOffset(0, isMobile and 8 or 12),
+	Size = UDim2.new(1, 0, 0, isMobile and 36 or 48),
+	Font = UIKit.FONT_TITLE,
+	Text = "팀 선택",
+	TextColor3 = Color3.new(1, 1, 1),
+	ZIndex = 42,
+})
+new("UIStroke", { Color = Color3.fromRGB(20, 25, 50), Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual, Parent = modeTitle }) -- 글자 테두리
+-- 닫기
+button({ Parent = modePanel, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.fromOffset(34, 34), BackgroundColor3 = C.red, Text = "X", ZIndex = 43 }, function()
+	modeOverlay.Visible = false
+end)
+local cardRow = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -16),
+	Size = UDim2.fromOffset(CARD_W * 3 + 16 * 2, CARD_H),
+	BackgroundTransparency = 1,
+	ZIndex = 42,
+	Parent = modePanel,
+}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 16), SortOrder = Enum.SortOrder.LayoutOrder }) })
+
+local modeCards = {}
+local joinMode
+for order, size in ipairs(Config.MatchModes) do
+	local style = MODE_STYLE[size] or MODE_STYLE[2]
+	local card = new("TextButton", {
+		LayoutOrder = order,
+		Size = UDim2.fromOffset(CARD_W, CARD_H),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		Text = "",
+		AutoButtonColor = true,
+		ZIndex = 43,
+		Parent = cardRow,
+	}, { UIKit.corner(16), UIKit.stroke(Color3.fromRGB(40, 25, 50), 3) })
+	-- 색 그라데이션은 뒤판에만 (카드 자체에 걸면 위 글자까지 물듦)
+	local back = new("Frame", { Parent = card, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 43 }, { UIKit.corner(16) })
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(style[1], style[2]), Parent = back })
+	-- 반짝이는 하이라이트 점
+	new("Frame", { Parent = card, Position = UDim2.fromOffset(10, 8), Size = UDim2.fromOffset(14, 9), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, ZIndex = 44 }, { UIKit.corner(5) })
+	-- 큰 숫자 "2v2" (금색 + 진한 테두리)
+	local num = label({
+		Parent = card,
+		Position = UDim2.fromScale(0.05, 0.08),
+		Size = UDim2.fromScale(0.9, 0.5),
+		Font = UIKit.FONT_TITLE,
+		Text = string.format("%dv%d", size, size),
+		TextColor3 = Color3.new(1, 1, 1),
+		ZIndex = 45,
+	})
+	new("UIGradient", { Rotation = 90, Color = GOLD_NUM, Parent = num })
+	new("UIStroke", { Color = Color3.fromRGB(40, 30, 60), Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual, Parent = num }) -- 글자 테두리
+	label({
+		Parent = card,
+		Position = UDim2.fromScale(0.05, 0.6),
+		Size = UDim2.fromScale(0.9, 0.2),
+		Font = UIKit.FONT_TITLE,
+		Text = "매칭",
+		TextColor3 = Color3.new(1, 1, 1),
+		TextStrokeTransparency = 0.2,
+		ZIndex = 45,
+	})
+	local count = label({
+		Parent = card,
+		Position = UDim2.fromScale(0.05, 0.8),
+		Size = UDim2.fromScale(0.9, 0.15),
+		Text = "",
+		TextColor3 = Color3.new(1, 1, 1),
+		TextStrokeTransparency = 0.3,
+		ZIndex = 45,
+	})
+	card.Activated:Connect(function()
+		joinMode(size)
+	end)
+	modeCards[size] = { card = card, count = count }
+end
+
+local function refreshModeCards()
+	for size, c in pairs(modeCards) do
+		local n = waitingIn(size)
+		c.count.Text = (queued == size and "✅ 대기 중 " or "대기 ") .. n .. " / " .. size * 2 .. "명"
+		local stroke = c.card:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = queued == size and Color3.fromRGB(255, 240, 120) or Color3.fromRGB(40, 25, 50)
+			stroke.Thickness = queued == size and 5 or 3
+		end
+	end
+end
+
+function joinMode(size)
+	local ok = Action:InvokeServer("Queue", size)
 	if ok then
-		queued = want
-		refreshPlay(nil)
-		screen.toast(want and "⛳ 대기열에 들어갔어요! 인원이 모이면 시작해요" or "대기열에서 나왔어요", want and C.green or C.sub)
+		queued = size
+		refreshPlay()
+		refreshModeCards()
+		modeOverlay.Visible = false
+		screen.toast(string.format("⛳ %d대%d 대기열에 들어갔어요! 인원이 모이면 시작해요", size, size), C.green)
+	end
+end
+
+modeOverlay.Activated:Connect(function()
+	modeOverlay.Visible = false
+end)
+
+playButton.Activated:Connect(function()
+	if queued then
+		-- 대기 중이면 취소
+		local ok = Action:InvokeServer("Queue", false)
+		if ok then
+			queued = false
+			refreshPlay()
+			refreshModeCards()
+			screen.toast("대기열에서 나왔어요", C.sub)
+		end
+	else
+		refreshModeCards()
+		modeOverlay.Visible = true
+		UIKit.pop(modePanel)
 	end
 end)
 
@@ -853,8 +1002,9 @@ remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	else
 		scoreLabel.Text = string.format("대기 %d명", m.queued or 0)
 	end
-	if queued then
-		refreshPlay(m.queued)
+	refreshPlay()
+	if modeOverlay.Visible then
+		refreshModeCards()
 	end
 	local myTeam = player:GetAttribute("Team")
 	if myTeam then
@@ -882,9 +1032,10 @@ end)
 remotes:WaitForChild("State").OnClientEvent:Connect(function(s)
 	state = s
 	wallet.Text = string.format("💰 %s   💎 %s   🧩 %s", Format.Short(s.coins), Format.Short(s.gems), Format.Short(s.shards))
-	if s.queued ~= nil and s.queued ~= queued then
-		queued = s.queued
-		refreshPlay(nil)
+	local q = type(s.queued) == "number" and s.queued or false
+	if q ~= queued then
+		queued = q
+		refreshPlay()
 	end
 	renderQuests()
 	screen.render()
@@ -903,9 +1054,10 @@ task.spawn(function()
 		local p = info.phase
 		timerLabel.Text = (p == "Playing" or p == "Countdown" or p == "Intermission") and Format.Time(left) or "--:--"
 		if p == "Waiting" then
-			phaseLabel.Text = queued and "⏳ 인원을 기다리는 중 · 4명 2대2 / 6명 3대3 / 8명 4대4" or "▶ PLAY 를 누르면 경기 대기열에 들어가요"
+			phaseLabel.Text = queued and string.format("⏳ %d대%d 인원을 기다리는 중 (%d/%d)", queued, queued, waitingIn(queued), queued * 2) or "▶ PLAY 를 눌러 2대2 · 3대3 · 4대4 중 골라요"
 		elseif p == "Intermission" then
-			phaseLabel.Text = "⛳ 곧 경기 시작 " .. math.ceil(left) .. " · 인원에 맞춰 팀이 무작위로 나뉘어요 (최대 4대4)"
+			local ps = info.pendingSize
+			phaseLabel.Text = ps and string.format("⛳ 곧 %d대%d 경기 시작 %d%s", ps, ps, math.ceil(left), queued and queued ~= ps and string.format(" · 내 %d대%d 는 다음 판", queued, queued) or "") or ("⛳ 곧 경기 시작 " .. math.ceil(left))
 		elseif p == "Countdown" then
 			phaseLabel.Text = string.format("%d번 홀 · %s · 준비 %d", info.hole, info.theme, math.ceil(left))
 		elseif p == "Playing" then
