@@ -98,7 +98,7 @@ local function ballInReach(dir)
 			if flat(pos - root.Position).Magnitude < 14 then
 				near = true
 			end
-			local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - root.Position).Magnitude <= 2.2
+			local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - root.Position).Magnitude <= CL.nearRadius
 			if inZone and math.abs(pos.Y - root.Position.Y) < 5 then
 				return ball, true
 			end

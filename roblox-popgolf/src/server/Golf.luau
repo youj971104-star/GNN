@@ -467,7 +467,7 @@ function Golf.Swing(player, direction, power)
 		for _, t in pairs(teams) do
 			if not t.sunk and t.frozenUntil <= os.clock() then
 				local pos = t.ball.Position
-				local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - origin).Magnitude <= 2.2
+				local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - origin).Magnitude <= CL.nearRadius
 				if ult then
 					inZone = flat(pos - origin).Magnitude <= UL.radius
 				end
