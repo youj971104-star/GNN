@@ -946,6 +946,13 @@ for key, m in pairs(screen.menuButtons) do
 		b.Text = ""
 		iconInto(b, NAV_ICON[key], "", { Size = UDim2.fromScale(0.62, 0.62), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.02), ZIndex = 2 })
 		label({ Parent = b, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0.32, 0), Text = title, Font = UIKit.FONT_TITLE, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.4, ZIndex = 2 })
+	else
+		-- 아이콘 그림이 없는 버튼(방법 등): 글자를 뒤판 위 라벨로 옮김 (버튼 자체 글자는 뒤판에 가려짐)
+		local text = b.Text
+		b.Text = ""
+		local l = label({ Parent = b, Size = UDim2.fromScale(1, 1), Text = text, Font = UIKit.FONT_TITLE, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.4, ZIndex = 2 })
+		new("UIPadding", { Parent = l, PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 4), PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4) })
+		new("UITextSizeConstraint", { Parent = l, MaxTextSize = 22 })
 	end
 end
 applyLayout(false)
