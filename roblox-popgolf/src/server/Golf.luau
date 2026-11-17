@@ -62,6 +62,21 @@ local function surfaceUnder(ball)
 	return hit.Instance.Name
 end
 
+-- 공 물리는 항상 서버가 계산 (가까운 선수 컴퓨터가 맡으면 서버가 준 속도를 그 컴퓨터가 덮어써서 공이 안 나감)
+local function serverOwn(ball)
+	if ball.Anchored or not ball:IsDescendantOf(workspace) then
+		return
+	end
+	local ok, err = pcall(function()
+		if ball:GetNetworkOwner() ~= nil or ball:GetNetworkOwnershipAuto() then
+			ball:SetNetworkOwner(nil)
+		end
+	end)
+	if not ok then
+		warn("[Golf] 공 네트워크 소유권을 서버로 못 바꿈:", ball.Name, err)
+	end
+end
+
 local function stopBall(ball)
 	ball.AssemblyLinearVelocity = Vector3.zero
 	ball.AssemblyAngularVelocity = Vector3.zero
@@ -298,9 +313,7 @@ function Golf.Go()
 	active = true
 	for _, t in pairs(teams) do
 		t.ball.Anchored = false
-		pcall(function()
-			t.ball:SetNetworkOwner(nil)
-		end)
+		serverOwn(t.ball)
 	end
 end
 
@@ -401,6 +414,7 @@ local function launchBall(t, dir, power, hitter, mult)
 		angle = B.puttAngle
 	end
 	local rad = math.rad(angle)
+	serverOwn(t.ball)
 	t.ball:SetAttribute("Resting", false)
 	t.restTimer = 0
 	t.lastHitter = hitter
@@ -482,7 +496,18 @@ function Golf.Swing(player, direction, power)
 					launchBall(t, dir, ult and math.max(power, 0.8) or power, player, ult and UL.launchMult or mult)
 					if Config.DebugShots then
 						local b = t.ball
-						print(string.format("[Shot] 발사: 속도 %.0f (힘 %.2f)", b.AssemblyLinearVelocity.Magnitude, power))
+						local owner = "?"
+						pcall(function()
+							local o = b:GetNetworkOwner()
+							owner = o and o.Name or "서버"
+						end)
+						local touching = {}
+						for _, part in ipairs(workspace:GetPartBoundsInRadius(b.Position, B.diameter / 2 + 0.05)) do
+							if part ~= b and part.CanCollide then
+								table.insert(touching, part:GetFullName())
+							end
+						end
+						print(string.format("[Shot] 발사: 속도 %.0f (힘 %.2f) / 소유자=%s / 겹친 부품=%s", b.AssemblyLinearVelocity.Magnitude, power, owner, #touching > 0 and table.concat(touching, ", ") or "없음"))
 						task.delay(0.1, function()
 							print(string.format("[Shot] 0.1초 뒤: 속도 %.0f / 위치 %s / 고정=%s", b.AssemblyLinearVelocity.Magnitude, tostring(b.Position), tostring(b.Anchored)))
 						end)
@@ -649,6 +674,7 @@ function Golf.UseItem(player)
 					ice:Destroy()
 					if t.ball.Parent and not t.sunk then
 						t.ball.Anchored = false
+						serverOwn(t.ball)
 					end
 				end)
 				for _, m in ipairs(t.members) do
