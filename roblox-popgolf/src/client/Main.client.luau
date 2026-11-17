@@ -1006,6 +1006,11 @@ remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	if modeOverlay.Visible then
 		refreshModeCards()
 	end
+	-- 경기 전용 서버: PLAY(매칭)는 로비 서버에서만
+	if m.role == "match" then
+		playButton.Visible = false
+		modeOverlay.Visible = false
+	end
 	local myTeam = player:GetAttribute("Team")
 	if myTeam then
 		teamLabel.Text = "나는 " .. Config.Teams[myTeam].name
@@ -1053,10 +1058,16 @@ task.spawn(function()
 		local left = math.max(0, endsAt - os.clock())
 		local p = info.phase
 		timerLabel.Text = (p == "Playing" or p == "Countdown" or p == "Intermission") and Format.Time(left) or "--:--"
-		if p == "Waiting" then
+		if p == "Waiting" and info.role == "match" then
+			phaseLabel.Text = "🏁 경기 끝! 로비로 돌아가는 중..."
+		elseif p == "Waiting" then
 			phaseLabel.Text = queued and string.format("⏳ %d대%d 인원을 기다리는 중 (%d/%d)", queued, queued, waitingIn(queued), queued * 2) or "▶ PLAY 를 눌러 2대2 · 3대3 · 4대4 중 골라요"
 		elseif p == "Intermission" then
 			local ps = info.pendingSize
+			if info.role == "match" then
+				phaseLabel.Text = string.format("⚔️ %d대%d 경기장 · 선수들이 모이는 중 %d", ps or 2, ps or 2, math.ceil(left))
+				continue
+			end
 			phaseLabel.Text = ps and string.format("⛳ 곧 %d대%d 경기 시작 %d%s", ps, ps, math.ceil(left), queued and queued ~= ps and string.format(" · 내 %d대%d 는 다음 판", queued, queued) or "") or ("⛳ 곧 경기 시작 " .. math.ceil(left))
 		elseif p == "Countdown" then
 			phaseLabel.Text = string.format("%d번 홀 · %s · 준비 %d", info.hole, info.theme, math.ceil(left))

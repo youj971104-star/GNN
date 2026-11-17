@@ -155,12 +155,17 @@ function DataService.Save(player, release)
 	if not data or data._unsaved or not (storeOk and store) then
 		return true
 	end
+	-- 다른 서버로 이동 중이면 잠금을 다시 걸지 않음 (도착한 서버가 바로 불러오게)
+	if data._teleporting then
+		release = true
+	end
 	local ok, err = retry(function()
 		store:UpdateAsync(key(player), function(old)
 			if old and old._lock and old._lock.job ~= game.JobId then
 				return nil
 			end
 			local copy = table.clone(data)
+			copy._teleporting = nil
 			copy._lock = (not release) and { job = game.JobId, time = os.time() } or nil
 			return copy
 		end)
@@ -179,6 +184,24 @@ function DataService.AddReceipt(data, receiptId)
 	table.insert(data.receipts, receiptId)
 	while #data.receipts > MAX_RECEIPTS do
 		table.remove(data.receipts, 1)
+	end
+end
+
+-- 텔레포트 직전: 지금까지 저장하고 잠금을 풀어서, 도착한 서버가 기다리지 않고 바로 불러오게 함
+function DataService.PrepareTeleport(player)
+	local data = profiles[player]
+	if data then
+		data._teleporting = true
+		DataService.Save(player, true)
+	end
+end
+
+-- 텔레포트 실패: 다시 이 서버가 잠금을 잡음
+function DataService.CancelTeleport(player)
+	local data = profiles[player]
+	if data and data._teleporting then
+		data._teleporting = nil
+		DataService.Save(player, false)
 	end
 end
 

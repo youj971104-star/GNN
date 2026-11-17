@@ -13,6 +13,13 @@ Config.MaxPlayers = Config.MaxTeamSize * 2 -- 한 경기 최대 8명 (넘치면 
 Config.Intermission = 15
 Config.MatchModes = { 2, 3, 4 } -- PLAY 에서 고르는 모드 (한 팀 인원): 2대2 · 3대3 · 4대4
 Config.FullStartDelay = 5 -- 고른 모드 인원이 꽉 차면 이 초 뒤 바로 시작
+-- 서버 간 매칭: 로비 서버에서 모드를 고르면 모든 서버의 같은 모드 대기자와 묶어 경기 전용 서버로 이동
+-- (Studio 에서는 텔레포트가 안 돼서 자동으로 한 서버 안 매칭을 씀)
+Config.CrossServer = {
+	enabled = true,
+	fillTime = 30, -- 가장 오래 기다린 사람이 이 초를 넘기면 모인 인원으로라도 시작 (혼자면 연습 경기)
+	gatherTime = 25, -- 경기 서버에서 배정된 선수들이 다 도착하길 기다리는 최대 시간
+}
 Config.HolesPerMatch = 3
 Config.HoleTime = 180 -- 홀 제한 시간. 끝나면 홀컵에 더 가까운 팀이 승리
 Config.Countdown = 3
@@ -43,7 +50,7 @@ Config.Ball = {
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1119a"
+Config.Build = "1119b"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀

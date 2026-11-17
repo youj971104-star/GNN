@@ -12,6 +12,7 @@ local Monetization = require(script.Parent.Monetization)
 local CourseBuilder = require(script.Parent.CourseBuilder)
 local Golf = require(script.Parent.Golf)
 local Ragdoll = require(script.Parent.Ragdoll)
+local Matchmaker = require(script.Parent.Matchmaker)
 local Gacha = require(script.Parent.Gacha)
 local Club = require(script.Parent.Club)
 
@@ -193,7 +194,12 @@ local function broadcastMatch()
 			return n
 		end)(),
 		-- 모드별 대기 인원 { ["2"] = n, ["3"] = n, ["4"] = n } (리모트로 보낼 때 숫자 키는 문자열로)
+		role = Matchmaker.IsMatchServer() and "match" or (Matchmaker.Enabled() and "lobby" or "local"),
 		queuedBy = (function()
+			-- 서버 간 매칭이면 모든 서버 합계 (매칭 담당 서버가 2초마다 집계)
+			if Matchmaker.Enabled() then
+				return Matchmaker.Counts()
+			end
 			local by = {}
 			for _, size in ipairs(Config.MatchModes) do
 				by[tostring(size)] = 0
@@ -580,8 +586,8 @@ local function finishMatch()
 	end
 end
 
-local function playMatch(participants)
-	match.teams = makeTeams(participants)
+local function playMatch(participants, presetTeams)
+	match.teams = presetTeams or makeTeams(participants)
 	match.holeWins = {}
 	local a, b = #match.teams[1], match.teams[2] and #match.teams[2] or 0
 	match.teamSize = math.max(a, b)
@@ -677,7 +683,8 @@ local function pickMode()
 	return best, bestN, false
 end
 
-task.spawn(function()
+-- 한 서버 안 매칭 (Studio 테스트용 / 서버 간 매칭을 끈 경우)
+local function localMatchLoop()
 	while true do
 		local size, n = pickMode()
 		if not size or n < Config.MinPlayers then
@@ -718,6 +725,115 @@ task.spawn(function()
 				playMatch(participants)
 			end
 		end
+	end
+end
+
+-- 경기 전용 서버: 텔레포트로 온 선수들로 경기 한 판 → 모두 로비로 돌려보냄
+local function matchServerLoop()
+	-- 텔레포트 데이터(모드·팀 배정) 받기
+	local data
+	local start = os.clock()
+	while not data and os.clock() - start < 60 do
+		for _, p in ipairs(Players:GetPlayers()) do
+			data = data or Matchmaker.JoinData(p)
+		end
+		task.wait(0.5)
+	end
+	local size = data and data.size or 2
+	local expected = {}
+	if data then
+		for _, team in ipairs(data.teams) do
+			for _, uid in ipairs(team) do
+				expected[uid] = true
+			end
+		end
+	end
+	local function arrived()
+		local list, missing = {}, 0
+		for uid in pairs(expected) do
+			local p = Players:GetPlayerByUserId(uid)
+			if p and DataService.Get(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+				table.insert(list, p)
+			else
+				missing += 1
+			end
+		end
+		return list, missing
+	end
+	-- 배정된 선수가 다 오길 기다림 (최대 gatherTime 초)
+	match.phase = "Intermission"
+	match.pendingSize = size
+	match.endsAt = os.clock() + Config.CrossServer.gatherTime
+	while os.clock() < match.endsAt do
+		local _, missing = arrived()
+		if missing == 0 then
+			match.endsAt = math.min(match.endsAt, os.clock() + 3)
+		end
+		broadcastMatch()
+		task.wait(1)
+	end
+	local present = arrived()
+	match.pendingSize = nil
+	if #present > 0 then
+		-- 배정된 팀 그대로 (안 온 사람 빼고). 한쪽이 비면 다시 나눔
+		local teams = { {}, {} }
+		if data then
+			for i, team in ipairs(data.teams) do
+				for _, uid in ipairs(team) do
+					local p = Players:GetPlayerByUserId(uid)
+					if p and table.find(present, p) then
+						table.insert(teams[i], p)
+					end
+				end
+			end
+		end
+		local preset
+		if #teams[1] > 0 and #teams[2] > 0 then
+			preset = teams
+		end
+		for _, p in ipairs(present) do
+			p:SetAttribute("Queued", size)
+		end
+		playMatch(present, preset)
+	end
+	-- 끝: 이 서버에 있는 사람 모두 로비로 (늦게 들어온 사람도)
+	while true do
+		Matchmaker.ReturnToLobby(Players:GetPlayers())
+		task.wait(10)
+	end
+end
+
+-- 서버 간 매칭 로비: 경기는 다른 서버에서 하므로 여기선 대기 상태만 알림
+local function lobbyLoop()
+	while true do
+		match.phase = "Waiting"
+		match.pendingSize = nil
+		broadcastMatch()
+		task.wait(2)
+	end
+end
+
+Matchmaker.Start({
+	notify = notify,
+	prepareTeleport = DataService.PrepareTeleport,
+	onTeleportFailed = function(player, size)
+		if not player.Parent then
+			return
+		end
+		DataService.CancelTeleport(player)
+		player:SetAttribute("Queued", nil)
+		notify(player, "😢 경기장으로 이동하지 못했어요. PLAY 를 다시 눌러 주세요", Color3.fromRGB(255, 150, 120))
+		refresh(player)
+	end,
+})
+
+task.spawn(function()
+	if Matchmaker.IsMatchServer() then
+		matchServerLoop()
+	elseif Matchmaker.Enabled() then
+		lobbyLoop()
+	else
+		localMatchLoop()
 	end
 end)
 
@@ -889,6 +1005,16 @@ function actions.Queue(player, data, size)
 		return false, "모드를 다시 골라 주세요"
 	end
 	player:SetAttribute("Queued", size or nil)
+	if Matchmaker.Enabled() then
+		if size then
+			if not Matchmaker.Join(player, size) then
+				player:SetAttribute("Queued", nil)
+				return false, "대기열에 들어가지 못했어요. 잠시 후 다시 눌러 주세요"
+			end
+		else
+			Matchmaker.Leave(player)
+		end
+	end
 	if size then
 		return true, string.format("⛳ %d대%d 대기열에 들어갔어요! 인원이 모이면 시작해요", size, size)
 	end
