@@ -935,13 +935,17 @@ for key, m in pairs(screen.menuButtons) do
 		stroke.Color = accent
 		stroke.Thickness = 2.5
 	end
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(60, 70, 140), Color3.fromRGB(18, 20, 46)), Parent = b })
+	-- 버튼 자체에 그라데이션을 걸면 안의 아이콘·글자까지 어둡게 물들어서, 그라데이션은 뒤에 깐 판에만 검
+	b.BackgroundColor3 = Color3.fromRGB(52, 60, 125)
+	b.TextColor3 = Color3.new(1, 1, 1)
+	local back = new("Frame", { Parent = b, Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 0 }, { UIKit.corner(8) })
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(85, 100, 190), Color3.fromRGB(40, 46, 105)), Parent = back })
 	local iconId = NAV_ICON[key] and Config.Icons[NAV_ICON[key]]
 	if iconId and iconId ~= 0 then
 		local title = string.match(b.Text, "\n(.+)$") or ""
 		b.Text = ""
-		iconInto(b, NAV_ICON[key], "", { Size = UDim2.fromScale(0.62, 0.62), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.02) })
-		label({ Parent = b, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0.32, 0), Text = title })
+		iconInto(b, NAV_ICON[key], "", { Size = UDim2.fromScale(0.62, 0.62), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.02), ZIndex = 2 })
+		label({ Parent = b, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 0), Size = UDim2.new(1, 0, 0.32, 0), Text = title, Font = UIKit.FONT_TITLE, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.4, ZIndex = 2 })
 	end
 end
 applyLayout(false)
