@@ -510,6 +510,11 @@ function Golf.Swing(player, direction, power)
 			player:SetAttribute("Powered", false)
 		end
 		local ult = ps.ultUntil > t0
+		-- 퍼펙트 샷: 힘 게이지 하얀 칸 안에서 뗐으면 조금 더 멀리
+		local perfect = not ult and power >= CL.perfect[1] and power <= CL.perfect[2]
+		if perfect then
+			mult *= CL.perfectMult
+		end
 		if ult then
 			ps.ultUntil = 0
 			player:SetAttribute("UltActive", false)
@@ -534,6 +539,10 @@ function Golf.Swing(player, direction, power)
 				end
 				if inZone and math.abs(pos.Y - origin.Y) < 6 then
 					launchBall(t, dir, ult and math.max(power, 0.8) or power, player, ult and UL.launchMult or mult)
+					if perfect then
+						perfect = false -- 알림은 한 번만
+						ctx.notify(player, "🎯 퍼펙트 샷!", Color3.fromRGB(255, 230, 90))
+					end
 					if Config.DebugShots then
 						local b = t.ball
 						local owner = "?"

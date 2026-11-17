@@ -344,7 +344,14 @@ if uiImage("SwingPowerGauge") then
 	powerFill.Visible = false
 	skinImage(powerBack, "SwingPowerGauge", 1)
 	local X0, X1, Y0, Y1 = 0.054, 0.947, 0.305, 0.695 -- 이미지 안 색 막대 칸
-	local cover = new("Frame", { Parent = powerBack, BackgroundColor3 = Color3.fromRGB(20, 24, 40), BackgroundTransparency = 0.15, BorderSizePixel = 0, ZIndex = 2 }, { new("UICorner", { CornerRadius = UDim.new(0.4, 0) }) })
+	local cover = new("Frame", { Parent = powerBack, BackgroundColor3 = Color3.fromRGB(20, 24, 40), BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 2 }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	-- 하얀 칸 = 퍼펙트 구간 (Config.Club.perfect). 세로선이 칸 안에 들어오면 칸이 금색으로 빛남
+	local PZ = Config.Club.perfect
+	local zx0, zx1 = X0 + (X1 - X0) * PZ[1], X0 + (X1 - X0) * PZ[2]
+	local zone = new("Frame", { Parent = powerBack, BackgroundColor3 = Color3.fromRGB(255, 225, 90), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 3 })
+	zone.Position, zone.Size = rect(zx0, 0.25, zx1, 0.75)
+	local zoneStroke = new("UIStroke", { Parent = zone, Color = Color3.fromRGB(255, 225, 90), Thickness = 3, Transparency = 1 })
+	local perfectTag = label({ Parent = powerBack, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale((zx0 + zx1) / 2, 0.06), Size = UDim2.fromScale(0.3, 0.3), Font = UIKit.FONT_TITLE, Text = "PERFECT", TextColor3 = Color3.fromRGB(255, 230, 90), TextStrokeTransparency = 0.2, Visible = false, ZIndex = 4 })
 	local marker = new("Frame", { Parent = powerBack, AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 3 })
 	powerText.Position, powerText.Size = rect(X0, Y0 + 0.05, X1, Y1 - 0.05)
 	powerText.ZIndex = 4
@@ -356,6 +363,10 @@ if uiImage("SwingPowerGauge") then
 		cover.Visible = p < 0.999
 		marker.Position = UDim2.fromScale(x, Y0 - 0.06)
 		marker.Size = UDim2.new(0, 3, Y1 - Y0 + 0.12, 0)
+		local inZone = p >= PZ[1] and p <= PZ[2]
+		zone.BackgroundTransparency = inZone and 0.55 or 1
+		zoneStroke.Transparency = inZone and 0 or 1
+		perfectTag.Visible = inZone
 	end
 end
 
