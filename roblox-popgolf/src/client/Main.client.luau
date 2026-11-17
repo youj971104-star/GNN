@@ -337,10 +337,9 @@ local powerSkin
 if uiImage("SwingPowerGauge") then
 	powerBack.BackgroundTransparency = 1
 	powerBack:FindFirstChildOfClass("UIStroke").Enabled = false
-	powerBack.Size = isMobile and UDim2.fromOffset(190, 47) or UDim2.fromOffset(380, 95)
-	if isMobile then
-		powerBack.Position = UDim2.new(0.5, 0, 1, -10)
-	end
+	-- 휴대폰: 맨 아래 가운데 / PC: 능력 버튼 줄 바로 위 (안내 문구와 안 겹치게)
+	powerBack.Size = isMobile and UDim2.fromOffset(190, 47) or UDim2.fromOffset(300, 75)
+	powerBack.Position = isMobile and UDim2.new(0.5, 0, 1, -10) or UDim2.new(0.5, 0, 1, -100)
 	powerFill.Visible = false
 	skinImage(powerBack, "SwingPowerGauge", 1)
 	local X0, X1, Y0, Y1 = 0.054, 0.947, 0.305, 0.695 -- 이미지 안 색 막대 칸

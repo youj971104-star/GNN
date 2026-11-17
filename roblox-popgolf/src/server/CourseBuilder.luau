@@ -254,7 +254,8 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	end
 
 	-- 티 뒤 네온 아치 (출발 입구 장식)
-	asset("Neon_Arch_Gate", CFrame.lookAt(-startDir * 15, -startDir * 30), { teamColor = Color3.fromRGB(255, 200, 70) })
+	-- 카메라(선수 뒤 약 26스터드)보다 더 뒤에 둬야 출발할 때 시야를 안 가림
+	asset("Neon_Arch_Gate", CFrame.lookAt(-startDir * 40, -startDir * 55), { teamColor = Color3.fromRGB(255, 200, 70) })
 
 	-- 5) 그린 + 홀컵 + 깃발
 	local R = CC.greenRadius
