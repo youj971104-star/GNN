@@ -52,7 +52,7 @@ Config.DebugShots = false
 -- Studio 에서 테스트할 때만 모든 골프채 스킨 장착 가능 (저장되지 않음, 게시된 게임에는 영향 없음)
 Config.StudioUnlockAllSkins = true
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1120m"
+Config.Build = "1120n"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
@@ -284,6 +284,13 @@ local RARITY_FX = {
 	Mythic = { aura = { rate = 32, size = 0.6 }, orbit = { count = 4, radius = 1.7, speed = 4.5 }, ring = true, pulse = true, rainbow = true, burst = { count = 70, shock = true, punch = true } },
 }
 local EFFECT_TEXTURE = { Fire = "fire", Smoke = "smoke" }
+-- 공을 맞혔을 때 헤드에서 터지는 마무리 연출 (스킨마다 다르게). 없으면 반짝임(spark)
+-- spark · splash(물방울) · flame(불꽃) · frost(얼음 조각) · stars(별 회오리) · gold(금화) · bubble(비눗방울) · rainbow(무지개 고리) · neon(번개) · panda(흑백 연기)
+local SWING_STYLE = {
+	Watermelon = "splash", Ocean = "splash", Bubblegum = "bubble", Panda = "panda",
+	Lava = "flame", Sun = "flame", Galaxy = "stars", Comet = "stars", Neon = "neon", Aurora = "neon",
+	Frost = "frost", Rainbow = "rainbow", Gold = "gold", VIPCrown = "gold", BlackGold = "gold",
+}
 
 -- 스킨 하나의 최종 연출 값
 function Config.GetFx(skinId)
@@ -299,6 +306,7 @@ function Config.GetFx(skinId)
 		pulse = base.pulse,
 		rainbow = base.rainbow,
 		burst = table.clone(base.burst),
+		swing = skin.swing or SWING_STYLE[skinId] or "spark",
 	}
 	for k, v in pairs(skin.fx or {}) do
 		fx[k] = v

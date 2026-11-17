@@ -73,21 +73,177 @@ local function detach(tool)
 	active[tool] = nil
 end
 
+----------------------------------------------------------------------
+-- 마무리 연출 (공을 맞혔을 때 헤드 자리에서): 스킨마다 다른 모양
+----------------------------------------------------------------------
+-- 한 번 뿌리는 입자
+local function emitAt(pos, o)
+	local holder = glowPart(Enum.PartType.Block, Vector3.one * 0.1, Color3.new(1, 1, 1))
+	holder.Transparency = 1
+	holder.CFrame = CFrame.new(pos)
+	holder.Parent = fxFolder
+	local em = Instance.new("ParticleEmitter")
+	em.Texture = o.texture or TEXTURES.sparkle
+	em.Color = o.color
+	em.Rate = 0
+	em.Lifetime = o.life or NumberRange.new(0.3, 0.7)
+	em.Speed = o.speed or NumberRange.new(8, 16)
+	em.SpreadAngle = o.spread or Vector2.new(180, 180)
+	em.Size = o.size or NumberSequence.new(0.6, 0)
+	em.Transparency = o.transparency or NumberSequence.new(0, 1)
+	em.LightEmission = o.light or 1
+	em.Drag = o.drag or 5
+	em.Acceleration = o.accel or Vector3.zero
+	em.RotSpeed = o.rot or NumberRange.new(0)
+	em.Rotation = NumberRange.new(0, 360)
+	em.Parent = holder
+	em:Emit(o.count)
+	Debris:AddItem(holder, 2)
+end
+
+-- 실제 부품을 사방으로 던짐 (내 화면에서만 물리 계산, 1초 뒤 사라짐)
+local function throwBits(pos, count, speed, make)
+	for i = 1, count do
+		local p = make(i)
+		p.Anchored = false
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Massless = true
+		p.CFrame = CFrame.new(pos) * CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6)
+		p.Parent = fxFolder
+		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.8 + 0.4, math.random() - 0.5).Unit
+		p.AssemblyLinearVelocity = dir * speed * (0.6 + math.random() * 0.6)
+		p.AssemblyAngularVelocity = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 20
+		TweenService:Create(p, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Transparency = 1, Size = p.Size * 0.4 }):Play()
+		Debris:AddItem(p, 1)
+	end
+end
+
+local function flatRing(pos, color, size, time, delay, transparency)
+	task.delay(delay or 0, function()
+		local ring = glowPart(Enum.PartType.Cylinder, Vector3.new(0.15, 1, 1), color)
+		ring.Transparency = transparency or 0.2
+		ring.CFrame = CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90))
+		ring.Parent = fxFolder
+		TweenService:Create(ring, TweenInfo.new(time or 0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, size, size), Transparency = 1 }):Play()
+		Debris:AddItem(ring, (time or 0.45) + 0.05)
+	end)
+end
+
+local SWING = {}
+function SWING.spark(pos, fx, n)
+	emitAt(pos, { color = colorSeq(fx.colors), count = n })
+	if fx.burst.shock then
+		flatRing(pos, fx.colors[1], 14)
+	end
+end
+function SWING.splash(pos, fx, n)
+	throwBits(pos, math.ceil(n / 3), 22, function(i)
+		local p = glowPart(Enum.PartType.Ball, Vector3.one * (0.35 + math.random() * 0.3), fx.colors[(i % #fx.colors) + 1])
+		p.Material = Enum.Material.Glass
+		p.Transparency = 0.25
+		return p
+	end)
+	emitAt(pos, { color = ColorSequence.new(Color3.fromRGB(200, 240, 255)), count = n, speed = NumberRange.new(6, 12), accel = Vector3.new(0, -30, 0), size = NumberSequence.new(0.45, 0.1), light = 0.3 })
+	flatRing(pos, Color3.fromRGB(150, 220, 255), 12, 0.5, 0, 0.4)
+end
+function SWING.flame(pos, fx, n)
+	emitAt(pos, { texture = TEXTURES.fire, color = colorSeq(fx.colors), count = n, speed = NumberRange.new(10, 20), size = NumberSequence.new(1.6, 0), accel = Vector3.new(0, 18, 0), drag = 4 })
+	emitAt(pos, { color = ColorSequence.new(Color3.fromRGB(255, 200, 80)), count = math.ceil(n / 2), speed = NumberRange.new(14, 26), size = NumberSequence.new(0.3, 0), accel = Vector3.new(0, 10, 0), life = NumberRange.new(0.6, 1.1) })
+	flatRing(pos, Color3.fromRGB(255, 120, 40), 16, 0.4)
+end
+function SWING.frost(pos, fx, n)
+	throwBits(pos, math.ceil(n / 3), 18, function()
+		local p = glowPart(Enum.PartType.Block, Vector3.new(0.3, 0.6 + math.random() * 0.5, 0.3), Color3.fromRGB(190, 235, 255))
+		p.Material = Enum.Material.Ice
+		p.Transparency = 0.15
+		return p
+	end)
+	emitAt(pos, { texture = TEXTURES.smoke, color = ColorSequence.new(Color3.new(1, 1, 1)), count = math.ceil(n / 3), speed = NumberRange.new(4, 8), size = NumberSequence.new(1.5, 3), transparency = NumberSequence.new(0.4, 1), light = 0.2, life = NumberRange.new(0.6, 1) })
+	flatRing(pos, Color3.fromRGB(180, 230, 255), 14, 0.55, 0, 0.3)
+end
+function SWING.stars(pos, fx, n)
+	emitAt(pos, { color = colorSeq(fx.colors), count = n, speed = NumberRange.new(4, 10), size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 1), NumberSequenceKeypoint.new(1, 0) }), rot = NumberRange.new(-400, 400), life = NumberRange.new(0.6, 1.2), drag = 2, accel = Vector3.new(0, 4, 0) })
+	throwBits(pos, 6, 14, function(i)
+		local p = glowPart(Enum.PartType.Block, Vector3.new(0.18, 0.7, 0.18), fx.colors[(i % #fx.colors) + 1])
+		return p
+	end)
+	flatRing(pos, fx.colors[1], 12, 0.4)
+	flatRing(pos, fx.colors[#fx.colors], 20, 0.6, 0.1, 0.4)
+end
+function SWING.gold(pos, fx, n)
+	throwBits(pos, math.ceil(n / 3), 20, function()
+		local p = glowPart(Enum.PartType.Cylinder, Vector3.new(0.12, 0.7, 0.7), Color3.fromRGB(255, 205, 70))
+		p.Material = Enum.Material.Foil
+		return p
+	end)
+	emitAt(pos, { color = ColorSequence.new(Color3.fromRGB(255, 240, 170), Color3.fromRGB(255, 190, 50)), count = n, speed = NumberRange.new(8, 14) })
+	flatRing(pos, Color3.fromRGB(255, 215, 90), 16, 0.5)
+end
+function SWING.bubble(pos, fx, n)
+	for _ = 1, math.ceil(n / 3) do
+		local b = glowPart(Enum.PartType.Ball, Vector3.one * (0.4 + math.random() * 0.5), fx.colors[math.random(1, #fx.colors)])
+		b.Material = Enum.Material.Glass
+		b.Transparency = 0.45
+		b.CFrame = CFrame.new(pos + Vector3.new(math.random() - 0.5, 0, math.random() - 0.5) * 2)
+		b.Parent = fxFolder
+		local rise = Vector3.new((math.random() - 0.5) * 4, 3 + math.random() * 4, (math.random() - 0.5) * 4)
+		local t = 0.6 + math.random() * 0.5
+		TweenService:Create(b, TweenInfo.new(t, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), { CFrame = b.CFrame + rise, Size = b.Size * 1.6 }):Play()
+		task.delay(t, function()
+			if b.Parent then
+				emitAt(b.Position, { color = ColorSequence.new(Color3.new(1, 1, 1)), count = 4, speed = NumberRange.new(3, 6), size = NumberSequence.new(0.25, 0) }) -- 퐁!
+				b:Destroy()
+			end
+		end)
+	end
+	flatRing(pos, fx.colors[1], 10, 0.4, 0, 0.4)
+end
+function SWING.rainbow(pos, fx, n)
+	local colors = { Color3.fromRGB(255, 80, 80), Color3.fromRGB(255, 170, 60), Color3.fromRGB(255, 230, 80), Color3.fromRGB(90, 220, 120), Color3.fromRGB(80, 160, 255), Color3.fromRGB(180, 100, 255) }
+	for i, c in ipairs(colors) do
+		flatRing(pos + Vector3.new(0, i * 0.25, 0), c, 8 + i * 2.5, 0.5, i * 0.04, 0.15)
+	end
+	emitAt(pos, { color = colorSeq(colors), count = n, speed = NumberRange.new(10, 18) })
+end
+function SWING.neon(pos, fx, n)
+	-- 사방으로 뻗는 번개 줄기
+	for k = 1, 5 do
+		local a = k / 5 * math.pi * 2 + math.random()
+		local prev = pos
+		for seg = 1, 4 do
+			local nextP = pos + Vector3.new(math.cos(a), (math.random() - 0.3) * 0.6, math.sin(a)) * seg * 1.6 + Vector3.new(math.random() - 0.5, 0, math.random() - 0.5)
+			local len = (nextP - prev).Magnitude
+			local bolt = glowPart(Enum.PartType.Block, Vector3.new(0.12, 0.12, len), fx.colors[((k + seg) % #fx.colors) + 1])
+			bolt.CFrame = CFrame.lookAt((prev + nextP) / 2, nextP)
+			bolt.Parent = fxFolder
+			TweenService:Create(bolt, TweenInfo.new(0.35), { Transparency = 1 }):Play()
+			Debris:AddItem(bolt, 0.4)
+			prev = nextP
+		end
+	end
+	emitAt(pos, { color = colorSeq(fx.colors), count = math.ceil(n / 2), speed = NumberRange.new(12, 20) })
+	flatRing(pos, fx.colors[1], 14, 0.35)
+end
+function SWING.panda(pos, fx, n)
+	emitAt(pos, { texture = TEXTURES.smoke, color = ColorSequence.new(Color3.fromRGB(30, 30, 30)), count = math.ceil(n / 2), speed = NumberRange.new(5, 10), size = NumberSequence.new(1.2, 2.5), transparency = NumberSequence.new(0.2, 1), light = 0, life = NumberRange.new(0.5, 0.9) })
+	emitAt(pos, { texture = TEXTURES.smoke, color = ColorSequence.new(Color3.new(1, 1, 1)), count = math.ceil(n / 2), speed = NumberRange.new(5, 10), size = NumberSequence.new(1.2, 2.5), transparency = NumberSequence.new(0.2, 1), light = 0.2, life = NumberRange.new(0.5, 0.9) })
+end
+
 local function burst(e, full)
 	local fx = e.fx
 	if e.burstEmitter then
-		e.burstEmitter:Emit(full and fx.burst.count or math.ceil(fx.burst.count * 0.3))
+		e.burstEmitter:Emit(math.ceil(fx.burst.count * (full and 0.15 or 0.3))) -- 맞혔을 때는 아래 스킨별 연출이 주인공
 	end
 	if not full then
 		return -- 헛스윙: 작은 반짝임만
 	end
-	if fx.burst.shock and e.head.Parent then
-		local ring = glowPart(Enum.PartType.Cylinder, Vector3.new(0.15, 1, 1), fx.colors[1])
-		ring.Transparency = 0.2
-		ring.CFrame = CFrame.new(e.head.Position) * CFrame.Angles(0, 0, math.rad(90))
-		ring.Parent = fxFolder
-		TweenService:Create(ring, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, 14, 14), Transparency = 1 }):Play()
-		Debris:AddItem(ring, 0.5)
+	-- 스킨별 마무리 연출 (등급이 높을수록 양이 많음)
+	if e.head.Parent then
+		local style = SWING[fx.swing] or SWING.spark
+		style(e.head.Position, fx, fx.burst.count)
 	end
 	-- 내가 휘둘렀을 때 화면 살짝 펀치
 	if fx.burst.punch and e.owner == player then
@@ -144,17 +300,22 @@ local function attach(tool)
 	table.insert(e.cleanup, trail)
 
 	-- 계속 나오는 빛 입자
+	-- 헤드를 덮는 빛 구름 대신, 헤드 겉면에서 반짝 생겼다 사라지는 작은 반짝임 (헤드 모양이 잘 보이게)
 	if fx.aura then
 		local em = Instance.new("ParticleEmitter")
 		em.Texture = TEXTURES[fx.texture] or TEXTURES.sparkle
 		em.Color = colorSeq(fx.colors)
-		em.Rate = fx.aura.rate
-		em.Lifetime = NumberRange.new(0.4, 0.9)
-		em.Speed = NumberRange.new(0.6, 1.8)
+		em.Rate = math.max(2, fx.aura.rate * 0.35)
+		em.Lifetime = NumberRange.new(0.25, 0.5)
+		em.Speed = NumberRange.new(0.2, 0.6)
 		em.SpreadAngle = Vector2.new(180, 180)
-		em.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, fx.aura.size), NumberSequenceKeypoint.new(1, 0) })
-		em.Transparency = NumberSequence.new(0.1, 1)
-		em.LightEmission = 1
+		em.Shape = Enum.ParticleEmitterShape.Box
+		em.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+		em.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+		-- 커졌다 작아지는 '반짝'
+		em.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.35, fx.aura.size * 0.55), NumberSequenceKeypoint.new(1, 0) })
+		em.Transparency = NumberSequence.new(0, 0.4)
+		em.LightEmission = 0.8
 		em.Drag = 2
 		em.Rotation = NumberRange.new(0, 360)
 		em.RotSpeed = NumberRange.new(-180, 180)
@@ -164,7 +325,7 @@ local function attach(tool)
 			em.Acceleration = Vector3.new(0, 1.5, 0)
 			em.Transparency = NumberSequence.new(0.5, 1)
 		end
-		em.Parent = att
+		em.Parent = head -- 부품에 달면 부품 겉면(Shape)에서 나옴
 		table.insert(e.cleanup, em)
 		e.aura = em
 	end

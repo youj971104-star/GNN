@@ -227,7 +227,8 @@ local function applySkin(model, skinId)
 			local n = p.Name
 			if string.sub(n, 1, 9) == "Head_Base" then
 				p.Color = skin.color
-				p.Material = head.Material
+				-- 헤드 몸통은 빛나지 않게 (Neon 이면 하얗게 번져서 모양이 안 보임) → 빛은 테두리 띠·보석이 담당
+				p.Material = head.Material == Enum.Material.Neon and Enum.Material.SmoothPlastic or head.Material
 			elseif string.sub(n, 1, 11) == "Head_Accent" then
 				p.Color = accent:Lerp(Color3.new(0, 0, 0), 0.25)
 				p.Material = rarityIndex >= 4 and Enum.Material.Foil or Enum.Material.Metal
