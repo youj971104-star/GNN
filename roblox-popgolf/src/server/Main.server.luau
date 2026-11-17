@@ -132,6 +132,19 @@ local function inMatch(player)
 	return false
 end
 
+-- Studio 테스트: 모든 골프채 스킨을 가진 것처럼 (저장 데이터는 건드리지 않음 → 실제 게임에는 영향 없음)
+local STUDIO_UNLOCK = RunService:IsStudio() and Config.StudioUnlockAllSkins == true
+local function ownedSkins(data)
+	if not STUDIO_UNLOCK then
+		return data.skins
+	end
+	local all = table.clone(data.skins)
+	for id in pairs(Config.Skins) do
+		all[id] = true
+	end
+	return all
+end
+
 local function refresh(player)
 	local data = DataService.Get(player)
 	if not data then
@@ -146,7 +159,7 @@ local function refresh(player)
 		coins = data.coins,
 		gems = data.gems,
 		shards = data.shards,
-		skins = data.skins,
+		skins = ownedSkins(data),
 		equipped = data.equipped,
 		skill = data.skill,
 		pity = data.pity.sinceLegendary,
@@ -990,7 +1003,7 @@ function actions.Pull(player, data, arg)
 end
 
 function actions.Equip(player, data, skinId)
-	if type(skinId) ~= "string" or not data.skins[skinId] then
+	if type(skinId) ~= "string" or not ownedSkins(data)[skinId] then
 		return false, "가지고 있지 않은 골프채예요"
 	end
 	data.equipped = skinId

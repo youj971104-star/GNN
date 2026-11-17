@@ -49,8 +49,10 @@ Config.Ball = {
 -- 꾹 누르면 골프채가 뒤로 올라가며 힘이 모이고, 떼면 휘두름 → 앞에 있는 공(우리 팀/상대 팀 모두)과 상대 선수가 맞음
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
+-- Studio 에서 테스트할 때만 모든 골프채 스킨 장착 가능 (저장되지 않음, 게시된 게임에는 영향 없음)
+Config.StudioUnlockAllSkins = true
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1120j"
+Config.Build = "1120k"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
