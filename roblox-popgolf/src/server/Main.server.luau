@@ -220,6 +220,8 @@ local function shockwave(position, radius, color)
 	fx.Parent = workspace
 end
 
+-- 일일 미션 진행 (아래에서 정의. 공을 맞힐 때 쓰이므로 이름을 먼저 선언)
+local questProgress
 local changePending = false
 Golf.Start({
 	shockwave = shockwave,
@@ -354,7 +356,7 @@ local function today()
 end
 
 -- 일일 미션: 진행도 올리고, 목표에 닿으면 바로 보상
-local function questProgress(player, key, amount)
+function questProgress(player, key, amount)
 	local data = DataService.Get(player)
 	local q = data and data.quests
 	local def = Config.Quests[key]
