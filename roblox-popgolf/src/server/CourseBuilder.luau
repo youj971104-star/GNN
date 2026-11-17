@@ -240,10 +240,23 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	end
 	local cupAngle = rng:NextNumber(0, math.pi * 2)
 	local cup = greenCenter + Vector3.new(math.cos(cupAngle), 0, math.sin(cupAngle)) * rng:NextNumber(0, R * 0.55)
-	disc("Cup", cup, Config.Ball.cupRadius, 0.27, 0.1, Color3.fromRGB(15, 15, 15), Enum.Material.SmoothPlastic, folder).CanCollide = false
+	-- 홀컵: 그린보다 확실히 보이게 (검은 구멍 + 하얀 테두리). 공·레이캐스트에는 안 걸림 (홀인 판정은 거리로 함)
+	local cupHole = disc("Cup", cup, Config.Ball.cupRadius - 0.35, 0.33, 0.12, Color3.fromRGB(8, 8, 10), Enum.Material.SmoothPlastic, folder)
+	cupHole.CanCollide = false
+	cupHole.CanQuery = false
+	local cupRingN = 32
+	for k = 1, cupRingN do
+		local a0 = (k - 1) / cupRingN * math.pi * 2
+		local a1 = k / cupRingN * math.pi * 2
+		local p0 = cup + Vector3.new(math.cos(a0), 0, math.sin(a0)) * Config.Ball.cupRadius
+		local p1 = cup + Vector3.new(math.cos(a1), 0, math.sin(a1)) * Config.Ball.cupRadius
+		local mid = Vector3.new((p0.X + p1.X) / 2, 0.34, (p0.Z + p1.Z) / 2)
+		part({ Name = "CupRing", Size = Vector3.new(0.35, 0.12, (p1 - p0).Magnitude + 0.05), CFrame = CFrame.lookAt(mid, mid + (p1 - p0)), Color = Color3.fromRGB(250, 250, 250), Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, folder)
+	end
 	local flag
 	-- 깃발 에셋: 홀컵 가운데가 기준점. 공이 깃대에 막히지 않게 충돌 끔
-	local flagAsset = asset("Flag_Cup", CFrame.new(cup + UP * 0.25), { collide = false, teamColor = Color3.fromRGB(255, 60, 60) })
+	-- 모델러 홀컵 테두리는 대부분 땅에 묻히게 만들어져 있어서 0.12 올려 금색 링이 보이게
+	local flagAsset = asset("Flag_Cup", CFrame.new(cup.X, 0.37, cup.Z), { collide = false, teamColor = Color3.fromRGB(255, 60, 60) })
 	if flagAsset then
 		flag = flagAsset.parts.TeamColor_Flag or flagAsset.model:FindFirstChildWhichIsA("BasePart", true)
 		for _, d in ipairs(flagAsset.model:GetDescendants()) do
