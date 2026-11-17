@@ -331,6 +331,34 @@ else
 	jumpButton.Parent = nil -- PC 는 스페이스바
 end
 
+-- 디자인: 스윙 힘 게이지 (파랑→초록→노랑→빨강 막대 + 하얀 칸). 가로:세로 = 4:1
+-- 아직 안 찬 부분은 어둡게 덮고, 지금 힘 위치에 하얀 세로선이 움직임
+local powerSkin
+if uiImage("SwingPowerGauge") then
+	powerBack.BackgroundTransparency = 1
+	powerBack:FindFirstChildOfClass("UIStroke").Enabled = false
+	powerBack.Size = isMobile and UDim2.fromOffset(190, 47) or UDim2.fromOffset(380, 95)
+	if isMobile then
+		powerBack.Position = UDim2.new(0.5, 0, 1, -10)
+	end
+	powerFill.Visible = false
+	skinImage(powerBack, "SwingPowerGauge", 1)
+	local X0, X1, Y0, Y1 = 0.054, 0.947, 0.305, 0.695 -- 이미지 안 색 막대 칸
+	local cover = new("Frame", { Parent = powerBack, BackgroundColor3 = Color3.fromRGB(20, 24, 40), BackgroundTransparency = 0.15, BorderSizePixel = 0, ZIndex = 2 }, { new("UICorner", { CornerRadius = UDim.new(0.4, 0) }) })
+	local marker = new("Frame", { Parent = powerBack, AnchorPoint = Vector2.new(0.5, 0), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, ZIndex = 3 })
+	powerText.Position, powerText.Size = rect(X0, Y0 + 0.05, X1, Y1 - 0.05)
+	powerText.ZIndex = 4
+	powerText.TextStrokeTransparency = 0.2
+	powerSkin = function(p)
+		p = math.clamp(p, 0, 1)
+		local x = X0 + (X1 - X0) * p
+		cover.Position, cover.Size = rect(x, Y0, X1, Y1)
+		cover.Visible = p < 0.999
+		marker.Position = UDim2.fromScale(x, Y0 - 0.06)
+		marker.Size = UDim2.new(0, 3, Y1 - Y0 + 0.12, 0)
+	end
+end
+
 -- 디자인: 샷 버튼 (빨간 원 + 별). 공이 원 안에 없으면 살짝 어둡게
 local shotSkin
 if uiImage("ClubAttackButton") then
@@ -823,6 +851,9 @@ Shot.Start({
 	setPower = function(p, visible)
 		powerBack.Visible = visible
 		powerFill.Size = UDim2.fromScale(p, 1)
+		if powerSkin then
+			powerSkin(p)
+		end
 		powerFill.BackgroundColor3 = Color3.fromHSV(0.33 - p * 0.33, 0.85, 0.95)
 		powerText.Text = math.floor(p * 100) .. "%"
 	end,

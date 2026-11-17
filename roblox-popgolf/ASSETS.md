@@ -66,7 +66,7 @@
 | `LiveMatchRankBoard` | 오른쪽 현황판: 1·2줄 레드·블루 공 거리, 3·4줄 레드·블루 선수 |
 | `ClubAttackButton` | 샷 버튼 (공이 원 밖이면 살짝 어둡게) |
 | `PlayerHPHUD` | 내 정보: 아바타 + 궁극기 게이지(초록) + 대시 준비(파랑) |
-| `SwingPowerGauge` | 스윙 힘 게이지 (이미지 받으면 연결) |
+| `SwingPowerGauge` | 스윙 힘 게이지: 아직 안 찬 부분은 어둡게, 지금 힘 위치에 하얀 세로선 |
 
 ## 6. Meshy AI 소나무
 
