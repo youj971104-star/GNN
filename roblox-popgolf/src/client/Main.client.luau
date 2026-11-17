@@ -243,6 +243,29 @@ local hint = label({
 	TextStrokeTransparency = 0.3,
 	Parent = screen.gui,
 })
+-- 안내 문구: 내용이 바뀔 때만 잠깐 보였다가(4초) 스르륵 사라짐. 같은 문구가 계속 들어와도 다시 띄우지 않음
+local HINT_SECONDS = 4
+local hintToken = 0
+local function setHint(text)
+	if text == hint:GetAttribute("Last") then
+		return
+	end
+	hint:SetAttribute("Last", text)
+	hintToken += 1
+	local my = hintToken
+	hint.Text = text
+	hint.TextTransparency = 0
+	hint.TextStrokeTransparency = 0.3
+	if text == "" then
+		return
+	end
+	task.delay(HINT_SECONDS, function()
+		if hintToken ~= my then
+			return
+		end
+		game:GetService("TweenService"):Create(hint, TweenInfo.new(0.6), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+	end)
+end
 
 local function roundButton(text, color, position, size)
 	return new("TextButton", {
@@ -875,15 +898,15 @@ Shot.Start({
 			shotSkin.ImageColor3 = ballNear and Color3.new(1, 1, 1) or Color3.fromRGB(170, 170, 170)
 		end
 		if practice then
-			hint.Text = "🏌️ 연습 스윙: 꾹 눌렀다 떼서 골프채 효과 확인"
+			setHint("🏌️ 연습 스윙: 꾹 눌렀다 떼서 골프채 효과 확인")
 		elseif not playing then
-			hint.Text = ""
+			setHint("")
 		elseif player:GetAttribute("Stunned") then
-			hint.Text = "💫 넘어졌어요! 잠깐만..."
+			setHint("💫 넘어졌어요! 잠깐만...")
 		elseif ballNear then
-			hint.Text = "⛳ 공이 초록 원 안에! 꾹 눌러 힘을 모았다가 떼면 카메라 방향으로 날아가요"
+			setHint("⛳ 공이 초록 원 안에! 꾹 눌러 힘을 모았다가 떼면 카메라 방향으로 날아가요")
 		else
-			hint.Text = "🏃 카메라를 칠 방향으로 돌리고, 공이 바닥의 원(내 오른쪽 앞)에 오게 서요 · 휘둘러서 상대 넘어뜨리기 · Q 대시 · E 스킬 · R 궁극기 · F 아이템"
+			setHint("🏃 카메라를 칠 방향으로 돌리고, 공이 바닥의 원(내 오른쪽 앞)에 오게 서요 · 휘둘러서 상대 넘어뜨리기 · Q 대시 · E 스킬 · R 궁극기 · F 아이템")
 		end
 	end,
 })
