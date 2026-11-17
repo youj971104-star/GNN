@@ -39,7 +39,7 @@ Config.Ball = {
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1117b"
+Config.Build = "1117c"
 
 -- 카메라 시점 (조금 위에서, 멀리서 내려다봄). 플레이어가 확대/축소·회전은 그대로 할 수 있음
 Config.Camera = {

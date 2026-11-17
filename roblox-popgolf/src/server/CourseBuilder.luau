@@ -109,9 +109,24 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	folder.Parent = workspace
 
 	-- 모델러 에셋 (ReplicatedStorage > Assets). 없으면 아래 기본 도형을 씀
+	-- 실제 지형 표면 높이 (지형만 봄). 지형이 없으면 nil
+	local terrainRay = RaycastParams.new()
+	terrainRay.FilterType = Enum.RaycastFilterType.Include
+	terrainRay.FilterDescendantsInstances = { workspace.Terrain }
+	local function groundY(x, z)
+		local hit = workspace:Raycast(Vector3.new(x, 80, z), Vector3.new(0, -160, 0), terrainRay)
+		return hit and hit.Position.Y
+	end
 	local function asset(name, cf, opts)
 		opts = opts or {}
 		opts.parent = folder
+		-- 지형 위에 놓는 소품은 실제 지형 표면 높이에 맞춤 (지형이 생각보다 높으면 묻히지 않게)
+		if cf and not opts.noSnap then
+			local gy = groundY(cf.X, cf.Z)
+			if gy and gy > cf.Y then
+				cf = cf + UP * (gy - cf.Y)
+			end
+		end
 		return AssetLib.Spawn(name, cf, opts)
 	end
 	local TREES = AssetLib.Available({ "Tree_Round_A", "Tree_Round_B", "Tree_Pine", "Tree_Palm" })
@@ -189,15 +204,15 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 
 	-- 3) 페어웨이: 20스터드마다 줄무늬, 꺾이는 곳은 원판으로 매끄럽게
 	local W = CC.fairwayWidth + extra * CC.widthPerExtraPlayer
-	-- 지형 풀잎 장식은 위에 얹은 얇은 부품(페어웨이·그린·티)을 뚫고 솟아나서 바닥이 전부 러프처럼 보임
-	-- → 그 아래 지형만 풀잎이 없는 흙(Ground)으로 바꿈. 바깥 러프는 풀잎 그대로라 경계가 또렷해짐
-	terrain:SetMaterialColor(Enum.Material.Ground, theme.rough:Lerp(Color3.new(0, 0, 0), 0.15))
+	-- 코스 바닥(페어웨이·그린·티) 자리는 지형을 아예 파내고(공기), 두께 8짜리 부품이 바닥이 됨
+	-- 지형은 표면을 매끄럽게 부풀려 그려서 위에 얹은 부품을 덮어 버림 → 겹치는 지형 자체를 없앰
+	-- 가장자리는 0.5씩 안쪽만 파서 지형과 부품 사이에 틈이 안 생기게
 	local function bareBox(cf, size)
 		local p = cf.Position
-		terrain:FillBlock(CFrame.new(p.X, -2, p.Z) * (cf - cf.Position), Vector3.new(size.X + 2, 4, size.Z + 2), Enum.Material.Ground)
+		terrain:FillBlock(CFrame.new(p.X, 8, p.Z) * (cf - cf.Position), Vector3.new(math.max(1, size.X - 1), 24, math.max(1, size.Z - 1)), Enum.Material.Air)
 	end
 	local function bareDisc(center, radius)
-		terrain:FillCylinder(CFrame.new(center.X, -2, center.Z), 4, radius + 1, Enum.Material.Ground)
+		terrain:FillCylinder(CFrame.new(center.X, 8, center.Z), 24, math.max(0.5, radius - 0.5), Enum.Material.Air)
 	end
 
 	local stripe = 0
@@ -214,22 +229,22 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 			bareBox(CFrame.lookAt(mid, mid + dir), Vector3.new(W, 1, (s1 - s0) + 0.05))
 			part({
 				Name = "Fairway",
-				Size = Vector3.new(W, 4, (s1 - s0) + 0.05),
-				-- 두께 4, 윗면 높이 0.5 (지형 속까지 꽉 채워서 어떤 화질에서도 지형에 묻히지 않게)
-				CFrame = CFrame.lookAt(mid - UP * 1.5, mid - UP * 1.5 + dir),
+				Size = Vector3.new(W, 8, (s1 - s0) + 0.05),
+				-- 두께 8, 윗면 높이 0.5 (파낸 지형 자리를 꽉 채움)
+				CFrame = CFrame.lookAt(mid - UP * 3.5, mid - UP * 3.5 + dir),
 				Color = stripe % 2 == 0 and theme.fairA or theme.fairB,
 				Material = FAIR_MAT,
 			}, folder)
 		end
-		disc("Fairway", b, W / 2, 0.51, 4, theme.fairA, FAIR_MAT, folder)
+		disc("Fairway", b, W / 2, 0.51, 8, theme.fairA, FAIR_MAT, folder)
 		bareDisc(b, W / 2)
 	end
 	bareDisc(path[1], W / 2)
 
 	-- 4) 티(출발대)
 	local startDir = (path[2] - path[1]).Unit
-	bareBox(CFrame.lookAt(Vector3.zero, startDir), Vector3.new(30, 0.3, 18))
-	part({ Name = "Tee", Size = Vector3.new(30, 4, 18), CFrame = CFrame.lookAt(Vector3.new(0, -1.2, 0), startDir * 10 + Vector3.new(0, -1.2, 0)), Color = Color3.fromRGB(175, 235, 140), Material = FAIR_MAT }, folder)
+	bareBox(CFrame.lookAt(Vector3.zero, startDir), Vector3.new(30, 1, 18))
+	part({ Name = "Tee", Size = Vector3.new(30, 8, 18), CFrame = CFrame.lookAt(Vector3.new(0, -3.2, 0), startDir * 10 + Vector3.new(0, -3.2, 0)), Color = Color3.fromRGB(175, 235, 140), Material = FAIR_MAT }, folder)
 	for i, sx in ipairs({ -12, 12 }) do
 		local marker = CFrame.lookAt(Vector3.zero, startDir) * CFrame.new(sx, 0.8, 0)
 		local teamColor = Config.Teams[i] and Config.Teams[i].color
@@ -244,9 +259,9 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- 5) 그린 + 홀컵 + 깃발
 	local R = CC.greenRadius
 	bareDisc(greenCenter, R + 3)
-	local green = disc("Green", greenCenter, R, 0.7, 4, theme.green, Enum.Material.SmoothPlastic, folder)
+	local green = disc("Green", greenCenter, R, 0.7, 8, theme.green, Enum.Material.SmoothPlastic, folder)
 	green.CustomPhysicalProperties = PhysicalProperties.new(1, 0.15, 0.2, 1, 1)
-	disc("GreenFringe", greenCenter, R + 3, 0.6, 4, theme.fairB, FAIR_MAT, folder).Name = "Fairway"
+	disc("GreenFringe", greenCenter, R + 3, 0.6, 8, theme.fairB, FAIR_MAT, folder).Name = "Fairway"
 	-- 그린 테두리 네온 링 (노을·밤 홀에서도 그린 경계가 보이게). 공·레이캐스트에는 안 걸림
 	local ringN = 64
 	for k = 1, ringN do
@@ -275,7 +290,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	local flag
 	-- 깃발 에셋: 홀컵 가운데가 기준점. 공이 깃대에 막히지 않게 충돌 끔
 	-- 모델러 홀컵 테두리는 대부분 땅에 묻히게 만들어져 있어서 0.12 올려 금색 링이 보이게
-	local flagAsset = asset("Flag_Cup", CFrame.new(cup.X, 0.82, cup.Z), { collide = false, teamColor = Color3.fromRGB(255, 60, 60) })
+	local flagAsset = asset("Flag_Cup", CFrame.new(cup.X, 0.82, cup.Z), { collide = false, noSnap = true, teamColor = Color3.fromRGB(255, 60, 60) })
 	if flagAsset then
 		flag = flagAsset.parts.TeamColor_Flag or flagAsset.model:FindFirstChildWhichIsA("BasePart", true)
 		for _, d in ipairs(flagAsset.model:GetDescendants()) do
@@ -404,13 +419,14 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local dir = (b - a).Unit
 		local side = Vector3.new(dir.Z, 0, -dir.X) * cartSide * (W / 2 + 7)
 		local mid = (a + b) / 2 + side
-		part({ Name = "CartPath", Size = Vector3.new(5, 1, (b - a).Magnitude + 5), CFrame = CFrame.lookAt(mid + UP * 0.1, mid + UP * 0.1 + dir), Color = Color3.fromRGB(175, 170, 160), Material = Enum.Material.Concrete }, folder)
+		bareBox(CFrame.lookAt(mid, mid + dir), Vector3.new(5, 1, (b - a).Magnitude + 5))
+		part({ Name = "CartPath", Size = Vector3.new(5, 8, (b - a).Magnitude + 5), CFrame = CFrame.lookAt(mid - UP * 3.4, mid - UP * 3.4 + dir), Color = Color3.fromRGB(175, 170, 160), Material = Enum.Material.Concrete }, folder)
 	end
 
 	-- 카트 길 시작점 옆에 세워 둔 골프 카트
 	do
 		local d0 = (path[2] - path[1]).Unit
-		local cartPos = path[1] + Vector3.new(d0.Z, 0, -d0.X) * cartSide * (W / 2 + 7) + d0 * 8
+		local cartPos = path[1] + Vector3.new(d0.Z, 0, -d0.X) * cartSide * (W / 2 + 7) + d0 * 8 + UP * 0.6 -- 카트 길 윗면 위
 		asset("Golf_Cart", CFrame.lookAt(cartPos, cartPos + d0), { teamColor = Color3.fromRGB(80, 200, 255) })
 	end
 
@@ -565,6 +581,13 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		alive = true,
 	}
 	current = hole
+	-- 점검용 한 줄: 러프 지형 표면 높이 (정상이면 0 근처). Output 창에서 확인
+	do
+		local side = Vector3.new(startDir.Z, 0, -startDir.X)
+		local probe = side * (W / 2 + 25)
+		local gy = groundY(probe.X, probe.Z)
+		print(string.format("[PopGolf] build %s · 러프 지형 높이 %.2f (코스 바닥 윗면 0.5)", tostring(Config.Build), gy or -999))
+	end
 
 	task.spawn(function()
 		while hole.alive do
