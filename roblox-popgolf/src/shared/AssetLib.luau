@@ -239,6 +239,14 @@ local function boundsHeight(parts)
 	return maxY - minY
 end
 
+-- 기준점이 빈 오브젝트(Null)라 로블록스로 가져올 때 사라지는 모델: 납품 FBX 에서 잰 기준점 위치
+-- (모델 바닥 가운데 기준, 로블록스 좌표: X 좌우 반전 · Y 위 · Z 뒤)
+AssetLib.POINTS = {
+	Hero_Leo = { Point_Head = Vector3.new(0.098, 2.999, -0.382), Point_Back = Vector3.new(0.098, 0.999, 0.068) },
+	Hero_Yuki = { Point_Head = Vector3.new(-0.081, 3.260, -0.206), Point_Back = Vector3.new(-0.081, 1.260, 0.244), Point_Float = Vector3.new(1.069, 2.260, -0.306) },
+	Hero_Gale = { Point_Head = Vector3.new(0.270, 3.260, -0.467), Point_Back = Vector3.new(0.270, 1.260, -0.017) },
+}
+
 -- 가져올 때 크기가 정해지지 않은 모델: 이 높이(스터드)로 자동 맞춤 (opts.scale 은 그 위에 곱해짐)
 AssetLib.HEIGHT = {
 	Tree_Pine2 = 20, -- Meshy AI 소나무 (원본은 1스터드 남짓)
@@ -319,6 +327,16 @@ function AssetLib.Spawn(name, cf, opts)
 		handle.parts[p.Name] = handle.parts[p.Name] or p
 		if startsWith(p.Name, "Point_") then
 			handle.points[p.Name] = p.CFrame
+		end
+	end
+	-- 모델 안에 기준점 부품이 없으면 (빈 오브젝트는 가져올 때 사라짐) 미리 잰 위치로 채움
+	local known = AssetLib.POINTS[name]
+	if known then
+		local bottom = CFrame.new(boundsBottomCenter(parts)) * (cf - cf.Position)
+		for key, offset in pairs(known) do
+			if not handle.points[key] then
+				handle.points[key] = bottom * CFrame.new(offset * scale)
+			end
 		end
 	end
 	model.Parent = opts.parent

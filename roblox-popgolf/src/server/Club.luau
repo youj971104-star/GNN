@@ -427,6 +427,9 @@ function Club.GiveHeroLook(player, heroId, teamColor)
 		return
 	end
 	local pHead, pBack = h.points.Point_Head, h.points.Point_Back
+	if not (pHead and pBack) then
+		warn("[Club] 영웅 외형 기준점(Point_Head/Point_Back)을 못 찾음:", "Hero_" .. heroId)
+	end
 	local pFloat = h.points.Point_Float or pBack
 	local pWaist = h.points.Point_Waist or pBack
 	-- 캐릭터 쪽 기준 자리: 머리 정수리 / 등 가운데 (R6 몸통은 가슴이 가운데보다 조금 위)
