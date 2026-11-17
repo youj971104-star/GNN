@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local AssetLib = require(ReplicatedStorage.Shared.AssetLib)
+local HitFX = require(ReplicatedStorage.Shared.GolfHitEffectFancy)
 -- 이펙트 이미지 (Config.FXTextures 에 ID가 있으면 모델러 이미지, 없으면 로블록스 기본)
 local SPARK_TEX = Config.FXTexture("Spark", "rbxasset://textures/particles/sparkles_main.dds")
 local ENERGY_TEX = Config.FXTexture("Energy", "rbxasset://textures/particles/fire_main.dds")
@@ -297,8 +298,17 @@ local function meteorVortex(pos, radius, assetName, lightColor)
 	end)
 end
 
-local function impact(pos, color, big, kind, radius)
+local function impact(pos, color, big, kind, radius, dir)
 	if typeof(pos) ~= "Vector3" then
+		return
+	end
+	if kind == "ballhit" then
+		-- 공 타격: 플래시 · 빛줄기 · 충격파 2겹 · 무지개 불꽃 · 별가루 · 잔디 먼지
+		local power = typeof(radius) == "number" and radius or 0.5
+		HitFX.Play(pos, typeof(dir) == "Vector3" and dir or nil, power)
+		if (camera.CFrame.Position - pos).Magnitude < 45 then
+			HitFX.Shake(power * 0.6)
+		end
 		return
 	end
 	if kind == "meteor" then

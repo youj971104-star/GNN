@@ -319,8 +319,8 @@ Golf.Start({
 	onChange = function()
 		changePending = true
 	end,
-	impact = function(position, color, big, kind, radius)
-		remotes.Impact:FireAllClients(position, color, big, kind, radius)
+	impact = function(position, color, big, kind, radius, dir)
+		remotes.Impact:FireAllClients(position, color, big, kind, radius, dir)
 	end,
 	onBallHit = function(player)
 		questProgress(player, "Hit", 1)

@@ -644,7 +644,8 @@ function Golf.Swing(player, direction, power)
 					end
 					addGauge(player, UL.perBallHit)
 					ctx.onBallHit(player)
-					ctx.impact(t.ball.Position, Config.Teams[index].color, ult or mult > 1)
+					-- 화려한 타격 이펙트 (GolfHitEffectFancy): 친 방향·힘에 맞춰
+					ctx.impact(t.ball.Position, Config.Teams[index].color, ult or mult > 1, "ballhit", math.clamp(power * (ult and 1.3 or mult), 0, 1), shotDir)
 					hitSomething = true
 				end
 			end
