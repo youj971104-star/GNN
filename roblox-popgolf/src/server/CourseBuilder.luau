@@ -187,6 +187,17 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 
 	-- 3) 페어웨이: 20스터드마다 줄무늬, 꺾이는 곳은 원판으로 매끄럽게
 	local W = CC.fairwayWidth + extra * CC.widthPerExtraPlayer
+	-- 지형 풀잎 장식은 위에 얹은 얇은 부품(페어웨이·그린·티)을 뚫고 솟아나서 바닥이 전부 러프처럼 보임
+	-- → 그 아래 지형만 풀잎이 없는 흙(Ground)으로 바꿈. 바깥 러프는 풀잎 그대로라 경계가 또렷해짐
+	terrain:SetMaterialColor(Enum.Material.Ground, theme.rough:Lerp(Color3.new(0, 0, 0), 0.15))
+	local function bareBox(cf, size)
+		local p = cf.Position
+		terrain:FillBlock(CFrame.new(p.X, -2, p.Z) * (cf - cf.Position), Vector3.new(size.X + 2, 4, size.Z + 2), Enum.Material.Ground)
+	end
+	local function bareDisc(center, radius)
+		terrain:FillCylinder(CFrame.new(center.X, -2, center.Z), 4, radius + 1, Enum.Material.Ground)
+	end
+
 	local stripe = 0
 	for i = 1, #path - 1 do
 		local a, b = path[i], path[i + 1]
@@ -198,6 +209,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 			local s1 = seg * (k + 1) / n
 			local mid = a + dir * ((s0 + s1) / 2)
 			stripe += 1
+			bareBox(CFrame.lookAt(mid, mid + dir), Vector3.new(W, 0.2, (s1 - s0) + 0.05))
 			part({
 				Name = "Fairway",
 				Size = Vector3.new(W, 0.2, (s1 - s0) + 0.05),
@@ -207,10 +219,13 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 			}, folder)
 		end
 		disc("Fairway", b, W / 2, 0.11, 0.2, theme.fairA, Enum.Material.Grass, folder)
+		bareDisc(b, W / 2)
 	end
+	bareDisc(path[1], W / 2)
 
 	-- 4) 티(출발대)
 	local startDir = (path[2] - path[1]).Unit
+	bareBox(CFrame.lookAt(Vector3.zero, startDir), Vector3.new(30, 0.3, 18))
 	part({ Name = "Tee", Size = Vector3.new(30, 0.3, 18), CFrame = CFrame.lookAt(Vector3.new(0, 0.15, 0), startDir * 10 + Vector3.new(0, 0.15, 0)), Color = Color3.fromRGB(150, 225, 120), Material = Enum.Material.Grass }, folder)
 	for i, sx in ipairs({ -12, 12 }) do
 		local marker = CFrame.lookAt(Vector3.zero, startDir) * CFrame.new(sx, 0.8, 0)
@@ -225,6 +240,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 
 	-- 5) 그린 + 홀컵 + 깃발
 	local R = CC.greenRadius
+	bareDisc(greenCenter, R + 3)
 	local green = disc("Green", greenCenter, R, 0.25, 0.5, theme.green, Enum.Material.SmoothPlastic, folder)
 	green.CustomPhysicalProperties = PhysicalProperties.new(1, 0.15, 0.2, 1, 1)
 	disc("GreenFringe", greenCenter, R + 3, 0.2, 0.4, theme.fairA, Enum.Material.Grass, folder).Name = "Fairway"
