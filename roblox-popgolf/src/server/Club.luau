@@ -127,7 +127,8 @@ local function setHeadMesh(model, skin)
 end
 
 -- 통째 모델 골프채 (손잡이~헤드 한 덩어리, 예: Meshy 드라이버)
--- 원본은 세워진 모양(아래 = 손잡이 끝, 위 = 헤드)이라 뒤집어서 손잡이를 위(+Y)로, 길이는 이 캐릭터의 샤프트에 맞게 늘림
+-- 로블록스로 가져오면 헤드가 아래, 손잡이가 위로 섬 → 그대로 두고 손잡이 끝을 샤프트 위끝에 맞춤
+-- (반대로 들어오는 모델은 스킨에 modelFlip = true), 길이는 이 캐릭터의 샤프트에 맞게 늘림
 local function setFullModel(model, skin)
 	local old = model:FindFirstChild("FullMesh")
 	if old and old:GetAttribute("Asset") == skin.model then
@@ -158,7 +159,14 @@ local function setFullModel(model, skin)
 	local holder = Instance.new("Model")
 	holder.Name = "FullMesh"
 	holder:SetAttribute("Asset", skin.model)
-	local place = CFrame.new(0, length / 2 + 0.3, 0) * CFrame.Angles(math.pi, 0, 0) * CFrame.Angles(0, math.rad(skin.modelYaw or 0), 0)
+	local top = length / 2 + 0.3 -- 손잡이 끝 자리 (샤프트 로컬 Y)
+	local place
+	if skin.modelFlip then
+		place = CFrame.new(0, top, 0) * CFrame.Angles(math.pi, 0, 0)
+	else
+		place = CFrame.new(0, top - maxY * scale, 0)
+	end
+	place *= CFrame.Angles(0, math.rad(skin.modelYaw or 0), 0)
 	for _, item in ipairs(list) do
 		local p = item.part
 		p.Size *= scale
