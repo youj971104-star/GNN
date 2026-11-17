@@ -8,6 +8,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local PhysicsService = game:GetService("PhysicsService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Ragdoll = require(script.Parent.Ragdoll)
@@ -212,6 +213,7 @@ local function makeBall(index, position)
 	ball.Material = Enum.Material.SmoothPlastic
 	ball.CustomPhysicalProperties = PhysicalProperties.new(2, 0.4, 0.35, 1, 1)
 	ball.Anchored = true
+	ball.CollisionGroup = "GolfBall" -- 선수 몸과는 안 부딪힘 (골프채로만 움직임)
 	ball:SetAttribute("Team", index)
 
 	local hl = Instance.new("Highlight")
@@ -1159,8 +1161,41 @@ local function tick(dt)
 	end
 end
 
+-- 충돌 그룹: 공은 선수 몸(골프채 포함)을 그냥 통과 → 걸어가다 몸에 닿아 공이 밀리는 일 없음
+-- (공으로 사람 맞히기 · 골프채 타격은 충돌이 아니라 거리로 판정하므로 그대로 동작)
+local function setupCollisionGroups()
+	pcall(function()
+		PhysicsService:RegisterCollisionGroup("GolfBall")
+		PhysicsService:RegisterCollisionGroup("GolfPlayer")
+	end)
+	PhysicsService:CollisionGroupSetCollidable("GolfBall", "GolfPlayer", false)
+	PhysicsService:CollisionGroupSetCollidable("GolfBall", "GolfBall", true)
+	local function tag(part)
+		if part:IsA("BasePart") then
+			part.CollisionGroup = "GolfPlayer"
+		end
+	end
+	local function onCharacter(character)
+		for _, d in ipairs(character:GetDescendants()) do
+			tag(d)
+		end
+		character.DescendantAdded:Connect(tag) -- 나중에 붙는 골프채·모자·레그돌 부품도
+	end
+	local function onPlayer(player)
+		player.CharacterAdded:Connect(onCharacter)
+		if player.Character then
+			onCharacter(player.Character)
+		end
+	end
+	Players.PlayerAdded:Connect(onPlayer)
+	for _, p in ipairs(Players:GetPlayers()) do
+		onPlayer(p)
+	end
+end
+
 function Golf.Start(context)
 	ctx = context
+	setupCollisionGroups()
 	ballsFolder = Instance.new("Folder")
 	ballsFolder.Name = "Balls"
 	ballsFolder.Parent = workspace
