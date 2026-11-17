@@ -226,8 +226,9 @@ jumpButton:FindFirstChildOfClass("UIPadding").PaddingBottom = UDim.new(0, 8)
 jumpButton.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 		local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-		if h and not player:GetAttribute("Stunned") then
-			h.Jump = true
+		-- humanoid.Jump = true 는 로블록스 기본 조작 모듈이 매 프레임 덮어써서(휴대폰) 안 먹힘 → 상태를 직접 '점프'로 바꿈
+		if h and not player:GetAttribute("Stunned") and h.FloorMaterial ~= Enum.Material.Air and h:GetStateEnabled(Enum.HumanoidStateType.Jumping) then
+			h:ChangeState(Enum.HumanoidStateType.Jumping)
 		end
 	end
 end)
