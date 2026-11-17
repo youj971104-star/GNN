@@ -544,6 +544,7 @@ function Golf.Swing(player, direction, power)
 					if perfect then
 						perfect = false -- 알림은 한 번만
 						ctx.notify(player, "🎯 퍼펙트 샷!", Color3.fromRGB(255, 230, 90))
+						ctx.impact(pos, Color3.fromRGB(255, 220, 110), false, "golden", 4)
 					end
 					if Config.DebugShots then
 						local b = t.ball
@@ -1171,6 +1172,7 @@ local function sink(index, t)
 	local ball = t.ball
 	ball.Anchored = true
 	TweenService:Create(ball, TweenInfo.new(0.35), { Position = hole.cup - UP * 1.5, Transparency = 1 }):Play()
+	ctx.impact(hole.cup + UP * 0.8, Color3.fromRGB(255, 220, 110), true, "golden", 9) -- 홀인: 황금 소용돌이
 	local team = Config.Teams[index]
 	local hitter = t.lastHitter
 	ctx.onSunk(index, hitter)

@@ -50,7 +50,7 @@ Config.Ball = {
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1120i"
+Config.Build = "1120j"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
@@ -233,7 +233,7 @@ Config.SkinOrder = {
 	"Watermelon", "Ocean", "Choco", "Bubblegum", "Panda",
 	"Lava", "Galaxy", "Neon", "Frost",
 	"Sun", "Rainbow", "Gold",
-	"Comet", "Aurora",
+	"Comet", "Aurora", "BlackGold",
 	"VIPCrown",
 }
 Config.Skins = {
@@ -257,6 +257,9 @@ Config.Skins = {
 	Gold = { head = "Club_Head_Leg3", name = "황금", rarity = "Legendary", color = Color3.fromRGB(255, 200, 80), material = "Foil", effect = "Sparkles", trail = { Color3.fromRGB(255, 240, 160), Color3.fromRGB(220, 150, 30) } },
 	Comet = { head = "Club_Head_Myth2", name = "혜성", rarity = "Mythic", color = Color3.fromRGB(150, 220, 255), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(120, 200, 255), Color3.fromRGB(80, 60, 255) } },
 	Aurora = { head = "Club_Head_Myth1", name = "오로라", rarity = "Mythic", color = Color3.fromRGB(120, 255, 200), material = "Glass", effect = "Sparkles", trail = { Color3.fromRGB(90, 255, 190), Color3.fromRGB(110, 140, 255), Color3.fromRGB(230, 120, 255) } },
+	-- 통째 모델 골프채 (Meshy AI 드라이버): 손잡이~헤드가 한 덩어리. model = Assets 이름
+	-- modelYaw: 헤드가 엉뚱한 쪽을 보면 90/180/-90 으로 돌려 맞춤
+	BlackGold = { model = "Club_Driver_BlackGold", modelYaw = 0, name = "블랙 골드 드라이버", rarity = "Mythic", color = Color3.fromRGB(25, 25, 28), material = "Foil", effect = "Sparkles", trail = { Color3.fromRGB(255, 225, 140), Color3.fromRGB(200, 150, 40), Color3.fromRGB(30, 30, 30) } },
 	-- 뽑기로 나오지 않는 VIP 전용 스킨 (게임패스는 확률형 아이템을 줄 수 없음)
 	VIPCrown = { head = "Club_Head_Leg3", name = "👑 VIP 왕관", rarity = "Legendary", color = Color3.fromRGB(255, 215, 90), material = "Neon", effect = "Light", trail = { Color3.fromRGB(255, 240, 150), Color3.fromRGB(255, 180, 40) }, exclusive = "VIP" },
 }

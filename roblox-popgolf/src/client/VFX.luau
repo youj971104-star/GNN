@@ -247,11 +247,12 @@ end
 
 -- 메테오 스윙: 모델러(Meshy) 불꽃 소용돌이 모델 (Assets > FX_Meteor)
 -- 바닥에서 작게 나타나 빙글빙글 돌며 radius 만큼 커지고 사라짐 (각자 화면에서 그려서 부드럽게)
-local function meteorVortex(pos, radius)
-	if not AssetLib.Has("FX_Meteor") then
+local function meteorVortex(pos, radius, assetName, lightColor)
+	assetName = assetName or "FX_Meteor"
+	if not AssetLib.Has(assetName) then
 		return
 	end
-	local h = AssetLib.Spawn("FX_Meteor", CFrame.new(pos - Vector3.new(0, 1, 0)), { parent = folder, collide = false, anchored = true })
+	local h = AssetLib.Spawn(assetName, CFrame.new(pos - Vector3.new(0, 1, 0)), { parent = folder, collide = false, anchored = true })
 	if not h then
 		return
 	end
@@ -266,7 +267,7 @@ local function meteorVortex(pos, radius)
 		end
 	end
 	local light = Instance.new("PointLight")
-	light.Color = Color3.fromRGB(255, 140, 60)
+	light.Color = lightColor or Color3.fromRGB(255, 140, 60)
 	light.Range = radius * 1.5
 	light.Brightness = 4
 	light.Parent = parts[1]
@@ -302,6 +303,9 @@ local function impact(pos, color, big, kind, radius)
 	end
 	if kind == "meteor" then
 		meteorVortex(pos, typeof(radius) == "number" and radius or 12)
+	elseif kind == "golden" then
+		-- 황금 소용돌이 (홀인 · 퍼펙트 샷)
+		meteorVortex(pos, typeof(radius) == "number" and radius or 6, "FX_Golden", Color3.fromRGB(255, 210, 90))
 	end
 	color = typeof(color) == "Color3" and color or Color3.new(1, 1, 1)
 	ring(pos, color, big and 10 or 5)

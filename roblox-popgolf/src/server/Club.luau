@@ -126,8 +126,78 @@ local function setHeadMesh(model, skin)
 	return holder
 end
 
+-- 통째 모델 골프채 (손잡이~헤드 한 덩어리, 예: Meshy 드라이버)
+-- 원본은 세워진 모양(아래 = 손잡이 끝, 위 = 헤드)이라 뒤집어서 손잡이를 위(+Y)로, 길이는 이 캐릭터의 샤프트에 맞게 늘림
+local function setFullModel(model, skin)
+	local old = model:FindFirstChild("FullMesh")
+	if old and old:GetAttribute("Asset") == skin.model then
+		return old
+	end
+	if old then
+		old:Destroy()
+	end
+	local list = skin.model and AssetLib.Parts(skin.model)
+	if not list then
+		return nil
+	end
+	local shaft = model.PrimaryPart
+	-- 원본 높이 (기준점 = 바닥 가운데 = 손잡이 끝)
+	local maxY = 0
+	for _, item in ipairs(list) do
+		local h = item.part.Size / 2
+		for _, sx in ipairs({ -1, 1 }) do
+			for _, sy in ipairs({ -1, 1 }) do
+				for _, sz in ipairs({ -1, 1 }) do
+					maxY = math.max(maxY, (item.offset * Vector3.new(h.X * sx, h.Y * sy, h.Z * sz)).Y)
+				end
+			end
+		end
+	end
+	local length = shaft.Size.Y
+	local scale = (length + 0.9) / math.max(maxY, 0.01) -- 손잡이 위 0.3 + 샤프트 + 헤드 0.6
+	local holder = Instance.new("Model")
+	holder.Name = "FullMesh"
+	holder:SetAttribute("Asset", skin.model)
+	local place = CFrame.new(0, length / 2 + 0.3, 0) * CFrame.Angles(math.pi, 0, 0) * CFrame.Angles(0, math.rad(skin.modelYaw or 0), 0)
+	for _, item in ipairs(list) do
+		local p = item.part
+		p.Size *= scale
+		local o = item.offset
+		weldTo(shaft, p, place * (CFrame.new(o.Position * scale) * o.Rotation))
+		p.Parent = holder
+	end
+	holder.Parent = model
+	return holder
+end
+
 local function applySkin(model, skinId)
 	local skin = Config.Skins[skinId] or Config.Skins.White
+	-- 통째 모델 스킨이면 기본 샤프트·손잡이·헤드를 숨기고 모델만 보이게 (Head 는 이펙트 기준점이라 투명하게 남김)
+	local full = skin.model and setFullModel(model, skin)
+	local oldFull = model:FindFirstChild("FullMesh")
+	if not full and oldFull then
+		oldFull:Destroy()
+	end
+	if full then
+		local hm = model:FindFirstChild("HeadMesh")
+		if hm then
+			hm:Destroy()
+		end
+		for _, n in ipairs({ "Shaft", "Grip", "Ferrule", "Head", "Gem" }) do
+			local p = model:FindFirstChild(n)
+			if p then
+				p.Transparency = 1
+			end
+		end
+		model:SetAttribute("Skin", skinId)
+		return
+	end
+	for _, n in ipairs({ "Shaft", "Grip", "Ferrule" }) do
+		local p = model:FindFirstChild(n)
+		if p then
+			p.Transparency = 0
+		end
+	end
 	local head = model:FindFirstChild("Head")
 	local gem = model:FindFirstChild("Gem")
 	local ferrule = model:FindFirstChild("Ferrule")
