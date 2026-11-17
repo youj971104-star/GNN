@@ -272,6 +272,20 @@ local function buildFromAssets()
 		end
 		return CFrame.lookAt(p, target)
 	end
+	-- 벽에 붙는 물건(전광판): 돌리지 않고 가까운 벽과 나란히, 홀 안쪽만 보게 + 벽에서 1스터드 앞으로
+	-- (스폰 쪽으로 비스듬히 돌리면 판 끝이 벽·네온 기둥 속으로 파고들어 화면이 가려짐)
+	local function wallFacing(pos)
+		local p = floorAt(pos)
+		local rel = p - floorAt(CENTER)
+		local dir
+		if math.abs(rel.Z) >= math.abs(rel.X) then
+			dir = Vector3.new(0, 0, rel.Z > 0 and -1 or 1)
+		else
+			dir = Vector3.new(rel.X > 0 and -1 or 1, 0, 0)
+		end
+		p += dir
+		return CFrame.lookAt(p, p + dir)
+	end
 	-- 에셋이 있으면 에셋을, 없으면 fallback() 결과(기본 도형)를 씀
 	local function place(name, cf, opts)
 		opts = opts or {}
@@ -313,7 +327,7 @@ local function buildFromAssets()
 		{ "globalKO", "Point_Board_GlobalKO", "💫 넘어뜨림 왕", PAL.pink, Vector3.new(36, 17.2, -56) },
 	}) do
 		local pos = pointPos(b[2], b[5])
-		local h = place("Board_Frame", facing(pos))
+		local h = place("Board_Frame", wallFacing(pos))
 		local screen = h and (h.parts.Screen_Main or h.parts.Screen_GlobalWins)
 		if screen then
 			boards[b[1]] = boardUI(screen, b[3], b[4])
@@ -321,7 +335,7 @@ local function buildFromAssets()
 			if h then
 				h.model:Destroy()
 			end
-			boards[b[1]] = leaderboardBoard(facing(pos) + Vector3.new(0, pos.Y - CENTER.Y, 0), b[3], b[4])
+			boards[b[1]] = leaderboardBoard(wallFacing(pos) + Vector3.new(0, pos.Y - CENTER.Y, 0), b[3], b[4])
 		end
 	end
 
