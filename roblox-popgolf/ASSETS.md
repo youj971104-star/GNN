@@ -41,7 +41,7 @@
 | `Club_Head_Myth1` · `Myth2` | 오로라 · 혜성 헤드 |
 | `Team_Cap` | 경기 중 팀 모자 (팀 색) |
 
-아직 연결하지 않은 것: `Stand_Curve30`, `Club_Shaft_Parts`(지금 샤프트와 모양이 같음), `Team_Ball`, 이펙트 PNG 4장 (아래 3번 참고).
+추가로 연결된 것: `Stand_Curve30`(그린 뒤를 둥글게 감싸는 곡선 관중석 + 관중), `Team_Ball`(팀 공 겉모습, 팀 색으로 칠함), `Club_Shaft_Parts`(골프채 손잡이·샤프트·목 부분 겉모습).
 
 ## 3. 다음 단계에서 연결할 것
 

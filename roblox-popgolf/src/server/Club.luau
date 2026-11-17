@@ -92,6 +92,27 @@ local function makeClub(geo)
 	gem.Parent = model
 
 	model.PrimaryPart = shaft
+
+	-- 모델러 샤프트 메시 (Assets > Club_Shaft_Parts: Club_Grip · Club_Shaft · Club_Ferrule)
+	-- 기본 부품과 같은 크기·자리에 겉모습만 덮어씌움 (기본 부품은 투명하게 남겨 관절·이펙트 기준으로 씀)
+	local looks = AssetLib.Parts("Club_Shaft_Parts")
+	if looks then
+		local map = { Club_Grip = grip, Club_Shaft = shaft, Club_Ferrule = ferrule }
+		for _, item in ipairs(looks) do
+			local base = map[AssetLib.BaseName(item.part.Name)]
+			if base then
+				local m = item.part
+				m.Name = base.Name .. "Look"
+				m.Size = base.Size
+				weldTo(shaft, m, shaft.CFrame:ToObjectSpace(base.CFrame))
+				m.Parent = model
+				base:SetAttribute("HasLook", true)
+				base.Transparency = 1
+			else
+				item.part:Destroy()
+			end
+		end
+	end
 	model:SetAttribute("ShaftCenter", center)
 	model:SetAttribute("HeadY", at(geo.headDist))
 	return model
@@ -193,7 +214,7 @@ local function applySkin(model, skinId)
 		if hm then
 			hm:Destroy()
 		end
-		for _, n in ipairs({ "Shaft", "Grip", "Ferrule", "Head", "Gem" }) do
+		for _, n in ipairs({ "Shaft", "Grip", "Ferrule", "Head", "Gem", "ShaftLook", "GripLook", "FerruleLook" }) do
 			local p = model:FindFirstChild(n)
 			if p then
 				p.Transparency = 1
@@ -205,7 +226,11 @@ local function applySkin(model, skinId)
 	for _, n in ipairs({ "Shaft", "Grip", "Ferrule" }) do
 		local p = model:FindFirstChild(n)
 		if p then
-			p.Transparency = 0
+			p.Transparency = p:GetAttribute("HasLook") and 1 or 0
+		end
+		local look = model:FindFirstChild(n .. "Look")
+		if look then
+			look.Transparency = 0
 		end
 	end
 	local head = model:FindFirstChild("Head")
@@ -260,6 +285,14 @@ local function applySkin(model, skinId)
 	-- 금속 띠: 스킨 색, 영웅부터 빛남, 전설부터 금색 테
 	ferrule.Color = rarityIndex >= 4 and Color3.fromRGB(255, 215, 120) or accent
 	ferrule.Material = rarityIndex >= 3 and Enum.Material.Neon or Enum.Material.Foil
+	-- 샤프트 메시가 있으면 같은 색·재질 입히기 (손잡이는 메시 원래 고무 색 유지)
+	for _, n in ipairs({ "Shaft", "Ferrule" }) do
+		local base, look = model:FindFirstChild(n), model:FindFirstChild(n .. "Look")
+		if base and look then
+			look.Color = base.Color
+			look.Material = base.Material
+		end
+	end
 	model:SetAttribute("Skin", skinId)
 end
 

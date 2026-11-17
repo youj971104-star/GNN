@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local PhysicsService = game:GetService("PhysicsService")
+local AssetLib = require(ReplicatedStorage.Shared.AssetLib)
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Ragdoll = require(script.Parent.Ragdoll)
@@ -217,7 +218,34 @@ local function makeBall(index, position)
 	ball.CollisionGroup = "GolfBall" -- 선수 몸과는 안 부딪힘 (골프채로만 움직임)
 	ball:SetAttribute("Team", index)
 
+	-- 모델러 팀 공 메시 (Assets > Team_Ball): 물리는 동그란 기본 공이 그대로 하고, 겉모습만 메시로 (용접)
+	local look = ball
+	local meshList = AssetLib.Parts("Team_Ball")
+	if meshList and meshList[1] then
+		local m = meshList[1].part
+		m.Name = "BallLook"
+		m.Size = Vector3.one * B.diameter
+		m.Color = team.color
+		m.CanCollide = false
+		m.CanQuery = false
+		m.CanTouch = false
+		m.Massless = true
+		m.Anchored = false
+		m.CFrame = ball.CFrame
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = ball
+		w.Part1 = m
+		w.Parent = m
+		m.Parent = ball
+		ball.Transparency = 1
+		look = m
+		for i = 2, #meshList do
+			meshList[i].part:Destroy()
+		end
+	end
+
 	local hl = Instance.new("Highlight")
+	hl.Adornee = look
 	hl.FillTransparency = 0.5
 	hl.FillColor = team.color
 	hl.OutlineColor = Color3.new(1, 1, 1)
@@ -1172,6 +1200,10 @@ local function sink(index, t)
 	local ball = t.ball
 	ball.Anchored = true
 	TweenService:Create(ball, TweenInfo.new(0.35), { Position = hole.cup - UP * 1.5, Transparency = 1 }):Play()
+	local look = ball:FindFirstChild("BallLook")
+	if look then
+		TweenService:Create(look, TweenInfo.new(0.35), { Transparency = 1 }):Play()
+	end
 	ctx.impact(hole.cup + UP * 0.8, Color3.fromRGB(255, 220, 110), true, "golden", 9) -- 홀인: 황금 소용돌이
 	local team = Config.Teams[index]
 	local hitter = t.lastHitter

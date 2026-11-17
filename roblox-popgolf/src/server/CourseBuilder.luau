@@ -545,7 +545,8 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		-- 관중 자리는 놓인 관중석 모델에서 직접 잼 (모델 방향이 어떻게 들어와도 의자와 맞게):
 		--   하얀 의자 줄(가운데 3번째 줄) = 기준, 뒤 난간(금속) 쪽 = 뒤, 줄마다 뒤로 3.2 · 위로 3.0, 의자 간격 2.4 (모델러 스크립트 값)
 		for _, sx in ipairs({ -10, 10 }) do
-			local stand = asset("Stand_Straight20", standCf * CFrame.new(sx, 0, 0))
+			-- 모델러 관중석은 의자 정면이 +Z 라서 180° 돌려야 그린을 봄
+			local stand = asset("Stand_Straight20", standCf * CFrame.new(sx, 0, 0) * CFrame.Angles(0, math.pi, 0))
 			local white, trim
 			if stand then
 				for _, d in ipairs(stand.model:GetDescendants()) do
@@ -570,6 +571,31 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 							part({ Name = "Fan", Size = Vector3.new(1.3, 1.6, 0.9), CFrame = body, Color = crowdColors[rng:NextInteger(1, #crowdColors)], Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false }, folder)
 							part({ Name = "FanHead", Shape = Enum.PartType.Ball, Size = Vector3.one * 1, CFrame = body * CFrame.new(0, 1.25, 0), Color = Color3.fromRGB(245, 205, 160), Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false }, folder)
 						end
+					end
+				end
+			end
+		end
+	end
+	-- 곡선 관중석 (그린 뒤, 그린을 둥글게 감쌈): 모델의 호 중심이 앞줄에서 30 앞 → 그린 중심에 맞추면 앞줄이 그린 테두리 바로 밖
+	if AssetLib.Has("Stand_Curve30") then
+		local last = path[#path - 1]
+		local outward = Vector3.new(greenCenter.X - last.X, 0, greenCenter.Z - last.Z)
+		outward = outward.Magnitude > 0.1 and outward.Unit or Vector3.new(0, 0, 1)
+		local front = greenCenter + outward * 30
+		local curve = asset("Stand_Curve30", CFrame.lookAt(front, front + outward)) -- 정면(+Z)이 그린 쪽
+		if curve then
+			local baseY = curve.model:GetPivot().Position.Y
+			for tier = 0, 4 do
+				local rSeat = 31.5 + tier * 3.2
+				local seats = 6 + tier
+				for s = 0, seats - 1 do
+					if rng:NextNumber() < 0.7 then
+						local phi = math.rad(-13 + 26 * s / (seats - 1))
+						local dir = (CFrame.Angles(0, phi, 0) * CFrame.new(outward)).Position
+						local pos = Vector3.new(greenCenter.X, baseY, greenCenter.Z) + dir * rSeat + UP * ((tier + 1) * 3.0 + 1.375)
+						local body = CFrame.lookAt(pos, Vector3.new(greenCenter.X, pos.Y, greenCenter.Z))
+						part({ Name = "Fan", Size = Vector3.new(1.3, 1.6, 0.9), CFrame = body, Color = crowdColors[rng:NextInteger(1, #crowdColors)], Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false }, folder)
+						part({ Name = "FanHead", Shape = Enum.PartType.Ball, Size = Vector3.one * 1, CFrame = body * CFrame.new(0, 1.25, 0), Color = Color3.fromRGB(245, 205, 160), Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false }, folder)
 					end
 				end
 			end
