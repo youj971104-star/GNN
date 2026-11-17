@@ -28,6 +28,7 @@ local zones = {} -- 서리 지대 { part, center, radius, untilTime, owner }
 local winner = nil
 local active = false
 local ballsFolder
+local freezeFx, tornadoFx, windTrail -- 아이템 연출 (아래에서 정의)
 
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Include
@@ -705,6 +706,158 @@ local function throwBomb(player)
 	end)
 end
 
+----------------------------------------------------------------------
+-- 아이템 연출 (서버에서 만들어 모두에게 보임)
+----------------------------------------------------------------------
+-- 얼음: 공을 감싼 큰 얼음 덩어리 + 사방으로 솟은 얼음 가시 + 바닥 서리 + 푸른 빛 + 남은 초
+function freezeFx(ball, seconds)
+	local pos = ball.Position
+	local folder = Instance.new("Model")
+	folder.Name = "FreezeFx"
+	local function ice(size, cf, transparency)
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Material = Enum.Material.Glass
+		p.Color = Color3.fromRGB(170, 230, 255)
+		p.Transparency = transparency or 0.25
+		p.Size = size
+		p.CFrame = cf
+		p.Parent = folder
+		return p
+	end
+	local core = ice(Vector3.one * (B.diameter + 2.4), CFrame.new(pos) * CFrame.Angles(0.4, 0.7, 0.2), 0.35)
+	for k = 1, 7 do
+		local a = k / 7 * math.pi * 2
+		local tilt = CFrame.Angles(0, a, 0) * CFrame.Angles(math.rad(-55), 0, 0)
+		local len = 2.5 + math.random() * 2
+		ice(Vector3.new(0.9, len, 0.9), CFrame.new(pos) * tilt * CFrame.new(0, len / 2 + 0.6, 0) * CFrame.Angles(0, math.rad(45), 0), 0.15)
+	end
+	-- 바닥 서리 원
+	local frost = Instance.new("Part")
+	frost.Shape = Enum.PartType.Cylinder
+	frost.Anchored = true
+	frost.CanCollide = false
+	frost.CanQuery = false
+	frost.Material = Enum.Material.Neon
+	frost.Color = Color3.fromRGB(150, 225, 255)
+	frost.Transparency = 0.45
+	frost.Size = Vector3.new(0.1, 9, 9)
+	frost.CFrame = CFrame.new(pos - UP * (B.diameter / 2 - 0.08)) * CFrame.Angles(0, 0, math.rad(90))
+	frost.Parent = folder
+	local hl = Instance.new("Highlight")
+	hl.FillColor = Color3.fromRGB(150, 225, 255)
+	hl.FillTransparency = 0.6
+	hl.OutlineColor = Color3.new(1, 1, 1)
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Parent = folder
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(140, 210, 255)
+	light.Range = 18
+	light.Brightness = 3
+	light.Parent = core
+	-- 반짝이는 눈송이
+	local em = Instance.new("ParticleEmitter")
+	em.Texture = Config.FXTexture("Spark", "rbxasset://textures/particles/sparkles_main.dds")
+	em.Color = ColorSequence.new(Color3.fromRGB(200, 240, 255))
+	em.LightEmission = 1
+	em.Rate = 18
+	em.Lifetime = NumberRange.new(0.6, 1.2)
+	em.Speed = NumberRange.new(1, 3)
+	em.SpreadAngle = Vector2.new(180, 180)
+	em.Size = NumberSequence.new(0.6, 0)
+	em.Parent = core
+	-- 남은 시간 표시 (멀리서도 보임)
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(90, 40)
+	gui.StudsOffset = Vector3.new(0, 4.5, 0)
+	gui.AlwaysOnTop = true
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.FredokaOne
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(170, 235, 255)
+	label.TextStrokeTransparency = 0.1
+	label.Parent = gui
+	gui.Parent = core
+	folder.Parent = ballsFolder
+	-- 살짝 커지며 등장
+	core.Size = Vector3.one * 0.5
+	TweenService:Create(core, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = Vector3.one * (B.diameter + 2.4) }):Play()
+	task.spawn(function()
+		local endAt = os.clock() + seconds
+		while os.clock() < endAt and folder.Parent do
+			label.Text = "🧊 " .. math.ceil(endAt - os.clock())
+			task.wait(0.2)
+		end
+		folder:Destroy()
+	end)
+end
+
+-- 돌풍: 상대 발밑에서 솟는 회오리 (빙글빙글 도는 하얀 고리 여러 겹)
+function tornadoFx(pos, seconds)
+	local model = Instance.new("Model")
+	model.Name = "TornadoFx"
+	local rings = {}
+	for k = 1, 6 do
+		local r = Instance.new("Part")
+		r.Shape = Enum.PartType.Cylinder
+		r.Anchored = true
+		r.CanCollide = false
+		r.CanQuery = false
+		r.CanTouch = false
+		r.Material = Enum.Material.Neon
+		r.Color = k % 2 == 0 and Color3.fromRGB(200, 240, 255) or Color3.new(1, 1, 1)
+		r.Transparency = 0.45
+		local radius = 2 + k * 1.1
+		r.Size = Vector3.new(0.35, radius * 2, radius * 2)
+		r.CFrame = CFrame.new(pos + UP * (k * 1.6)) * CFrame.Angles(0, 0, math.rad(90))
+		r.Parent = model
+		table.insert(rings, { part = r, h = k * 1.6, radius = radius })
+	end
+	model.Parent = ballsFolder
+	task.spawn(function()
+		local t0 = os.clock()
+		while os.clock() - t0 < seconds do
+			local t = os.clock() - t0
+			for i, ring in ipairs(rings) do
+				local wob = Vector3.new(math.cos(t * 9 + i), 0, math.sin(t * 9 + i)) * 0.6
+				ring.part.CFrame = CFrame.new(pos + UP * (ring.h + t * 6) + wob) * CFrame.Angles(0, t * 12 + i, 0) * CFrame.Angles(0, 0, math.rad(90 + 12 * math.sin(t * 7 + i)))
+				ring.part.Transparency = 0.45 + 0.55 * (t / seconds)
+			end
+			task.wait(0.03)
+		end
+		model:Destroy()
+	end)
+end
+
+-- 날아가는 상대 뒤로 바람 꼬리 + 소용돌이 연기
+function windTrail(root, seconds)
+	local att = Instance.new("Attachment")
+	att.Parent = root
+	local em = Instance.new("ParticleEmitter")
+	em.Texture = Config.FXTexture("Smoke", "rbxasset://textures/particles/smoke_main.dds")
+	em.Color = ColorSequence.new(Color3.new(1, 1, 1))
+	em.Transparency = NumberSequence.new(0.3, 1)
+	em.LightEmission = 0.4
+	em.Rate = 40
+	em.Lifetime = NumberRange.new(0.4, 0.8)
+	em.Speed = NumberRange.new(2, 5)
+	em.SpreadAngle = Vector2.new(180, 180)
+	em.RotSpeed = NumberRange.new(-360, 360)
+	em.Size = NumberSequence.new(1.8, 3.5)
+	em.Parent = att
+	task.delay(seconds, function()
+		em.Enabled = false
+		task.delay(1, function()
+			att:Destroy()
+		end)
+	end)
+end
+
 function Golf.UseItem(player)
 	local index = playerTeam[player]
 	local ps = pstate[player]
@@ -718,37 +871,43 @@ function Golf.UseItem(player)
 	if item == "Bomb" then
 		throwBomb(player)
 	elseif item == "Freeze" then
+		local ICE = Color3.fromRGB(150, 225, 255)
 		for i, t in pairs(teams) do
 			if i ~= index and not t.sunk then
 				t.frozenUntil = os.clock() + 5
 				stopBall(t.ball)
 				t.ball.Anchored = true
-				local ice = Instance.new("Part")
-				ice.Size = Vector3.one * (B.diameter + 1.8)
-				ice.CFrame = t.ball.CFrame
-				ice.Anchored = true
-				ice.CanCollide = false
-				ice.Material = Enum.Material.Ice
-				ice.Color = Color3.fromRGB(170, 220, 255)
-				ice.Transparency = 0.4
-				ice.Parent = ballsFolder
+				freezeFx(t.ball, 5)
+				ctx.impact(t.ball.Position, ICE, true)
+				ctx.shockwave(t.ball.Position, 10, ICE)
+				for _, m in ipairs(t.members) do
+					ctx.notify(m, "🧊 우리 공이 5초 동안 얼었어요!", ICE)
+				end
 				task.delay(5, function()
-					ice:Destroy()
 					if t.ball.Parent and not t.sunk then
+						ctx.impact(t.ball.Position, Color3.new(1, 1, 1), false) -- 얼음 깨짐
 						t.ball.Anchored = false
 						serverOwn(t.ball)
 					end
 				end)
-				for _, m in ipairs(t.members) do
-					ctx.notify(m, "🧊 우리 공이 5초 동안 얼었어요!", Color3.fromRGB(150, 210, 255))
-				end
 			end
 		end
+		ctx.announce("🧊 " .. player.DisplayName .. " 님이 상대 공을 얼렸어요!", 2)
 	elseif item == "Gust" then
+		local root = rootOf(player)
+		if root then
+			ctx.shockwave(root.Position, 24, Color3.fromRGB(220, 245, 255))
+		end
 		for _, enemy in ipairs(enemiesOf(player)) do
+			local er = rootOf(enemy)
+			if er then
+				tornadoFx(er.Position, 1.6)
+				windTrail(er, 1.4)
+			end
 			local a = math.random() * math.pi * 2
 			stun(enemy, Vector3.new(math.cos(a), 0, math.sin(a)) * 25 + UP * 75, player)
 		end
+		ctx.announce("🌪️ " .. player.DisplayName .. " 님의 돌풍!", 2)
 	end
 	ctx.notify(player, Config.Items[item].name .. " 사용!", Color3.fromRGB(255, 230, 120))
 	ctx.onChange()
