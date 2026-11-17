@@ -425,8 +425,20 @@ local function launchBall(t, dir, power, hitter, mult)
 	t.ball:SetAttribute("Resting", false)
 	t.restTimer = 0
 	t.lastHitter = hitter
-	t.ball.AssemblyLinearVelocity = dir * (math.cos(rad) * speed) + UP * (math.sin(rad) * speed)
-	t.ball.AssemblyAngularVelocity = Vector3.new(dir.Z, 0, -dir.X) * -speed * 0.3 -- 앞으로 구르는 회전
+	-- 공이 바닥 부품에 파묻혀 '잠든' 상태면 속도만 바꿔서는 안 움직임 → 바닥 위로 살짝 들어 올려(위치 이동 = 물리 깨움) 겹침에서 빼냄
+	local ball = t.ball
+	local below = workspace:Raycast(ball.Position + UP * 3, -UP * (3 + B.diameter), rayParams)
+	if below then
+		local restY = below.Position.Y + B.diameter / 2 + 0.05
+		if ball.Position.Y < restY then
+			ball.CFrame = ball.CFrame + UP * (restY - ball.Position.Y)
+		end
+	end
+	local velocity = dir * (math.cos(rad) * speed) + UP * (math.sin(rad) * speed)
+	ball.AssemblyLinearVelocity = Vector3.zero
+	ball:ApplyImpulse(velocity * ball.AssemblyMass) -- 충격으로 발사 (잠든 공도 확실히 깨움)
+	ball.AssemblyLinearVelocity = velocity
+	ball.AssemblyAngularVelocity = Vector3.new(dir.Z, 0, -dir.X) * -speed * 0.3 -- 앞으로 구르는 회전
 end
 
 function Golf.Swing(player, direction, power)

@@ -542,7 +542,8 @@ function CourseBuilder.BallStart(hole, teamIndex, teamCount)
 	local side = Vector3.new(hole.startDir.Z, 0, -hole.startDir.X)
 	-- 팀 인원이 많을수록 두 팀 공 사이를 넓혀서 출발 때 안 겹치게
 	local spread = (teamIndex - (teamCount + 1) / 2) * (9 + math.max(0, (hole.teamSize or 2) - 2) * 4)
-	return hole.tee + side * spread + hole.startDir * 2 + UP * (Config.Ball.diameter / 2 + 0.2)
+	-- 티 윗면(0.3)보다 살짝 위에 놓기 (바닥 부품에 파묻히면 물리가 잠들어 공이 안 나감)
+	return hole.tee + side * spread + hole.startDir * 2 + UP * (Config.Ball.diameter / 2 + 0.45)
 end
 
 -- 선수 출발 위치: 우리 팀 공 바로 뒤
