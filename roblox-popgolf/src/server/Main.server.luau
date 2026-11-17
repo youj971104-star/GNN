@@ -132,6 +132,28 @@ local function inMatch(player)
 	return false
 end
 
+-- 운영자 확인 (서버에서만 판단 → 조작 불가)
+local adminCache = {}
+local function isAdmin(player)
+	if adminCache[player] ~= nil then
+		return adminCache[player]
+	end
+	local ok = RunService:IsStudio() or table.find(Config.Admins, player.UserId) ~= nil
+	if not ok and game.CreatorType == Enum.CreatorType.User then
+		ok = player.UserId == game.CreatorId
+	elseif not ok and game.CreatorType == Enum.CreatorType.Group then
+		local got, rank = pcall(function()
+			return player:GetRankInGroup(game.CreatorId)
+		end)
+		ok = got and rank >= 255
+	end
+	adminCache[player] = ok
+	return ok
+end
+Players.PlayerRemoving:Connect(function(p)
+	adminCache[p] = nil
+end)
+
 -- Studio 테스트: 모든 골프채 스킨을 가진 것처럼 (저장 데이터는 건드리지 않음 → 실제 게임에는 영향 없음)
 local STUDIO_UNLOCK = RunService:IsStudio() and Config.StudioUnlockAllSkins == true
 local function ownedSkins(data)
@@ -160,6 +182,7 @@ local function refresh(player)
 		gems = data.gems,
 		shards = data.shards,
 		skins = ownedSkins(data),
+		isAdmin = isAdmin(player),
 		equipped = data.equipped,
 		skill = data.skill,
 		pity = data.pity.sinceLegendary,
@@ -1012,6 +1035,55 @@ function actions.Equip(player, data, skinId)
 end
 
 -- PLAY 버튼: 대기열 들어가기 / 나가기
+-- 🛠 운영자: 재화·골프채 지급 (운영자만, 서버에서 다시 확인)
+-- req = { cmd = "currency" | "skin" | "allskins", target = UserId, coins, gems, shards, skin }
+function actions.Admin(player, data, req)
+	if not isAdmin(player) or type(req) ~= "table" then
+		return false, "운영자만 쓸 수 있어요"
+	end
+	local target = (type(req.target) == "number" and Players:GetPlayerByUserId(req.target)) or player
+	local tdata = DataService.Get(target)
+	if not tdata then
+		return false, "대상의 데이터를 아직 못 불러왔어요"
+	end
+	local what
+	if req.cmd == "currency" then
+		local parts = {}
+		for _, key in ipairs({ "coins", "gems", "shards" }) do
+			local n = tonumber(req[key])
+			if n and n ~= 0 then
+				n = math.clamp(math.floor(n), -10000000, 10000000)
+				tdata[key] = math.max(0, (tdata[key] or 0) + n)
+				table.insert(parts, ({ coins = "💰", gems = "💎", shards = "🧩" })[key] .. (n > 0 and "+" or "") .. n)
+			end
+		end
+		if #parts == 0 then
+			return false, "수량을 입력해 주세요"
+		end
+		what = table.concat(parts, " ")
+	elseif req.cmd == "skin" then
+		local skin = type(req.skin) == "string" and Config.Skins[req.skin]
+		if not skin then
+			return false, "없는 골프채예요"
+		end
+		tdata.skins[req.skin] = true
+		what = "🏌️ " .. skin.name
+	elseif req.cmd == "allskins" then
+		for id in pairs(Config.Skins) do
+			tdata.skins[id] = true
+		end
+		what = "🏌️ 모든 골프채"
+	else
+		return false, "알 수 없는 명령"
+	end
+	print(string.format("[Admin] %s → %s : %s", player.Name, target.Name, what))
+	if target ~= player then
+		notify(target, "🎁 운영자 선물: " .. what, Color3.fromRGB(255, 220, 120))
+		refresh(target)
+	end
+	return true, string.format("✅ %s 님에게 %s 지급", target.DisplayName, what)
+end
+
 -- PLAY → 모드 고르기: size = 2/3/4 (2대2/3대3/4대4) 로 대기열 들어가기, false 면 나가기
 function actions.Queue(player, data, size)
 	if size and not table.find(Config.MatchModes, size) then

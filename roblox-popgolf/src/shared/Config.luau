@@ -51,8 +51,11 @@ Config.Ball = {
 Config.DebugShots = false
 -- Studio 에서 테스트할 때만 모든 골프채 스킨 장착 가능 (저장되지 않음, 게시된 게임에는 영향 없음)
 Config.StudioUnlockAllSkins = true
+-- 운영자 (게임 안 📋 메뉴에 🛠 운영자 버튼이 생김: 재화·골프채 지급)
+-- 게임 주인(그룹 게임이면 그룹 소유자)은 자동으로 운영자. 다른 사람을 추가하려면 로블록스 UserId 를 넣기
+Config.Admins = {}
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1120o"
+Config.Build = "1121a"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀

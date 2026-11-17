@@ -1221,8 +1221,91 @@ remotes:WaitForChild("Match").OnClientEvent:Connect(function(m)
 	renderBoard()
 end)
 
+----------------------------------------------------------------------
+-- 🛠 운영자 메뉴 (운영자 계정에만 보임. 실제 지급 권한은 서버가 다시 확인)
+----------------------------------------------------------------------
+local adminTarget = player.UserId
+local adminAmount = 1000
+local adminMenuMade = false
+local function adminAct(req)
+	req.target = adminTarget
+	local ok, msg = Action:InvokeServer("Admin", req)
+	screen.toast(msg or (ok and "완료" or "실패"), ok and C.green or C.red)
+end
+local function makeAdminMenu()
+	if adminMenuMade then
+		return
+	end
+	adminMenuMade = true
+	local b = screen.menu("Admin", "🛠\n운영자", Color3.fromRGB(255, 90, 90), "🛠 운영자 도구", function(parent)
+		-- 1) 대상 고르기
+		UIKit.section(parent, "1. 누구에게?", 1)
+		local list = new("Frame", { Parent = parent, LayoutOrder = 2, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }, {
+			new("UIGridLayout", { CellSize = UDim2.fromOffset(150, 36), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
+		for i, p in ipairs(Players:GetPlayers()) do
+			local selected = p.UserId == adminTarget
+			button({ Parent = list, LayoutOrder = i, BackgroundColor3 = selected and C.green or C.card, Text = (selected and "✅ " or "") .. p.DisplayName .. (p == player and " (나)" or "") }, function()
+				adminTarget = p.UserId
+				screen.render()
+			end)
+		end
+		-- 2) 재화
+		UIKit.section(parent, "2. 재화 지급 (빼려면 -100 처럼 마이너스)", 3)
+		local row = new("Frame", { Parent = parent, LayoutOrder = 4, Size = UDim2.new(1, -8, 0, 44), BackgroundTransparency = 1 }, {
+			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }),
+		})
+		local box = new("TextBox", { Parent = row, LayoutOrder = 1, Size = UDim2.fromOffset(120, 44), BackgroundColor3 = C.card, TextColor3 = C.text, Font = UIKit.FONT, TextScaled = true, Text = tostring(adminAmount), PlaceholderText = "수량", ClearTextOnFocus = false }, { UIKit.corner(8) })
+		box.FocusLost:Connect(function()
+			adminAmount = tonumber(box.Text) or adminAmount
+			box.Text = tostring(adminAmount)
+		end)
+		for i, cur in ipairs({ { "coins", "💰 코인" }, { "gems", "💎 젬" }, { "shards", "🧩 조각" } }) do
+			button({ Parent = row, LayoutOrder = i + 1, Size = UDim2.fromOffset(110, 44), BackgroundColor3 = C.accent, Text = cur[2] }, function()
+				adminAmount = tonumber(box.Text) or adminAmount
+				adminAct({ cmd = "currency", [cur[1]] = adminAmount })
+			end)
+		end
+		-- 3) 골프채
+		UIKit.section(parent, "3. 골프채 지급", 5)
+		button({ Parent = parent, LayoutOrder = 6, Size = UDim2.new(1, -8, 0, 40), BackgroundColor3 = Color3.fromRGB(255, 170, 50), Text = "🏌️ 모든 골프채 한 번에 지급" }, function()
+			adminAct({ cmd = "allskins" })
+		end)
+		local grid = new("Frame", { Parent = parent, LayoutOrder = 7, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }, {
+			new("UIGridLayout", { CellSize = UDim2.fromOffset(150, 40), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
+		for i, id in ipairs(Config.SkinOrder) do
+			local skin = Config.Skins[id]
+			local gb = button({ Parent = grid, LayoutOrder = i, BackgroundColor3 = C.card, TextColor3 = rarityColor(skin.rarity), Text = skin.name }, function()
+				adminAct({ cmd = "skin", skin = id })
+			end)
+			UIKit.stroke(rarityColor(skin.rarity), 1.5).Parent = gb
+		end
+		UIKit.paragraph(parent, "지급 기록은 서버 Output 에 [Admin] 으로 남아요. 받은 사람에게는 '운영자 선물' 알림이 떠요.", 8, 40)
+	end)
+	if isMobile then
+		b.Size = UDim2.fromOffset(60, 50)
+	else
+		b.Size = UDim2.fromOffset(76, 60)
+	end
+end
+-- 운영자 패널 대상 목록은 사람이 들어오고 나갈 때 새로 그림
+Players.PlayerAdded:Connect(function()
+	if screen.current == "Admin" then
+		screen.render()
+	end
+end)
+Players.PlayerRemoving:Connect(function()
+	if screen.current == "Admin" then
+		task.defer(screen.render)
+	end
+end)
+
 remotes:WaitForChild("State").OnClientEvent:Connect(function(s)
 	state = s
+	if s.isAdmin then
+		makeAdminMenu()
+	end
 	wallet.Text = string.format("💰 %s   💎 %s   🧩 %s", Format.Short(s.coins), Format.Short(s.gems), Format.Short(s.shards))
 	local q = type(s.queued) == "number" and s.queued or false
 	if q ~= queued then
