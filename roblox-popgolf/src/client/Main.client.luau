@@ -416,10 +416,10 @@ end
 ----------------------------------------------------------------------
 local queued = false
 local playButton = new("TextButton", {
-	-- 휴대폰: 오른쪽 아래 샷·점프 버튼 바로 위 / PC: 아래 가운데
-	AnchorPoint = isMobile and Vector2.new(1, 1) or Vector2.new(0.5, 1),
-	Position = isMobile and UDim2.new(1, -16, 1, -116) or UDim2.new(0.5, 0, 1, -104),
-	Size = UDim2.fromOffset(isMobile and 170 or 280, isMobile and 44 or 64),
+	-- 오른쪽 아래 샷 버튼 바로 위 (가운데는 캐릭터가 보이게 비워 둠)
+	AnchorPoint = Vector2.new(1, 1),
+	Position = isMobile and UDim2.new(1, -16, 1, -116) or UDim2.new(1, -20, 1, -142),
+	Size = UDim2.fromOffset(isMobile and 170 or 220, isMobile and 44 or 56),
 	BackgroundColor3 = Color3.new(1, 1, 1),
 	Text = "PLAY",
 	Font = UIKit.FONT_TITLE,
@@ -450,7 +450,7 @@ end)
 local questPanel = new("Frame", {
 	AnchorPoint = isMobile and Vector2.new(0, 0) or Vector2.new(0, 0.5),
 	Position = isMobile and UDim2.new(0, 12, 0, 8) or UDim2.new(0, 12, 0.45, 0),
-	Size = UDim2.fromOffset(isMobile and 150 or 240, 0),
+	Size = UDim2.fromOffset(isMobile and 150 or 210, 0),
 	AutomaticSize = Enum.AutomaticSize.Y,
 	BackgroundColor3 = NAVY,
 	BackgroundTransparency = 0.15,
@@ -498,11 +498,12 @@ local function menuHorizontal(on)
 		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	elseif on then
-		f.AnchorPoint = Vector2.new(0.5, 1)
-		f.Position = UDim2.new(0.5, 0, 1, -12)
-		f.Size = UDim2.fromOffset(600, 70)
+		-- PC 로비: 왼쪽 아래 가로 줄
+		f.AnchorPoint = Vector2.new(0, 1)
+		f.Position = UDim2.new(0, 14, 1, -12)
+		f.Size = UDim2.fromOffset(560, 60)
 		layout.FillDirection = Enum.FillDirection.Horizontal
-		layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
 	else
 		f.AnchorPoint = Vector2.new(0, 0.5)
@@ -531,9 +532,7 @@ local function applyLayout(inGame)
 		playButton.Visible = false
 		questPanel.Visible = false
 		setAbilitiesVisible(true)
-		if isMobile then
-			hint.Position = UDim2.new(0.5, 0, 1, -54)
-		end
+		hint.Position = isMobile and UDim2.new(0.5, 0, 1, -54) or UDim2.new(0.5, 0, 1, -186)
 	else
 		-- 로비: PLAY 버튼, 미션, 아래 메뉴 줄
 		menuHorizontal(true)
@@ -542,9 +541,7 @@ local function applyLayout(inGame)
 		playButton.Visible = true
 		questPanel.Visible = true
 		setAbilitiesVisible(false)
-		if isMobile then
-			hint.Position = UDim2.new(0.5, 0, 1, -72) -- 아래 메뉴 줄 위
-		end
+		hint.Position = isMobile and UDim2.new(0.5, 0, 1, -72) or UDim2.new(0.5, 0, 1, -82) -- 아래 메뉴 줄 위
 	end
 end
 
@@ -560,7 +557,7 @@ Shot.Start({
 		jumpButton.Visible = playing
 		shotButton.BackgroundColor3 = ballNear and C.green or Color3.fromRGB(255, 130, 80)
 		if practice then
-			hint.Text = isMobile and "🏌️ 연습 스윙: 꾹 눌렀다 떼서 골프채 효과 확인" or "🏌️ 연습 스윙: 꾹 눌렀다 떼서 장착한 골프채 효과를 확인해 보세요 (🏌️ 골프채 메뉴에서 장착)"
+			hint.Text = "🏌️ 연습 스윙: 꾹 눌렀다 떼서 골프채 효과 확인"
 		elseif not playing then
 			hint.Text = ""
 		elseif player:GetAttribute("Stunned") then
@@ -925,9 +922,7 @@ end)
 local NAV_ICON = { Gacha = "NavGacha", Clubs = "NavClubs", Skills = "NavSkills", Shop = "NavShop", Stats = "NavStats" }
 for key, m in pairs(screen.menuButtons) do
 	local b = m.button
-	if isMobile then
-		b.Size = UDim2.fromOffset(60, 50)
-	end
+	b.Size = isMobile and UDim2.fromOffset(60, 50) or UDim2.fromOffset(76, 60)
 	local accent = b.BackgroundColor3
 	b.BackgroundColor3 = NAVY
 	local stroke = b:FindFirstChildOfClass("UIStroke")
