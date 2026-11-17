@@ -872,12 +872,23 @@ function Golf.UseItem(player)
 		throwBomb(player)
 	elseif item == "Freeze" then
 		local ICE = Color3.fromRGB(150, 225, 255)
+		-- 쓴 사람 주변에도 냉기 폭발 (상대가 없어도 썼다는 게 보이게)
+		local myRoot = rootOf(player)
+		if myRoot then
+			ctx.impact(myRoot.Position, ICE, false)
+			ctx.shockwave(myRoot.Position, 12, ICE)
+		end
+		local targets = 0
 		for i, t in pairs(teams) do
 			if i ~= index and not t.sunk then
+				targets += 1
 				t.frozenUntil = os.clock() + 5
 				stopBall(t.ball)
 				t.ball.Anchored = true
-				freezeFx(t.ball, 5)
+				local ok, err = pcall(freezeFx, t.ball, 5)
+				if not ok then
+					warn("[Golf] 얼음 연출 오류:", err)
+				end
 				ctx.impact(t.ball.Position, ICE, true)
 				ctx.shockwave(t.ball.Position, 10, ICE)
 				for _, m in ipairs(t.members) do
@@ -892,7 +903,11 @@ function Golf.UseItem(player)
 				end)
 			end
 		end
-		ctx.announce("🧊 " .. player.DisplayName .. " 님이 상대 공을 얼렸어요!", 2)
+		if targets > 0 then
+			ctx.announce("🧊 " .. player.DisplayName .. " 님이 상대 공을 얼렸어요!", 2)
+		else
+			ctx.notify(player, "🧊 얼릴 상대 공이 없어요 (상대 팀이 있을 때 효과가 나와요)", ICE)
+		end
 	elseif item == "Gust" then
 		local root = rootOf(player)
 		if root then
