@@ -67,6 +67,13 @@ local function serverOwn(ball)
 	if ball.Anchored or not ball:IsDescendantOf(workspace) then
 		return
 	end
+	-- 공은 다른 부품과 붙어 있으면 안 됨 (고정된 바닥과 붙으면 공 전체가 고정된 것처럼 꼼짝 안 함)
+	for _, joint in ipairs(ball:GetJoints()) do
+		if Config.DebugShots then
+			print("[Shot] 공에 붙은 연결 제거:", joint:GetFullName(), joint.ClassName)
+		end
+		joint:Destroy()
+	end
 	local ok, err = pcall(function()
 		if ball:GetNetworkOwner() ~= nil or ball:GetNetworkOwnershipAuto() then
 			ball:SetNetworkOwner(nil)
@@ -508,6 +515,19 @@ function Golf.Swing(player, direction, power)
 							end
 						end
 						print(string.format("[Shot] 발사: 속도 %.0f (힘 %.2f) / 소유자=%s / 겹친 부품=%s", b.AssemblyLinearVelocity.Magnitude, power, owner, #touching > 0 and table.concat(touching, ", ") or "없음"))
+						local connected = {}
+						for _, cp in ipairs(b:GetConnectedParts(true)) do
+							if cp ~= b then
+								table.insert(connected, cp:GetFullName())
+							end
+						end
+						print(string.format("[Shot] 공 상태: 땅에묶임=%s / 연결수=%d / 연결된부품=%s / 묶음대표=%s / 충돌그룹=%s / 질량=%.2f",
+							tostring(b:IsGrounded()), #b:GetJoints(), #connected > 0 and table.concat(connected, ", ") or "없음",
+							b.AssemblyRootPart and b.AssemblyRootPart:GetFullName() or "?", b.CollisionGroup, b.AssemblyMass))
+						task.spawn(function()
+							game:GetService("RunService").Heartbeat:Wait()
+							print(string.format("[Shot] 한 프레임 뒤: 속도 %.0f", b.AssemblyLinearVelocity.Magnitude))
+						end)
 						task.delay(0.1, function()
 							print(string.format("[Shot] 0.1초 뒤: 속도 %.0f / 위치 %s / 고정=%s", b.AssemblyLinearVelocity.Magnitude, tostring(b.Position), tostring(b.Anchored)))
 						end)
