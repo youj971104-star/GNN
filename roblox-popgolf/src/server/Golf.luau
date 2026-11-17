@@ -412,6 +412,9 @@ function Golf.Swing(player, direction, power)
 	local index = playerTeam[player]
 	local ps = pstate[player]
 	local character = player.Character
+	if Config.DebugShots then
+		print(string.format("[Shot] 서버가 스윙 받음: %s / 진행중=%s / 팀=%s / 힘=%s", player.Name, tostring(active), tostring(index), tostring(power)))
+	end
 	if not (active and index and ps and character) then
 		return
 	end
@@ -467,12 +470,23 @@ function Golf.Swing(player, direction, power)
 		for _, t in pairs(teams) do
 			if not t.sunk and t.frozenUntil <= os.clock() then
 				local pos = t.ball.Position
-				local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - origin).Magnitude <= CL.nearRadius
+				local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - origin).Magnitude <= 2.2
 				if ult then
 					inZone = flat(pos - origin).Magnitude <= UL.radius
 				end
+				if Config.DebugShots then
+					print(string.format("[Shot] %s 스윙 → %s 공: 존까지 %.1f / 몸까지 %.1f / 높이차 %.1f / 고정=%s / 판정=%s",
+						player.Name, t.ball.Name, flat(pos - zone).Magnitude, flat(pos - origin).Magnitude, math.abs(pos.Y - origin.Y), tostring(t.ball.Anchored), tostring(inZone and math.abs(pos.Y - origin.Y) < 6)))
+				end
 				if inZone and math.abs(pos.Y - origin.Y) < 6 then
 					launchBall(t, dir, ult and math.max(power, 0.8) or power, player, ult and UL.launchMult or mult)
+					if Config.DebugShots then
+						local b = t.ball
+						print(string.format("[Shot] 발사: 속도 %.0f (힘 %.2f)", b.AssemblyLinearVelocity.Magnitude, power))
+						task.delay(0.1, function()
+							print(string.format("[Shot] 0.1초 뒤: 속도 %.0f / 위치 %s / 고정=%s", b.AssemblyLinearVelocity.Magnitude, tostring(b.Position), tostring(b.Anchored)))
+						end)
+					end
 					addGauge(player, UL.perBallHit)
 					ctx.onBallHit(player)
 					ctx.impact(t.ball.Position, Config.Teams[index].color, ult or mult > 1)

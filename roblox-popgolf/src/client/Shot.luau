@@ -21,6 +21,7 @@ local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local CL = Config.Club
 
 local enabled = false
+local practice = false -- 로비 연습 스윙 (모션·효과만)
 local charging = false
 local chargeStart = 0
 local power = 0
@@ -98,7 +99,7 @@ local function ballInReach(dir)
 			if flat(pos - root.Position).Magnitude < 14 then
 				near = true
 			end
-			local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - root.Position).Magnitude <= CL.nearRadius
+			local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - root.Position).Magnitude <= 2.2
 			if inZone and math.abs(pos.Y - root.Position.Y) < 5 then
 				return ball, true
 			end
@@ -174,8 +175,6 @@ function Shot.Ultimate()
 		remotes.Ultimate:FireServer()
 	end
 end
-
-local practice = false -- 로비 연습 스윙 (모션·효과만)
 
 function Shot.Update(info, aimPlus)
 	hasAimPlus = aimPlus
