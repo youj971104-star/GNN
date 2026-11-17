@@ -243,8 +243,8 @@ local hint = label({
 	TextStrokeTransparency = 0.3,
 	Parent = screen.gui,
 })
--- 안내 문구: 내용이 바뀔 때만 잠깐 보였다가(4초) 스르륵 사라짐. 같은 문구가 계속 들어와도 다시 띄우지 않음
-local HINT_SECONDS = 4
+-- 안내 문구: 내용이 바뀔 때만 잠깐 보였다가(2초) 스르륵 사라짐. 같은 문구가 계속 들어와도 다시 띄우지 않음
+local HINT_SECONDS = 2
 local hintToken = 0
 local function setHint(text)
 	if text == hint:GetAttribute("Last") then
