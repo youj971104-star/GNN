@@ -28,6 +28,8 @@ Config.Ball = {
 	puttAngle = 4, -- 그린 위에서는 거의 굴림
 	puttPower = 0.38, -- 그린 위 샷 세기 배율 (섬세한 퍼팅)
 	cupRadius = 2.6, -- 홀컵 판정 반경
+	bonkSpeed = 28, -- 공이 이보다 빠르게 날아갈 때 상대 선수에 맞으면 넘어짐
+	bonkRadius = 3.2, -- 공과 선수 몸 중심 사이 이 거리 안이면 맞은 것
 	cupMaxSpeed = 32, -- 이보다 빠르면 홀컵을 지나쳐 버림
 	stopSpeed = 1.2,
 	-- 바닥 종류별 굴러가는 저항 (0.1초마다 속도에 곱함, 작을수록 빨리 멈춤)
@@ -39,7 +41,7 @@ Config.Ball = {
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1118b"
+Config.Build = "1118c"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀

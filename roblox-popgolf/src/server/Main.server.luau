@@ -11,6 +11,7 @@ local DataService = require(script.Parent.DataService)
 local Monetization = require(script.Parent.Monetization)
 local CourseBuilder = require(script.Parent.CourseBuilder)
 local Golf = require(script.Parent.Golf)
+local Ragdoll = require(script.Parent.Ragdoll)
 local Gacha = require(script.Parent.Gacha)
 local Club = require(script.Parent.Club)
 
@@ -454,6 +455,7 @@ end
 local function sendToLobby(player)
 	local character = player.Character
 	if character then
+		Ragdoll.Set(character, false)
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		if humanoid then
 			humanoid.PlatformStand = false

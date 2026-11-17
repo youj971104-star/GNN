@@ -27,6 +27,7 @@ pcall(function()
 end)
 
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 -- 휴대폰·태블릿 (터치만 있고 키보드 없음)
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
@@ -89,14 +90,17 @@ local function iconInto(parent, key, emoji, props)
 	return obj
 end
 
+-- 위쪽 HUD는 로블록스 상단 버튼 줄(메뉴·채팅 버튼 높이)까지 끌어올림: 화면 가운데·오른쪽은 비어 있음
+local TOP = -GuiService:GetGuiInset().Y + 6
 local hud = new("Frame", {
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 6),
-	Size = isMobile and UDim2.fromOffset(300, 96) or UDim2.fromOffset(400, 104),
+	Position = UDim2.new(0.5, 0, 0, TOP),
+	Size = isMobile and UDim2.fromOffset(230, 80) or UDim2.fromOffset(340, 92),
 	BackgroundTransparency = 1,
 	Parent = screen.gui,
 })
-local scoreBar = new("Frame", { Parent = hud, Size = UDim2.new(1, 0, 0, 54), BackgroundTransparency = 1 })
+local SCORE_H = isMobile and 40 or 48
+local scoreBar = new("Frame", { Parent = hud, Size = UDim2.new(1, 0, 0, SCORE_H), BackgroundTransparency = 1 })
 local function teamBlock(xScale, anchorX, team, title)
 	local f = new("Frame", {
 		Parent = scoreBar,
@@ -120,18 +124,18 @@ local timerBox = new("Frame", {
 }, { UIKit.corner(12), UIKit.stroke(CYAN, 2) })
 local timerLabel = label({ Parent = timerBox, Position = UDim2.fromScale(0, 0.02), Size = UDim2.fromScale(1, 0.66), Font = UIKit.FONT_TITLE, Text = "--:--", TextColor3 = Color3.new(1, 1, 1) })
 local scoreLabel = label({ Parent = timerBox, Position = UDim2.fromScale(0, 0.66), Size = UDim2.fromScale(1, 0.3), TextColor3 = CYAN, Text = "" }) -- 모드·홀 표시
-local phaseLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, 58), Size = UDim2.new(1, 0, 0, 22), TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3, Text = "대기 중..." })
-local teamLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, 80), Size = UDim2.new(1, 0, 0, 20), TextStrokeTransparency = 0.3, Text = "" })
+local phaseLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, SCORE_H + 2), Size = UDim2.new(1, 0, 0, isMobile and 16 or 20), TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3, Text = "대기 중..." })
+local teamLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, SCORE_H + (isMobile and 18 or 22)), Size = UDim2.new(1, 0, 0, isMobile and 15 or 18), TextStrokeTransparency = 0.3, Text = "" })
 
 -- 오른쪽 위: 재화 알약
 local walletPill = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -12, 0, 8),
-	Size = UDim2.fromOffset(isMobile and 220 or 290, 34),
+	Position = UDim2.new(1, -12, 0, TOP + 2),
+	Size = UDim2.fromOffset(isMobile and 180 or 260, isMobile and 28 or 32),
 	BackgroundColor3 = NAVY,
 	BackgroundTransparency = 0.1,
 	Parent = screen.gui,
-}, { UIKit.corner(17), UIKit.stroke(Color3.fromRGB(255, 200, 70), 2) })
+}, { UIKit.corner(14), UIKit.stroke(Color3.fromRGB(255, 200, 70), 2) })
 local wallet = label({
 	Parent = walletPill,
 	Position = UDim2.fromOffset(10, 4),
@@ -143,8 +147,8 @@ local wallet = label({
 -- 오른쪽: 선수 목록 (팀, 아이템, 방패)
 local board = new("Frame", {
 	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -10, 0, 50),
-	Size = UDim2.fromOffset(isMobile and 170 or 230, 0),
+	Position = UDim2.new(1, -10, 0, TOP + (isMobile and 36 or 42)),
+	Size = UDim2.fromOffset(isMobile and 150 or 210, 0),
 	AutomaticSize = Enum.AutomaticSize.Y,
 	BackgroundColor3 = C.bg,
 	BackgroundTransparency = 0.25,
@@ -194,7 +198,7 @@ local function roundButton(text, color, position, size)
 	}, { UIKit.corner(size / 2), UIKit.stroke(Color3.new(1, 1, 1), 3), new("UIPadding", { PaddingTop = UDim.new(0, 16), PaddingBottom = UDim.new(0, 16), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }) })
 end
 
-local shotButton = roundButton("🏌️\n꾹 눌렀다\n떼기", C.green, UDim2.new(1, -20, 1, -30), 120)
+local shotButton = roundButton("🏌️\n꾹 눌렀다\n떼기", C.green, UDim2.new(1, -20, 1, -30), 100)
 shotButton.InputBegan:Connect(function(input)
 	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
 		Shot.BeginCharge()
@@ -215,17 +219,54 @@ local itemButton = button({
 	Parent = screen.gui,
 }, Shot.UseItem)
 
--- 휴대폰: 로블록스 점프 버튼(오른쪽 아래)과 안 겹치게 엄지가 닿는 오른쪽 중간으로
+-- 점프 버튼 (휴대폰: 샷 버튼 바로 옆. 로블록스 기본 점프 버튼은 숨김)
+local jumpButton = roundButton("⬆\n점프", Color3.fromRGB(80, 150, 255), UDim2.new(1, -20, 1, -30), 58)
+jumpButton:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, 8)
+jumpButton:FindFirstChildOfClass("UIPadding").PaddingBottom = UDim.new(0, 8)
+jumpButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if h and not player:GetAttribute("Stunned") then
+			h.Jump = true
+		end
+	end
+end)
+
+-- 휴대폰: 오른쪽 아래 엄지 자리에 샷 버튼, 그 둘레에 점프·대시·스킬·궁극기 (작게)
+-- 기준: 오른쪽 아래 모서리에서 떨어진 거리(가운데 기준). SHOT = 샷 버튼 크기
+local SHOT, SMALL, JUMP = 84, 50, 56
+local function aroundShot(gui, size, dx, dy)
+	gui.AnchorPoint = Vector2.new(0.5, 0.5)
+	gui.Size = UDim2.fromOffset(size, size)
+	gui.Position = UDim2.new(1, -dx, 1, -dy)
+end
 if isMobile then
-	shotButton.AnchorPoint = Vector2.new(1, 0.5)
-	shotButton.Position = UDim2.new(1, -24, 0.52, 0)
-	shotButton.Size = UDim2.fromOffset(130, 130)
-	itemButton.AnchorPoint = Vector2.new(1, 0.5)
-	itemButton.Position = UDim2.new(1, -24, 0.52, -112)
-	itemButton.Size = UDim2.fromOffset(150, 50)
-	powerBack.Position = UDim2.new(0.5, 0, 1, -40)
-	powerBack.Size = UDim2.new(0.5, 0, 0, 24)
-	hint.Position = UDim2.new(0.5, 0, 1, -70)
+	aroundShot(shotButton, SHOT, 62, 58)
+	shotButton:FindFirstChildOfClass("UIPadding").PaddingTop = UDim.new(0, 10)
+	shotButton:FindFirstChildOfClass("UIPadding").PaddingBottom = UDim.new(0, 10)
+	aroundShot(jumpButton, JUMP, 156, 40)
+	itemButton.AnchorPoint = Vector2.new(1, 1)
+	itemButton.Position = UDim2.new(1, -198, 1, -16)
+	itemButton.Size = UDim2.fromOffset(110, 36)
+	powerBack.Position = UDim2.new(0.5, 0, 1, -34)
+	powerBack.Size = UDim2.new(0.34, 0, 0, 16)
+	hint.Position = UDim2.new(0.5, 0, 1, -54)
+	hint.Size = UDim2.new(0.5, 0, 0, 16)
+	-- 로블록스 기본 점프 버튼 숨기기 (우리 점프 버튼과 자리가 겹침)
+	task.spawn(function()
+		local pg = player:WaitForChild("PlayerGui")
+		while true do
+			local touch = pg:FindFirstChild("TouchGui")
+			local frame = touch and touch:FindFirstChild("TouchControlFrame")
+			local jb = frame and frame:FindFirstChild("JumpButton")
+			if jb and jb.Visible then
+				jb.Visible = false
+			end
+			task.wait(1)
+		end
+	end)
+else
+	jumpButton.Parent = nil -- PC 는 스페이스바
 end
 
 ----------------------------------------------------------------------
@@ -251,7 +292,7 @@ end)
 ----------------------------------------------------------------------
 local abilityButtons = {}
 local function abilityButton(key, icon, onPress, name, iconKey)
-	local size = isMobile and 74 or 70
+	local size = isMobile and SMALL or 58
 	local b = new("TextButton", {
 		Size = UDim2.fromOffset(size, size),
 		BackgroundColor3 = NAVY,
@@ -284,26 +325,24 @@ local skillBtn = abilityButton("E", "💥", Shot.Skill, "스킬", "Skill_")
 local ultBtn = abilityButton("R", "☄️", Shot.Ultimate, "궁극기", "Ultimate")
 
 if isMobile then
-	-- 샷 버튼(오른쪽 중간) 주변: 왼쪽에 대시·스킬, 아래에 궁극기
-	for _, e in ipairs(abilityButtons) do
-		e.button.AnchorPoint = Vector2.new(1, 0.5)
-	end
-	dashBtn.button.Position = UDim2.new(1, -168, 0.52, 34)
-	skillBtn.button.Position = UDim2.new(1, -168, 0.52, -50)
-	ultBtn.button.Position = UDim2.new(1, -40, 0.52, 116)
+	-- 샷 버튼 둘레 (왼쪽 위 → 위): 대시 · 스킬 · 궁극기
+	aroundShot(dashBtn.button, SMALL, 146, 110)
+	aroundShot(skillBtn.button, SMALL, 100, 146)
+	aroundShot(ultBtn.button, SMALL, 38, 156)
 else
 	-- PC: 화면 아래 가운데 한 줄
 	for i, e in ipairs(abilityButtons) do
 		e.button.AnchorPoint = Vector2.new(0.5, 1)
-		e.button.Position = UDim2.new(0.5, (i - 2) * 92, 1, -20)
+		e.button.Position = UDim2.new(0.5, (i - 2) * 76, 1, -20)
 	end
 end
 
 -- 궁극기 게이지 바 (살짝 기울어진 띠)
 local gaugeBar = new("Frame", {
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = isMobile and UDim2.new(0.5, 0, 1, -96) or UDim2.new(0.5, 0, 1, -112),
-	Size = isMobile and UDim2.new(0.42, 0, 0, 22) or UDim2.fromOffset(300, 24),
+	-- 휴대폰: 궁극기 버튼 위에 작은 띠 / PC: 능력 버튼 줄 위
+	AnchorPoint = isMobile and Vector2.new(1, 1) or Vector2.new(0.5, 1),
+	Position = isMobile and UDim2.new(1, -12, 1, -194) or UDim2.new(0.5, 0, 1, -92),
+	Size = isMobile and UDim2.fromOffset(150, 14) or UDim2.fromOffset(220, 18),
 	BackgroundColor3 = NAVY,
 	Rotation = -2,
 	Visible = false,
@@ -501,6 +540,7 @@ Shot.Start({
 	end,
 	setMode = function(playing, ballNear, practice)
 		shotButton.Visible = playing
+		jumpButton.Visible = playing
 		shotButton.BackgroundColor3 = ballNear and C.green or Color3.fromRGB(255, 130, 80)
 		if practice then
 			hint.Text = "🏌️ 연습 스윙: 꾹 눌렀다 떼서 장착한 골프채 효과를 확인해 보세요 (🏌️ 골프채 메뉴에서 장착)"

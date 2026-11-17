@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local Ragdoll = require(script.Parent.Ragdoll)
 
 local Golf = {}
 
@@ -154,6 +155,7 @@ local function stun(player, velocity, by, duration)
 	duration = duration or CL.stunTime
 	ps.stunUntil = now + duration
 	humanoid.PlatformStand = true
+	Ragdoll.Set(player.Character, true) -- 흐느적 넘어짐
 	fling(player, velocity)
 	player:SetAttribute("Stunned", true)
 	if player.Character then
@@ -163,6 +165,7 @@ local function stun(player, velocity, by, duration)
 	task.delay(duration, function()
 		if ps.stunUntil <= os.clock() + 0.05 then
 			local _, h = rootOf(player)
+			Ragdoll.Set(player.Character, false)
 			if h then
 				h.PlatformStand = false
 				h:ChangeState(Enum.HumanoidStateType.GettingUp)
@@ -308,6 +311,7 @@ function Golf.PlacePlayer(player, slot)
 	else
 		cf = CFrame.new(teams[index].ball.Position + UP * 4 + Vector3.new(math.random(-4, 4), 0, math.random(-4, 4)))
 	end
+	Ragdoll.Set(character, false)
 	character:PivotTo(cf)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
@@ -425,6 +429,8 @@ local function launchBall(t, dir, power, hitter, mult)
 	t.ball:SetAttribute("Resting", false)
 	t.restTimer = 0
 	t.lastHitter = hitter
+	t.launchedAt = os.clock()
+	t.bonked = {} -- 이번 샷에 이미 맞은 선수
 	-- 공이 바닥 부품에 파묻혀 '잠든' 상태면 속도만 바꿔서는 안 움직임 → 바닥 위로 살짝 들어 올려(위치 이동 = 물리 깨움) 겹침에서 빼냄
 	local ball = t.ball
 	local below = workspace:Raycast(ball.Position + UP * 3, -UP * (3 + B.diameter), rayParams)
@@ -1050,6 +1056,24 @@ local function tick(dt)
 			local factor = drag ^ (dt / 0.1)
 			ball.AssemblyLinearVelocity = Vector3.new(v.X * factor, v.Y, v.Z * factor)
 			ball.AssemblyAngularVelocity *= factor
+		end
+
+		-- 날아가는 공에 상대 선수가 맞으면 넘어짐 (친 사람의 상대 팀만, 샷마다 한 번)
+		if t.lastHitter and t.bonked and v.Magnitude > B.bonkSpeed and os.clock() - (t.launchedAt or 0) > 0.08 then
+			for _, enemy in ipairs(enemiesOf(t.lastHitter)) do
+				local er = rootOf(enemy)
+				if er and not t.bonked[enemy] and (er.Position - pos).Magnitude < B.bonkRadius then
+					t.bonked[enemy] = true
+					local push = Vector3.new(v.X, 0, v.Z)
+					push = push.Magnitude > 0.1 and push.Unit or UP
+					if stun(enemy, push * (25 + v.Magnitude * 0.4) + UP * 28, t.lastHitter) then
+						ctx.notify(t.lastHitter, "🎯 공으로 " .. enemy.DisplayName .. " 님을 맞혔어요!", Color3.fromRGB(255, 220, 120))
+						-- 맞은 공은 힘이 꺾여 튕김
+						ball.AssemblyLinearVelocity = Vector3.new(-v.X * 0.25, math.abs(v.Y) * 0.3 + 6, -v.Z * 0.25)
+						v = ball.AssemblyLinearVelocity
+					end
+				end
+			end
 		end
 
 		-- 홀인: 홀컵 위에서 너무 빠르지 않으면 쏙

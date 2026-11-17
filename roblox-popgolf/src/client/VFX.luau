@@ -105,6 +105,20 @@ local function watchCharacter(p, character)
 			shake = math.max(shake, 1)
 			hurtFlash()
 		end)
+		-- 레그돌: 내 캐릭터 물리는 내 컴퓨터가 계산하므로 여기서 휴머노이드를 물리 상태로 바꿔야 팔다리가 흐느적거림
+		character:GetAttributeChangedSignal("Ragdoll"):Connect(function()
+			local h = character:FindFirstChildOfClass("Humanoid")
+			if not h then
+				return
+			end
+			if character:GetAttribute("Ragdoll") then
+				h:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+				h:ChangeState(Enum.HumanoidStateType.Physics)
+			else
+				h:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+				h:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+		end)
 	end
 
 	-- 파워 드라이브 반짝임 / 궁극기 오라
