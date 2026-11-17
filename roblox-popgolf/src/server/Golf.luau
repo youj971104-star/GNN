@@ -520,6 +520,7 @@ function Golf.Swing(player, direction, power)
 			ps.ultUntil = 0
 			player:SetAttribute("UltActive", false)
 			ctx.shockwave(origin, UL.radius, Config.Teams[index].color)
+			ctx.impact(origin, Color3.fromRGB(255, 140, 60), true, "meteor", UL.radius) -- 불꽃 소용돌이
 			ctx.announce("☄️ " .. player.DisplayName .. " 님의 메테오 스윙!", 2)
 		end
 		-- 선수는 목표(dir)를 왼쪽에 두고 옆으로 섬 → 얼굴 방향 = dir × 위

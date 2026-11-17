@@ -11,6 +11,7 @@ local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local AssetLib = require(ReplicatedStorage.Shared.AssetLib)
 -- 이펙트 이미지 (Config.FXTextures 에 ID가 있으면 모델러 이미지, 없으면 로블록스 기본)
 local SPARK_TEX = Config.FXTexture("Spark", "rbxasset://textures/particles/sparkles_main.dds")
 local ENERGY_TEX = Config.FXTexture("Energy", "rbxasset://textures/particles/fire_main.dds")
@@ -244,9 +245,63 @@ local function sparkleBurst(pos, color, count)
 	Debris:AddItem(holder, 0.8)
 end
 
-local function impact(pos, color, big)
+-- 메테오 스윙: 모델러(Meshy) 불꽃 소용돌이 모델 (Assets > FX_Meteor)
+-- 바닥에서 작게 나타나 빙글빙글 돌며 radius 만큼 커지고 사라짐 (각자 화면에서 그려서 부드럽게)
+local function meteorVortex(pos, radius)
+	if not AssetLib.Has("FX_Meteor") then
+		return
+	end
+	local h = AssetLib.Spawn("FX_Meteor", CFrame.new(pos - Vector3.new(0, 1, 0)), { parent = folder, collide = false, anchored = true })
+	if not h then
+		return
+	end
+	local model = h.model
+	local parts = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.CanQuery = false
+			d.CanTouch = false
+			d.CastShadow = false
+			table.insert(parts, d)
+		end
+	end
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 140, 60)
+	light.Range = radius * 1.5
+	light.Brightness = 4
+	light.Parent = parts[1]
+	local size = model:GetExtentsSize()
+	local width = math.max(size.X, size.Z, 0.01)
+	local base = model:GetScale()
+	local pivot = model:GetPivot()
+	local DURATION = 1.1
+	local t0 = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = (os.clock() - t0) / DURATION
+		if t >= 1 or not model.Parent then
+			conn:Disconnect()
+			model:Destroy()
+			return
+		end
+		local grow = 1 - (1 - t) ^ 3 -- 빠르게 커졌다가 천천히
+		local w = radius * (0.35 + 1.75 * grow) -- 지름
+		model:ScaleTo(base * w / width)
+		model:PivotTo(pivot * CFrame.Angles(0, t * math.pi * 3, 0))
+		local fade = t < 0.55 and 0 or (t - 0.55) / 0.45
+		for _, p in ipairs(parts) do
+			p.LocalTransparencyModifier = fade
+		end
+		light.Brightness = 4 * (1 - fade)
+	end)
+end
+
+local function impact(pos, color, big, kind, radius)
 	if typeof(pos) ~= "Vector3" then
 		return
+	end
+	if kind == "meteor" then
+		meteorVortex(pos, typeof(radius) == "number" and radius or 12)
 	end
 	color = typeof(color) == "Color3" and color or Color3.new(1, 1, 1)
 	ring(pos, color, big and 10 or 5)
