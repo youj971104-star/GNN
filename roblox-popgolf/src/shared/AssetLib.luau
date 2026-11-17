@@ -221,6 +221,29 @@ local function styleParts(model, opts)
 end
 
 -- 부품들을 모두 감싸는 상자(축 정렬)의 밑면 가운데
+-- 모델 높이(스터드). 크기가 제각각인 외부 모델(예: Meshy AI)을 정해진 키로 맞출 때 씀
+local function boundsHeight(parts)
+	local minY, maxY = math.huge, -math.huge
+	for _, p in ipairs(parts) do
+		local h = p.Size / 2
+		for _, sx in ipairs({ -1, 1 }) do
+			for _, sy in ipairs({ -1, 1 }) do
+				for _, sz in ipairs({ -1, 1 }) do
+					local y = p.CFrame:PointToWorldSpace(Vector3.new(h.X * sx, h.Y * sy, h.Z * sz)).Y
+					minY = math.min(minY, y)
+					maxY = math.max(maxY, y)
+				end
+			end
+		end
+	end
+	return maxY - minY
+end
+
+-- 가져올 때 크기가 정해지지 않은 모델: 이 높이(스터드)로 자동 맞춤 (opts.scale 은 그 위에 곱해짐)
+AssetLib.HEIGHT = {
+	Tree_Pine2 = 20, -- Meshy AI 소나무 (원본은 1스터드 남짓)
+}
+
 local function boundsBottomCenter(parts)
 	local minV = Vector3.new(math.huge, math.huge, math.huge)
 	local maxV = -minV
@@ -267,7 +290,14 @@ function AssetLib.Spawn(name, cf, opts)
 	local bottomCenter = boundsBottomCenter(parts)
 	model.WorldPivot = CFrame.new(bottomCenter - offset)
 	local scale = opts.scale or 1
-	if scale ~= 1 then
+	local targetH = AssetLib.HEIGHT[name]
+	if targetH then
+		local h = boundsHeight(parts)
+		if h > 0.01 then
+			scale *= targetH / h
+		end
+	end
+	if math.abs(scale - 1) > 0.001 then
 		model:ScaleTo(scale)
 	end
 	cf = cf or CFrame.new()

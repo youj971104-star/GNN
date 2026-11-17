@@ -129,7 +129,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		end
 		return AssetLib.Spawn(name, cf, opts)
 	end
-	local TREES = AssetLib.Available({ "Tree_Round_A", "Tree_Round_B", "Tree_Pine", "Tree_Palm" })
+	local TREES = AssetLib.Available({ "Tree_Round_A", "Tree_Round_B", "Tree_Pine", "Tree_Palm", "Tree_Pine2" })
 	local BUSHES = AssetLib.Available({ "Bush_A", "Bush_B" })
 	local FLOWERS = AssetLib.Available({ "Flower_A", "Flower_B" })
 	local ROCKS = AssetLib.Available({ "Rock_A", "Rock_B", "Rock_C" })

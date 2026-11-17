@@ -50,7 +50,7 @@ Config.Ball = {
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1119d"
+Config.Build = "1120a"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
@@ -169,6 +169,15 @@ Config.Quests = {
 -- 아이콘 이미지 (선택). images/icons 의 그림을 로블록스에 올리고 받은 ID 를 넣으면
 -- 버튼에 이모지 대신 그림이 나옵니다. 0 이면 이모지로 표시
 ----------------------------------------------------------------------
+-- 경기 화면(HUD) 디자인 이미지. PNG를 올리고 받은 이미지 ID를 넣으면 그 디자인으로 바뀜 (0 이면 지금 모양)
+Config.UIImages = {
+	HoleStatusPill = 0, -- 위쪽 가운데: 홀 번호 + 남은 시간 (깃발 알약)
+	LiveMatchRankBoard = 0, -- 오른쪽: 팀별 공 현황 + 선수 (빨강·파랑 4줄 판)
+	ClubAttackButton = 0, -- 샷(휘두르기) 버튼 (빨간 원 + 별)
+	PlayerHPHUD = 0, -- 내 정보: 아바타 + 궁극기 게이지(초록) + 대시 준비(파랑)
+	SwingPowerGauge = 0, -- 스윙 힘 게이지 (이미지 받으면 연결)
+}
+
 Config.Icons = {
 	Dash = 0,
 	Ultimate = 0,

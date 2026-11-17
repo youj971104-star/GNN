@@ -90,6 +90,27 @@ local function iconInto(parent, key, emoji, props)
 	return obj
 end
 
+-- HUD 디자인 이미지 (Config.UIImages). ID 가 있으면 그 이미지를 판으로 깔고 글자·막대만 위에 얹음
+local function uiImage(key)
+	local id = Config.UIImages and Config.UIImages[key]
+	return id and id ~= 0 and ("rbxassetid://" .. id) or nil
+end
+local function skinImage(parent, key, z)
+	return new("ImageLabel", {
+		Name = key,
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Image = uiImage(key),
+		ScaleType = Enum.ScaleType.Stretch,
+		ZIndex = z or 1,
+		Parent = parent,
+	})
+end
+-- 판 이미지 안의 칸 위치 (이미지 크기에 대한 비율, 디자인 PNG에서 잰 값)
+local function rect(x0, y0, x1, y1)
+	return UDim2.fromScale(x0, y0), UDim2.fromScale(x1 - x0, y1 - y0)
+end
+
 -- 위쪽 HUD는 로블록스 상단 버튼 줄(메뉴·채팅 버튼 높이)까지 끌어올림: 화면 가운데·오른쪽은 비어 있음
 local TOP = -GuiService:GetGuiInset().Y + 6
 local hud = new("Frame", {
@@ -111,10 +132,10 @@ local function teamBlock(xScale, anchorX, team, title)
 	}, { UIKit.corner(12), UIKit.stroke(Color3.new(1, 1, 1), 2) })
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(team.color:Lerp(Color3.new(1, 1, 1), 0.2), team.color:Lerp(Color3.new(0, 0, 0), 0.35)), Parent = f })
 	label({ Parent = f, Position = UDim2.fromScale(0, 0.04), Size = UDim2.fromScale(1, 0.3), Text = title, TextColor3 = Color3.new(1, 1, 1) })
-	return label({ Parent = f, Position = UDim2.fromScale(0, 0.3), Size = UDim2.fromScale(1, 0.7), Font = UIKit.FONT_TITLE, Text = "0", TextStrokeTransparency = 0.3 })
+	return label({ Parent = f, Position = UDim2.fromScale(0, 0.3), Size = UDim2.fromScale(1, 0.7), Font = UIKit.FONT_TITLE, Text = "0", TextStrokeTransparency = 0.3 }), f
 end
-local redNum = teamBlock(0, 0, Config.Teams[1], "레드")
-local blueNum = teamBlock(1, 1, Config.Teams[2], "블루")
+local redNum, redFrame = teamBlock(0, 0, Config.Teams[1], "레드")
+local blueNum, blueFrame = teamBlock(1, 1, Config.Teams[2], "블루")
 local timerBox = new("Frame", {
 	Parent = scoreBar,
 	AnchorPoint = Vector2.new(0.5, 0),
@@ -124,6 +145,23 @@ local timerBox = new("Frame", {
 }, { UIKit.corner(12), UIKit.stroke(CYAN, 2) })
 local timerLabel = label({ Parent = timerBox, Position = UDim2.fromScale(0, 0.02), Size = UDim2.fromScale(1, 0.66), Font = UIKit.FONT_TITLE, Text = "--:--", TextColor3 = Color3.new(1, 1, 1) })
 local scoreLabel = label({ Parent = timerBox, Position = UDim2.fromScale(0, 0.66), Size = UDim2.fromScale(1, 0.3), TextColor3 = CYAN, Text = "" }) -- 모드·홀 표시
+-- 디자인: 깃발 알약 (왼쪽 = 모드·홀, 가운데 세로줄, 오른쪽 = 남은 시간). 알약은 가로:세로 = 4:1
+if uiImage("HoleStatusPill") then
+	local pillW = SCORE_H * 4
+	local teamW = math.floor(SCORE_H * 1.35)
+	hud.Size = UDim2.fromOffset(pillW + teamW * 2 + 8, hud.Size.Y.Offset)
+	redFrame.Size = UDim2.new(0, teamW, 1, 0)
+	blueFrame.Size = UDim2.new(0, teamW, 1, 0)
+	timerBox.Size = UDim2.new(0, pillW, 1, 0)
+	timerBox.BackgroundTransparency = 1
+	timerBox:FindFirstChildOfClass("UIStroke").Enabled = false
+	skinImage(timerBox, "HoleStatusPill", 1)
+	timerLabel.Position, timerLabel.Size = rect(0.53, 0.2, 0.93, 0.8)
+	timerLabel.ZIndex = 2
+	scoreLabel.Position, scoreLabel.Size = rect(0.21, 0.26, 0.47, 0.74)
+	scoreLabel.TextColor3 = Color3.new(1, 1, 1)
+	scoreLabel.ZIndex = 2
+end
 local phaseLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, SCORE_H + 2), Size = UDim2.new(1, 0, 0, isMobile and 16 or 20), TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3, Text = "대기 중..." })
 local teamLabel = label({ Parent = hud, Position = UDim2.fromOffset(0, SCORE_H + (isMobile and 18 or 22)), Size = UDim2.new(1, 0, 0, isMobile and 15 or 18), TextStrokeTransparency = 0.3, Text = "" })
 
@@ -159,6 +197,29 @@ local board = new("Frame", {
 	new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
 	new("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
 })
+
+-- 디자인: 실시간 현황판 (머리 줄 + 빨강·파랑·빨강·파랑 4줄)
+-- 1줄 레드 팀 공, 2줄 블루 팀 공, 3줄 레드 선수, 4줄 블루 선수
+local rank
+if uiImage("LiveMatchRankBoard") then
+	local w = isMobile and 150 or 210
+	local frame = new("Frame", {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = board.Position,
+		Size = UDim2.fromOffset(w, math.floor(w / 0.913)),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = screen.gui,
+	})
+	skinImage(frame, "LiveMatchRankBoard", 1)
+	rank = { frame = frame, rows = {} }
+	local hp, hs = rect(0.09, 0.07, 0.91, 0.15)
+	rank.header = label({ Parent = frame, Position = hp, Size = hs, Font = UIKit.FONT_TITLE, Text = "실시간 현황", TextColor3 = Color3.new(1, 1, 1), ZIndex = 2 })
+	for i, y in ipairs({ 0.207, 0.389, 0.572, 0.754 }) do
+		local pos, size = rect(0.09, y + 0.025, 0.91, y + 0.123)
+		rank.rows[i] = label({ Parent = frame, Position = pos, Size = size, Text = "", TextColor3 = Color3.new(1, 1, 1), TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 2 })
+	end
+end
 
 ----------------------------------------------------------------------
 -- 아래쪽: 파워 게이지, 안내, 버튼
@@ -270,6 +331,16 @@ else
 	jumpButton.Parent = nil -- PC 는 스페이스바
 end
 
+-- 디자인: 샷 버튼 (빨간 원 + 별). 공이 원 안에 없으면 살짝 어둡게
+local shotSkin
+if uiImage("ClubAttackButton") then
+	shotButton.BackgroundTransparency = 1
+	shotButton.Text = ""
+	shotButton:FindFirstChildOfClass("UIStroke").Enabled = false
+	shotButton:FindFirstChildOfClass("UIPadding"):Destroy()
+	shotSkin = skinImage(shotButton, "ClubAttackButton", 1)
+end
+
 ----------------------------------------------------------------------
 -- 경기 중에는 메뉴를 접어서 조작에 집중 (☰ 버튼으로 필요할 때만 열기)
 ----------------------------------------------------------------------
@@ -353,6 +424,52 @@ local gaugeFill = new("Frame", { Parent = gaugeBar, Size = UDim2.fromScale(0, 1)
 new("UIGradient", { Color = ColorSequence.new(Color3.fromRGB(255, 120, 40), Color3.fromRGB(255, 220, 90)), Parent = gaugeFill })
 local gaugeText = label({ Parent = gaugeBar, Size = UDim2.fromScale(1, 1), ZIndex = 3, Text = "", TextStrokeTransparency = 0.2 })
 
+-- 디자인: 내 정보 판 (아바타 동그라미 + 초록 막대 = 궁극기 게이지 + 파랑 막대 = 대시 준비)
+-- 이 판이 있으면 가운데 궁극기 띠는 숨김 (같은 정보)
+local phud
+if uiImage("PlayerHPHUD") then
+	local w = isMobile and 170 or 250
+	local frame = new("Frame", {
+		AnchorPoint = isMobile and Vector2.new(0, 0) or Vector2.new(0, 1),
+		Position = isMobile and UDim2.fromOffset(12, 92) or UDim2.new(0, 12, 1, -12),
+		Size = UDim2.fromOffset(w, w / 4),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Parent = screen.gui,
+	})
+	skinImage(frame, "PlayerHPHUD", 1)
+	local ap, as = rect(0.047, 0.21, 0.19, 0.79)
+	local avatar = new("ImageLabel", { Parent = frame, Position = ap, Size = as, BackgroundTransparency = 1, ZIndex = 2 }, { new("UICorner", { CornerRadius = UDim.new(1, 0) }) })
+	task.spawn(function()
+		local ok, img = pcall(function()
+			return Players:GetUserThumbnailAsync(player.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+		end)
+		if ok then
+			avatar.Image = img
+		end
+	end)
+	-- 막대 위 '빈 부분' 가림막 (오른쪽부터 덮음)
+	local function bar(x0, y0, x1, y1, text)
+		local cover = new("Frame", { Parent = frame, BackgroundColor3 = Color3.fromRGB(28, 33, 55), BackgroundTransparency = 0.1, BorderSizePixel = 0, ZIndex = 2 }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+		local tp, ts = rect(x0 + 0.02, y0, x1 - 0.02, y1)
+		local t = label({ Parent = frame, Position = tp, Size = ts, Text = text, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3, ZIndex = 3 })
+		return function(p, txt)
+			p = math.clamp(p, 0, 1)
+			local x = x0 + (x1 - x0) * p
+			cover.Position, cover.Size = rect(x, y0, x1, y1)
+			cover.Visible = p < 0.999
+			if txt then
+				t.Text = txt
+			end
+		end
+	end
+	phud = {
+		frame = frame,
+		ult = bar(0.227, 0.29, 0.942, 0.5, ""),
+		dash = bar(0.227, 0.58, 0.864, 0.75, ""),
+	}
+end
+
 local function setCooldown(entry, remaining, total)
 	if remaining > 0.05 then
 		entry.cover.Size = UDim2.fromScale(1, math.clamp(remaining / total, 0, 1))
@@ -398,6 +515,11 @@ task.spawn(function()
 			ultBtn.cdText.Text = full and "" or (math.floor(gauge) .. "%")
 			ultBtn.button.BackgroundColor3 = full and Color3.fromRGB(255, 190, 60) or NAVY
 		end
+		if phud then
+			local dashLeft = (player:GetAttribute("DashReady") or 0) - now
+			phud.ult(gauge / Config.Ultimate.gaugeMax, player:GetAttribute("UltActive") and "궁극기 발동!" or (full and "궁극기 준비 완료" or ("궁극기 " .. math.floor(gauge) .. "%")))
+			phud.dash(1 - math.max(0, dashLeft) / Config.Dash.cooldown, dashLeft > 0 and string.format("대시 %.1f", dashLeft) or "대시 준비")
+		end
 		-- 기울어진 궁극기 게이지 바
 		gaugeFill.Size = UDim2.fromScale(math.clamp(gauge / Config.Ultimate.gaugeMax, 0, 1), 1)
 		gaugeText.Text = string.format("%s  %s", Config.Ultimate.name, player:GetAttribute("UltActive") and "발동!" or (full and "준비 완료 [R]" or (math.floor(gauge) .. "%")))
@@ -408,7 +530,10 @@ local function setAbilitiesVisible(on)
 	for _, e in ipairs(abilityButtons) do
 		e.button.Visible = on
 	end
-	gaugeBar.Visible = on
+	gaugeBar.Visible = on and not phud
+	if phud then
+		phud.frame.Visible = on
+	end
 end
 
 ----------------------------------------------------------------------
@@ -705,6 +830,9 @@ Shot.Start({
 		shotButton.Visible = playing
 		jumpButton.Visible = playing
 		shotButton.BackgroundColor3 = ballNear and C.green or Color3.fromRGB(255, 130, 80)
+		if shotSkin then
+			shotSkin.ImageColor3 = ballNear and Color3.new(1, 1, 1) or Color3.fromRGB(170, 170, 170)
+		end
 		if practice then
 			hint.Text = "🏌️ 연습 스윙: 꾹 눌렀다 떼서 골프채 효과 확인"
 		elseif not playing then
@@ -965,6 +1093,24 @@ local function renderBoard()
 	end
 	local inMatch = info.phase ~= "Waiting" and info.phase ~= "Intermission"
 	board.Visible = inMatch and #info.golf.players > 0
+	if rank then
+		board.Visible = false
+		rank.frame.Visible = inMatch and #info.golf.players > 0
+		for index = 1, 2 do
+			local team = Config.Teams[index]
+			local t = info.golf.teams[index]
+			rank.rows[index].Text = t and string.format("%s  %s%s", team.name, t.sunk and "✅ 홀인!" or ("홀컵까지 " .. t.dist), t.frozen and " 🧊" or "") or (team.name .. "  -")
+			local names = {}
+			for _, p in ipairs(info.golf.players) do
+				if p.team == index then
+					local me = p.userId == player.UserId
+					table.insert(names, (me and "★" or "") .. p.name .. (p.shield and "🛡️" or ""))
+				end
+			end
+			rank.rows[index + 2].Text = #names > 0 and table.concat(names, ", ") or "-"
+		end
+		return
+	end
 	local order = 0
 	for index, team in ipairs(Config.Teams) do
 		local t = info.golf.teams[index]
