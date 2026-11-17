@@ -117,7 +117,9 @@ local function setHeadMesh(model, skin)
 	local holder = Instance.new("Model")
 	holder.Name = "HeadMesh"
 	holder:SetAttribute("Asset", want)
-	local originOffset = CFrame.new(0, (model:GetAttribute("HeadY") or 0) + HEAD_RAISE, 0)
+	-- 모델러 헤드는 발끝(토)이 +Z 로 만들어져 있어서 그대로 붙이면 몸 쪽으로 튀어나와 좌우가 뒤집혀 보임
+	-- → 샤프트 축으로 180° 돌려 토가 바깥(-Z)을 향하게
+	local originOffset = CFrame.new(0, (model:GetAttribute("HeadY") or 0) + HEAD_RAISE, 0) * CFrame.Angles(0, math.pi, 0)
 	for _, item in ipairs(list) do
 		weldTo(shaft, item.part, originOffset * item.offset)
 		item.part.Parent = holder
