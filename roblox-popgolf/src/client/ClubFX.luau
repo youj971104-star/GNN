@@ -18,9 +18,9 @@ local camera = workspace.CurrentCamera
 
 -- 로블록스에 기본으로 들어 있는 입자 그림
 local TEXTURES = {
-	sparkle = "rbxasset://textures/particles/sparkles_main.dds",
-	fire = "rbxasset://textures/particles/fire_main.dds",
-	smoke = "rbxasset://textures/particles/smoke_main.dds",
+	sparkle = Config.FXTexture("Spark", "rbxasset://textures/particles/sparkles_main.dds"),
+	fire = Config.FXTexture("Energy", "rbxasset://textures/particles/fire_main.dds"),
+	smoke = Config.FXTexture("Smoke", "rbxasset://textures/particles/smoke_main.dds"),
 }
 
 local fxFolder = Instance.new("Folder")

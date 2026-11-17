@@ -39,7 +39,23 @@ Config.Ball = {
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
 Config.DebugShots = false
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1117d"
+Config.Build = "1118a"
+
+-- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
+-- 0 이면 로블록스 기본 이펙트 이미지를 씀
+Config.FXTextures = {
+	Spark = 0, -- 반짝임: 공 칠 때 불꽃, 골프채 반짝임, 파워 드라이브
+	Ring = 0, -- 충격파 고리: 공·사람 맞을 때 바닥에 퍼지는 원
+	Energy = 0, -- 에너지: 궁극기 오라, 큰 충격 불꽃
+	Smoke = 0, -- 연기: 서리 골프채 등 연기 효과
+}
+function Config.FXTexture(key, fallback)
+	local id = Config.FXTextures[key]
+	if type(id) == "number" and id > 0 then
+		return "rbxassetid://" .. id
+	end
+	return fallback
+end
 
 -- 카메라 시점 (조금 위에서, 멀리서 내려다봄). 플레이어가 확대/축소·회전은 그대로 할 수 있음
 Config.Camera = {

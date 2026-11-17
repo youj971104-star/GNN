@@ -11,6 +11,10 @@ local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+-- 이펙트 이미지 (Config.FXTextures 에 ID가 있으면 모델러 이미지, 없으면 로블록스 기본)
+local SPARK_TEX = Config.FXTexture("Spark", "rbxasset://textures/particles/sparkles_main.dds")
+local ENERGY_TEX = Config.FXTexture("Energy", "rbxasset://textures/particles/fire_main.dds")
+local RING_TEX = Config.FXTexture("Ring", nil)
 
 local VFX = {}
 
@@ -111,7 +115,7 @@ local function watchCharacter(p, character)
 	local att = Instance.new("Attachment")
 	att.Parent = root
 	local sparkle = Instance.new("ParticleEmitter")
-	sparkle.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	sparkle.Texture = SPARK_TEX
 	sparkle.Color = ColorSequence.new(Config.Skills.PowerDrive.color)
 	sparkle.Rate = 25
 	sparkle.Lifetime = NumberRange.new(0.3, 0.6)
@@ -122,7 +126,7 @@ local function watchCharacter(p, character)
 	sparkle.Enabled = false
 	sparkle.Parent = att
 	local aura = Instance.new("ParticleEmitter")
-	aura.Texture = "rbxasset://textures/particles/fire_main.dds"
+	aura.Texture = ENERGY_TEX
 	aura.Color = ColorSequence.new(Color3.fromRGB(255, 220, 90), Color3.fromRGB(255, 80, 40))
 	aura.Rate = 45
 	aura.Lifetime = NumberRange.new(0.4, 0.8)
@@ -168,6 +172,26 @@ end
 
 local function ring(pos, color, radius, delay, time)
 	task.delay(delay or 0, function()
+		if RING_TEX then
+			-- 모델러 충격파 고리 이미지: 바닥에 납작하게 한 장 뿌려서 커지며 사라짐
+			local holder = glow(Enum.PartType.Block, Vector3.one * 0.1, CFrame.new(pos), color, 1)
+			local em = Instance.new("ParticleEmitter")
+			em.Texture = RING_TEX
+			em.Color = ColorSequence.new(color)
+			em.Orientation = Enum.ParticleOrientation.VelocityPerpendicular
+			em.EmissionDirection = Enum.NormalId.Top
+			em.Speed = NumberRange.new(0.01)
+			em.SpreadAngle = Vector2.new(0, 0)
+			em.Rate = 0
+			em.Lifetime = NumberRange.new(time or 0.35)
+			em.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, radius * 0.3), NumberSequenceKeypoint.new(1, radius * 2) })
+			em.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+			em.LightEmission = 1
+			em.Parent = holder
+			em:Emit(1)
+			Debris:AddItem(holder, (time or 0.35) + 0.2)
+			return
+		end
 		local r = glow(Enum.PartType.Cylinder, Vector3.new(0.25, 1, 1), CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90)), color, 0.05)
 		TweenService:Create(r, TweenInfo.new(time or 0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, radius * 2, radius * 2), Transparency = 1 }):Play()
 		Debris:AddItem(r, (time or 0.35) + 0.05)
@@ -192,7 +216,7 @@ end
 local function sparkleBurst(pos, color, count)
 	local holder = glow(Enum.PartType.Block, Vector3.one * 0.1, CFrame.new(pos), color, 1)
 	local em = Instance.new("ParticleEmitter")
-	em.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	em.Texture = SPARK_TEX
 	em.Color = ColorSequence.new(color, Color3.new(1, 1, 1))
 	em.Rate = 0
 	em.Lifetime = NumberRange.new(0.3, 0.6)
@@ -227,7 +251,7 @@ local function impact(pos, color, big)
 		Debris:AddItem(pillar, 0.55)
 		local fire = glow(Enum.PartType.Block, Vector3.one * 0.1, CFrame.new(pos), PURPLE, 1)
 		local em = Instance.new("ParticleEmitter")
-		em.Texture = "rbxasset://textures/particles/fire_main.dds"
+		em.Texture = ENERGY_TEX
 		em.Color = ColorSequence.new(PURPLE, Color3.fromRGB(255, 120, 230))
 		em.Rate = 0
 		em.Lifetime = NumberRange.new(0.4, 0.8)

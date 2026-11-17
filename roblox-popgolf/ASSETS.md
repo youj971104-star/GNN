@@ -45,7 +45,8 @@
 
 ## 3. 다음 단계에서 연결할 것
 
-- **팀 공 딤플**과 **이펙트 텍스처**(Spark·Ring·Energy·Smoke)는 이미지를 로블록스에 올려서 받은 **에셋 ID**가 필요합니다. ID가 생기면 알려 주세요.
+- **이펙트 이미지**(Spark·Ring·Energy·Smoke): Studio 상단 **보기 → 에셋 관리자 → 일괄 가져오기**로 PNG 4장을 올린 뒤, 각 이미지를 우클릭 → **에셋 ID 복사**해서 `src/shared/Config.luau`의 `Config.FXTextures`에 숫자를 넣으면 바로 적용됩니다 (0 이면 로블록스 기본 이미지).
+- **팀 공 딤플**(`Ball_Base_Normal`)은 공을 `Team_Ball` 메시로 바꿀 때 함께 연결합니다.
 - `Stand_Curve30`을 쓸 경우, Studio에서 그 안의 `Collider_` 부품들의 **CollisionFidelity**를 `PreciseConvexDecomposition`으로 바꿔 주세요 (곡선이라 기본 충돌이 앞으로 1스터드쯤 튀어나옵니다). 실행 중에는 코드로 바꿀 수 없는 속성입니다.
 
 ## 4. 동작 방식 (참고)
