@@ -404,6 +404,18 @@ local NEON_WORDS = {
 	White = Color3.fromRGB(240, 245, 255), Green = Color3.fromRGB(80, 255, 140), Red = Color3.fromRGB(255, 70, 70),
 }
 local SPIN_WORDS = { "Pinwheel", "ClockHand", "Ring" }
+-- 가져오면 색이 빠져 하얗게 들어오는 경우가 있어서 색을 직접 입힘: 이름에 이 단어가 있으면 이 색, 없으면 영웅 색
+local PART_COLORS = {
+	{ "ScrollWood", Color3.fromRGB(110, 70, 40), "Wood" },
+	{ "ScrollPaper", Color3.fromRGB(235, 218, 175), "SmoothPlastic" },
+	{ "SnowBand", Color3.fromRGB(235, 245, 255), "SmoothPlastic" },
+	{ "Wood", Color3.fromRGB(110, 70, 40), "Wood" },
+	{ "Paper", Color3.fromRGB(235, 218, 175), "SmoothPlastic" },
+	{ "Gold", Color3.fromRGB(255, 205, 80), "Foil" },
+	{ "Silver", Color3.fromRGB(200, 205, 215), "Metal" },
+	{ "Black", Color3.fromRGB(30, 30, 35), "SmoothPlastic" },
+	{ "White", Color3.fromRGB(240, 245, 255), "SmoothPlastic" },
+}
 
 function Club.RemoveHeroLook(player)
 	local character = player.Character
@@ -460,9 +472,21 @@ function Club.GiveHeroLook(player, heroId, teamColor)
 				p.Material = Enum.Material.SmoothPlastic
 			elseif n:find("Neon_") then
 				p.Material = Enum.Material.Neon
+				p.Color = hero.color
 				for word, c in pairs(NEON_WORDS) do
 					if n:find("Neon_" .. word) then
 						p.Color = c
+					end
+				end
+			else
+				-- 몸통 장식: 이름 단어별 색, 아니면 영웅 대표 색 (레오 캐디백 = 주황, 유키 망토 = 하늘색 …)
+				p.Color = hero.color
+				p.Material = Enum.Material.SmoothPlastic
+				for _, pc in ipairs(PART_COLORS) do
+					if n:find(pc[1]) then
+						p.Color = pc[2]
+						p.Material = Enum.Material[pc[3]]
+						break
 					end
 				end
 			end
