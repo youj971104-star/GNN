@@ -274,23 +274,44 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	end
 	local cupAngle = rng:NextNumber(0, math.pi * 2)
 	local cup = greenCenter + Vector3.new(math.cos(cupAngle), 0, math.sin(cupAngle)) * rng:NextNumber(0, R * 0.55)
-	-- 홀컵: 그린보다 확실히 보이게 (검은 구멍 + 하얀 테두리). 공·레이캐스트에는 안 걸림 (홀인 판정은 거리로 함)
-	local cupHole = disc("Cup", cup, Config.Ball.cupRadius - 0.35, 0.78, 0.12, Color3.fromRGB(8, 8, 10), Enum.Material.SmoothPlastic, folder)
-	cupHole.CanCollide = false
-	cupHole.CanQuery = false
-	local cupRingN = 32
-	for k = 1, cupRingN do
-		local a0 = (k - 1) / cupRingN * math.pi * 2
-		local a1 = k / cupRingN * math.pi * 2
-		local p0 = cup + Vector3.new(math.cos(a0), 0, math.sin(a0)) * Config.Ball.cupRadius
-		local p1 = cup + Vector3.new(math.cos(a1), 0, math.sin(a1)) * Config.Ball.cupRadius
-		local mid = Vector3.new((p0.X + p1.X) / 2, 0.79, (p0.Z + p1.Z) / 2)
-		part({ Name = "CupRing", Size = Vector3.new(0.35, 0.12, (p1 - p0).Magnitude + 0.05), CFrame = CFrame.lookAt(mid, mid + (p1 - p0)), Color = Color3.fromRGB(250, 250, 250), Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, folder)
-	end
-	local flag
 	-- 깃발 에셋: 홀컵 가운데가 기준점. 공이 깃대에 막히지 않게 충돌 끔
 	-- 모델러 홀컵 테두리는 대부분 땅에 묻히게 만들어져 있어서 0.12 올려 금색 링이 보이게
+	local flag
 	local flagAsset = asset("Flag_Cup", CFrame.new(cup.X, 0.82, cup.Z), { collide = false, noSnap = true, teamColor = Color3.fromRGB(255, 60, 60) })
+	if flagAsset then
+		-- 기준점 보정값이 깃발 천 때문에 옆으로 밀리는 경우가 있어서, 테두리(없으면 깃대) 가운데를 홀컵에 정확히 맞춤
+		local anchor
+		for _, d in ipairs(flagAsset.model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				if d.Name:find("HoleRim") or d.Name:find("Rim_Outer") then
+					anchor = d
+				elseif not anchor and d.Name:find("Pole") then
+					anchor = d
+				end
+			end
+		end
+		if anchor then
+			local off = Vector3.new(cup.X - anchor.Position.X, 0, cup.Z - anchor.Position.Z)
+			flagAsset.model:TranslateBy(off)
+		end
+	end
+	-- 홀컵 구멍: 검은 원판. 공·레이캐스트에는 안 걸림 (홀인 판정은 거리로 함)
+	-- 에셋이 있으면 에셋 금색 테두리 안쪽(반지름 2.1)에 맞추고, 없으면 하얀 테두리를 직접 그림
+	local holeR = flagAsset and 2.05 or (Config.Ball.cupRadius - 0.35)
+	local cupHole = disc("Cup", cup, holeR, 0.78, 0.12, Color3.fromRGB(8, 8, 10), Enum.Material.SmoothPlastic, folder)
+	cupHole.CanCollide = false
+	cupHole.CanQuery = false
+	if not flagAsset then
+		local cupRingN = 32
+		for k = 1, cupRingN do
+			local a0 = (k - 1) / cupRingN * math.pi * 2
+			local a1 = k / cupRingN * math.pi * 2
+			local p0 = cup + Vector3.new(math.cos(a0), 0, math.sin(a0)) * Config.Ball.cupRadius
+			local p1 = cup + Vector3.new(math.cos(a1), 0, math.sin(a1)) * Config.Ball.cupRadius
+			local mid = Vector3.new((p0.X + p1.X) / 2, 0.79, (p0.Z + p1.Z) / 2)
+			part({ Name = "CupRing", Size = Vector3.new(0.35, 0.12, (p1 - p0).Magnitude + 0.05), CFrame = CFrame.lookAt(mid, mid + (p1 - p0)), Color = Color3.fromRGB(250, 250, 250), Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, folder)
+		end
+	end
 	if flagAsset then
 		flag = flagAsset.parts.TeamColor_Flag or flagAsset.model:FindFirstChildWhichIsA("BasePart", true)
 		for _, d in ipairs(flagAsset.model:GetDescendants()) do
@@ -581,13 +602,6 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		alive = true,
 	}
 	current = hole
-	-- 점검용 한 줄: 러프 지형 표면 높이 (정상이면 0 근처). Output 창에서 확인
-	do
-		local side = Vector3.new(startDir.Z, 0, -startDir.X)
-		local probe = side * (W / 2 + 25)
-		local gy = groundY(probe.X, probe.Z)
-		print(string.format("[PopGolf] build %s · 러프 지형 높이 %.2f (코스 바닥 윗면 0.5)", tostring(Config.Build), gy or -999))
-	end
 
 	task.spawn(function()
 		while hole.alive do
