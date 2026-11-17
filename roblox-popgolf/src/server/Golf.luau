@@ -31,6 +31,12 @@ local ballsFolder
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Include
 
+-- 공이 땅에 묻혔는지 볼 때 쓰는 '바닥만' 레이캐스트 (지형 + 코스 바닥 부품, 나무·소품·물은 무시)
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Include
+groundParams.IgnoreWater = true
+local GROUND_NAMES = { Fairway = true, Green = true, GreenFringe = true, Tee = true, CartPath = true }
+
 ----------------------------------------------------------------------
 -- 도우미
 ----------------------------------------------------------------------
@@ -260,6 +266,13 @@ function Golf.BeginHole(newHole, teamLists)
 	active = false
 	ballsFolder:ClearAllChildren()
 	rayParams.FilterDescendantsInstances = { hole.folder, workspace.Terrain }
+	local ground = { workspace.Terrain }
+	for _, d in ipairs(hole.folder:GetChildren()) do
+		if d:IsA("BasePart") and GROUND_NAMES[d.Name] then
+			table.insert(ground, d)
+		end
+	end
+	groundParams.FilterDescendantsInstances = ground
 
 	local teamCount = #teamLists
 	for index, members in ipairs(teamLists) do
@@ -1043,6 +1056,18 @@ local function tick(dt)
 			resetBall(t, "💨 우리 공이 코스 밖으로! 마지막 자리로 돌아와요")
 			changed = true
 			continue
+		end
+		-- 땅에 묻힘 방지: 위에서 바닥을 재서 공 아랫면이 바닥보다 내려가 있으면 바닥 위로 올림
+		-- (빠른 공이 지형 표면을 살짝 뚫고 들어가 그대로 갇히는 문제)
+		do
+			local r = B.diameter / 2
+			local top = workspace:Raycast(pos + UP * 40, -UP * 80, groundParams)
+			if top and top.Position.Y - (pos.Y - r) > 0.25 then
+				local v0 = ball.AssemblyLinearVelocity
+				ball.CFrame = CFrame.new(Vector3.new(pos.X, top.Position.Y + r + 0.05, pos.Z)) * ball.CFrame.Rotation
+				ball.AssemblyLinearVelocity = Vector3.new(v0.X, v0.Y < 0 and -v0.Y * 0.3 or v0.Y, v0.Z)
+				pos = ball.Position
+			end
 		end
 		local surface = surfaceUnder(ball)
 		if surface == "Water" then
