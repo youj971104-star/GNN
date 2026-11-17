@@ -1379,6 +1379,9 @@ local function makeAdminMenu()
 		button({ Parent = parent, LayoutOrder = 6, Size = UDim2.new(1, -8, 0, 40), BackgroundColor3 = Color3.fromRGB(255, 170, 50), Text = "🏌️ 모든 골프채 한 번에 지급" }, function()
 			adminAct({ cmd = "allskins" })
 		end)
+		button({ Parent = parent, LayoutOrder = 6, Size = UDim2.new(1, -8, 0, 40), BackgroundColor3 = Color3.fromRGB(255, 150, 60), Text = "🦸 모든 영웅 한 번에 지급" }, function()
+			adminAct({ cmd = "allheroes" })
+		end)
 		local grid = new("Frame", { Parent = parent, LayoutOrder = 7, Size = UDim2.new(1, -8, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }, {
 			new("UIGridLayout", { CellSize = UDim2.fromOffset(150, 40), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
 		})
