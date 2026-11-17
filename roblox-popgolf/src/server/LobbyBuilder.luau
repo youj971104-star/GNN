@@ -108,18 +108,27 @@ end
 -- 화면 파트에 순위판 UI(머리 띠 + 제목 + 10줄 목록). 반환: 목록 TextLabel
 local function boardUI(screen, title, color)
 	local sg = surface(screen, Enum.NormalId.Front, 24)
+	-- 화면 가장자리는 모델의 베젤·네온 띠에 가려질 수 있어서, 안쪽(좌우 8%, 위아래 4%)에만 그림
+	local inner = Instance.new("Frame")
+	inner.BackgroundTransparency = 1
+	inner.Position = UDim2.fromScale(0.08, 0.04)
+	inner.Size = UDim2.fromScale(0.84, 0.92)
+	inner.Parent = sg
 	local header = Instance.new("Frame")
 	header.Size = UDim2.fromScale(1, 0.13)
 	header.BackgroundColor3 = color
 	header.BorderSizePixel = 0
-	header.Parent = sg
-	text(header, { Size = UDim2.fromScale(1, 1), Text = title, TextColor3 = Color3.fromRGB(20, 20, 30) })
-	local list = text(sg, {
-		Position = UDim2.fromScale(0.05, 0.16),
-		Size = UDim2.fromScale(0.9, 0.82),
+	header.Parent = inner
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.2, 0)
+	corner.Parent = header
+	text(header, { Position = UDim2.fromScale(0.05, 0.1), Size = UDim2.fromScale(0.9, 0.8), Text = title, TextColor3 = Color3.fromRGB(20, 20, 30) })
+	local list = text(inner, {
+		Position = UDim2.fromScale(0.02, 0.16),
+		Size = UDim2.fromScale(0.96, 0.84),
 		Text = "불러오는 중...",
 		TextScaled = false,
-		TextSize = 44,
+		TextSize = 38,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		LineHeight = 1.15,
