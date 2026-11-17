@@ -421,7 +421,7 @@ local function refreshGlobalBoards()
 				end
 				label.Text = #lines > 0 and table.concat(lines, "\n") or "아직 기록이 없어요"
 			else
-				label.Text = "순위를 불러오지 못했어요\n(게임 설정 → 보안 → API 접근 켜기)"
+				label.Text = "순위를 불러오지 못했어요\n(게임 설정 > 보안 > API 접근 켜기)"
 			end
 		end
 	end
