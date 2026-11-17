@@ -55,7 +55,7 @@ Config.StudioUnlockAllSkins = true
 -- 게임 주인(그룹 게임이면 그룹 소유자)은 자동으로 운영자. 다른 사람을 추가하려면 로블록스 UserId 를 넣기
 Config.Admins = {}
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1121f"
+Config.Build = "1122a"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
@@ -321,6 +321,68 @@ end
 ----------------------------------------------------------------------
 -- 캡슐 뽑기 (가챠) — 확률은 게임 안에 항상 표시
 ----------------------------------------------------------------------
+----------------------------------------------------------------------
+-- 🦸 영웅 — 영웅마다 궁극기(R)가 다름. 영웅 캡슐(가챠)로 모으고, 🦸 영웅 메뉴에서 골라 출전
+-- 세계관: 하늘에 떠 있는 '팝 아일랜드'의 골프 리그 '팝 컵'. 섬의 심장 '골든 홀'이 깨지면서
+-- 흩어진 힘의 조각이 골퍼들에게 깃들었고, 각자 사연을 가진 영웅들이 우승컵을 향해 모여든다.
+-- ult.kind: 즉시 발동(blizzard, tornado, thunder, phantom, giant, rewind, blackhole)
+--           다음 스윙 강화(meteor, cannon, golden) — 켜고 window 초 안에 휘둘러야 함
+----------------------------------------------------------------------
+Config.HeroOrder = { "Leo", "Yuki", "Gale", "Volt", "Shade", "Titan", "Chrono", "Nova", "Midas", "Void" }
+Config.DefaultHero = "Leo"
+Config.Heroes = {
+	Leo = {
+		emoji = "☄️", name = "레오", title = "떨어진 별의 신입", rarity = "Common", color = Color3.fromRGB(255, 140, 60),
+		lore = "골든 홀이 깨지던 밤, 하늘에서 떨어진 별똥별 조각을 주운 견습 캐디. 스윙할 때마다 별의 불꽃이 튄다. 꿈은 단 하나, 팝 컵의 첫 우승.",
+		ult = { kind = "meteor", name = "☄️ 메테오 스윙", desc = "다음 스윙이 주변 12 안의 모든 공과 상대를 날려 버려요" },
+	},
+	Yuki = {
+		emoji = "❄️", name = "유키", title = "북쪽 그린의 얼음 공주", rarity = "Rare", color = Color3.fromRGB(140, 210, 255),
+		lore = "일 년 내내 눈이 내리는 북쪽 그린의 공주. 얼음 위에서 퍼팅을 배워 공을 멈추는 데 천재적이다. 차갑지만 패배한 상대에게 손난로를 건네는 다정함이 있다.",
+		ult = { kind = "blizzard", name = "❄️ 블리자드", desc = "상대 공을 4초 동안 얼리고, 주변 20 안의 상대를 4초 동안 느리게 해요", seconds = 4, radius = 20 },
+	},
+	Gale = {
+		emoji = "🌪️", name = "게일", title = "바람을 읽는 방랑자", rarity = "Rare", color = Color3.fromRGB(190, 240, 220),
+		lore = "섬과 섬 사이를 바람을 타고 떠도는 방랑 골퍼. 풀잎 흔들림만 보고도 바람을 읽는다. 누군가를 찾아 팝 컵에 왔다는데, 그게 누군지는 말하지 않는다.",
+		ult = { kind = "tornado", name = "🌪️ 토네이도", desc = "주변 25 안의 상대를 모두 회오리로 하늘 높이 날려요", radius = 25 },
+	},
+	Volt = {
+		emoji = "⚡", name = "볼트", title = "번개 배달 캐디", rarity = "Epic", color = Color3.fromRGB(255, 230, 60),
+		lore = "번개보다 빨리 골프백을 배달하던 캐디. 폭풍 속 배달 중 낙뢰를 맞고 전기를 다루게 됐다. 시끄럽고 성격 급하지만 약속 시간은 절대 어기지 않는다.",
+		ult = { kind = "thunder", name = "⚡ 천둥 낙뢰", desc = "어디 있든 상대 최대 3명에게 번개를 내리꽂아 기절시켜요", targets = 3 },
+	},
+	Shade = {
+		emoji = "👻", name = "셰이드", title = "그림자 벙커의 닌자", rarity = "Epic", color = Color3.fromRGB(120, 100, 170),
+		lore = "아무도 들어가지 않는 그림자 벙커에서 수련한 닌자. 소리 없이 다가와 공을 쳐 내고 사라진다. 사실은 수줍음이 많아서 숨어 다니는 거라는 소문이 있다.",
+		ult = { kind = "phantom", name = "👻 그림자 걸음", desc = "6초 동안 거의 투명해지고, 어떤 공격도 안 맞고, 1.5배 빨라져요", seconds = 6, speed = 1.5 },
+	},
+	Titan = {
+		emoji = "🗿", name = "타이탄", title = "돌산의 거인 장사", rarity = "Epic", color = Color3.fromRGB(170, 140, 110),
+		lore = "돌산 채석장에서 바위를 굴리며 자란 장사. 골프채를 처음 잡던 날 손잡이를 부러뜨렸다. 덩치와 달리 꽃을 좋아해 그린 가장자리 꽃을 절대 밟지 않는다.",
+		ult = { kind = "giant", name = "🗿 거인화", desc = "8초 동안 몸이 커지고 스윙 범위·넉백이 2배가 돼요", seconds = 8, scale = 1.5 },
+	},
+	Chrono = {
+		emoji = "⏳", name = "크로노", title = "시계탑의 시간 여행자", rarity = "Legendary", color = Color3.fromRGB(110, 200, 255),
+		lore = "섬 꼭대기 시계탑을 지키는 소년. 골든 홀이 깨진 순간을 되돌리려다 시간에 갇혀 버렸다. 팝 컵 우승컵에 시간을 고칠 힘이 있다고 믿는다.",
+		ult = { kind = "rewind", name = "⏳ 되감기", desc = "상대 팀 공을 바로 전 샷을 치기 전 자리로 되돌려요" },
+	},
+	Nova = {
+		emoji = "🚀", name = "노바", title = "로켓 공학 천재", rarity = "Legendary", color = Color3.fromRGB(255, 90, 120),
+		lore = "골프채에 로켓 엔진을 단 공학 천재. '더 멀리'만 외치다 연구소를 세 번 날려 먹었다. 그녀의 목표는 공을 달까지 보내는 것.",
+		ult = { kind = "cannon", name = "🚀 골프 대포", desc = "다음 스윙이 공을 2.2배 세기로 쏘아 보내요", mult = 2.2 },
+	},
+	Midas = {
+		emoji = "🌟", name = "마이다스", title = "황금 손의 귀족", rarity = "Legendary", color = Color3.fromRGB(255, 210, 80),
+		lore = "손대는 것마다 황금으로 바뀌는 저주를 받은 귀족. 골프공만은 황금이 되지 않아 골프에 빠졌다. 저주를 풀 방법을 팝 컵에서 찾고 있다.",
+		ult = { kind = "golden", name = "🌟 황금 퍼팅", desc = "다음 스윙이 홀컵 방향으로 자동 조준되고 퍼펙트 샷이 돼요" },
+	},
+	Void = {
+		emoji = "🕳️", name = "보이드", title = "별을 삼킨 마법사", rarity = "Mythic", color = Color3.fromRGB(150, 70, 255),
+		lore = "골든 홀을 깨뜨린 장본인이라는 소문의 마법사. 손바닥 위에 작은 블랙홀을 띄운다. 그가 팝 컵에 나온 진짜 이유는 아무도 모른다.",
+		ult = { kind = "blackhole", name = "🕳️ 블랙홀", desc = "우리 공을 홀컵 쪽으로 30 끌어당기고, 상대 공은 홀컵에서 20 밀어내요", pull = 30, push = 20 },
+	},
+}
+
 Config.Capsules = {
 	Basic = {
 		name = "🟢 일반 캡슐",
@@ -335,6 +397,15 @@ Config.Capsules = {
 		tenCost = 450, -- 10연차 (1회 무료 효과)
 		odds = { Rare = 60, Epic = 30, Legendary = 9, Mythic = 1 },
 		paid = true, -- 젬을 로벅스로 살 수 있으므로 '유료 확률형 아이템'
+	},
+	Hero = {
+		name = "🦸 영웅 캡슐",
+		currency = "gems",
+		cost = 100,
+		tenCost = 900,
+		odds = { Rare = 62, Epic = 28, Legendary = 9, Mythic = 1 },
+		paid = true,
+		kind = "hero", -- 영웅이 나옴 (중복은 조각 2배)
 	},
 }
 -- 천장 (프리미엄 캡슐 전용)

@@ -20,6 +20,31 @@ for _, id in ipairs(Config.SkinOrder) do
 end
 Gacha.Pool = pool
 
+-- 영웅 캡슐: 등급별 영웅 목록 (기본 영웅은 처음부터 가지고 있어서 제외)
+local heroPool = {}
+for _, id in ipairs(Config.HeroOrder) do
+	local hero = Config.Heroes[id]
+	if id ~= Config.DefaultHero and not hero.exclusive then
+		heroPool[hero.rarity] = heroPool[hero.rarity] or {}
+		table.insert(heroPool[hero.rarity], id)
+	end
+end
+Gacha.HeroPool = heroPool
+
+local function giveHero(data, rarity)
+	local list = heroPool[rarity]
+	local heroId = list[math.random(1, #list)]
+	local isNew = not data.heroes[heroId]
+	local shards = 0
+	if isNew then
+		data.heroes[heroId] = true
+	else
+		shards = Config.RarityById[rarity].shards * 2
+		data.shards += shards
+	end
+	return { hero = heroId, rarity = rarity, new = isNew, shards = shards }
+end
+
 local function rarityIndex(id)
 	return Config.RarityById[id].index
 end
@@ -92,7 +117,20 @@ function Gacha.Pull(data, capsuleId, count, restricted)
 	local bestIndex = 0
 	for i = 1, count do
 		local rarity
-		if capsuleId == "Premium" then
+		if capsule.kind == "hero" then
+			-- 영웅 캡슐도 같은 천장 규칙 (따로 셈)
+			data.pity.heroSince = (data.pity.heroSince or 0) + 1
+			if data.pity.heroSince >= Config.Pity.legendaryAt then
+				rarity = rollRarity(capsule.odds, "Legendary")
+			elseif count == 10 and i == 10 and bestIndex < rarityIndex(Config.Pity.tenPullMinRarity) then
+				rarity = rollRarity(capsule.odds, Config.Pity.tenPullMinRarity)
+			else
+				rarity = rollRarity(capsule.odds)
+			end
+			if rarityIndex(rarity) >= rarityIndex("Legendary") then
+				data.pity.heroSince = 0
+			end
+		elseif capsuleId == "Premium" then
 			data.pity.sinceLegendary += 1
 			if data.pity.sinceLegendary >= Config.Pity.legendaryAt then
 				rarity = rollRarity(capsule.odds, "Legendary")
@@ -108,7 +146,7 @@ function Gacha.Pull(data, capsuleId, count, restricted)
 			rarity = rollRarity(capsule.odds)
 		end
 		bestIndex = math.max(bestIndex, rarityIndex(rarity))
-		table.insert(results, giveSkin(data, rarity))
+		table.insert(results, capsule.kind == "hero" and giveHero(data, rarity) or giveSkin(data, rarity))
 	end
 	data.stats.pulls += count
 	return true, results
@@ -139,8 +177,8 @@ function Gacha.OddsTable(capsuleId)
 	for _, rar in ipairs(Config.Rarities) do
 		local pct = capsule.odds[rar.id]
 		if pct then
-			local list = pool[rar.id] or {}
-			table.insert(rows, { rarity = rar.id, percent = pct, each = #list > 0 and pct / #list or 0, skins = list })
+			local list = (capsule.kind == "hero" and heroPool[rar.id]) or pool[rar.id] or {}
+			table.insert(rows, { rarity = rar.id, percent = pct, each = #list > 0 and pct / #list or 0, skins = list, heroes = capsule.kind == "hero" })
 		end
 	end
 	return rows

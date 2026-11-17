@@ -24,7 +24,9 @@ DataService.Configure("PopGolfData_v2", function()
 		skins = { White = true },
 		equipped = "White",
 		skill = Config.DefaultSkill, -- 장착한 스킬 (E)
-		pity = { sinceLegendary = 0 },
+		heroes = { [Config.DefaultHero] = true }, -- 가진 영웅
+		hero = Config.DefaultHero, -- 출전 영웅 (궁극기 R 이 영웅마다 다름)
+		pity = { sinceLegendary = 0, heroSince = 0 },
 		stats = { matches = 0, wins = 0, holesWon = 0, sinks = 0, knockouts = 0, pulls = 0 },
 		lastDailyDay = 0,
 		lastVipGemDay = 0,
@@ -156,6 +158,16 @@ end)
 
 -- Studio 테스트: 모든 골프채 스킨을 가진 것처럼 (저장 데이터는 건드리지 않음 → 실제 게임에는 영향 없음)
 local STUDIO_UNLOCK = RunService:IsStudio() and Config.StudioUnlockAllSkins == true
+local function ownedHeroes(data)
+	local all = table.clone(data.heroes or {})
+	all[Config.DefaultHero] = true
+	if STUDIO_UNLOCK then
+		for id in pairs(Config.Heroes) do
+			all[id] = true
+		end
+	end
+	return all
+end
 local function ownedSkins(data)
 	if not STUDIO_UNLOCK then
 		return data.skins
@@ -182,6 +194,10 @@ local function refresh(player)
 		gems = data.gems,
 		shards = data.shards,
 		skins = ownedSkins(data),
+		heroes = ownedHeroes(data),
+		hero = data.hero,
+		heroPity = data.pity.heroSince or 0,
+		oddsHero = Gacha.OddsTable("Hero"),
 		isAdmin = isAdmin(player),
 		equipped = data.equipped,
 		skill = data.skill,
@@ -284,6 +300,14 @@ local questProgress
 local changePending = false
 Golf.Start({
 	shockwave = shockwave,
+	heroOf = function(player)
+		local data = DataService.Get(player)
+		local id = data and data.hero
+		if not (id and Config.Heroes[id] and ownedHeroes(data)[id]) then
+			id = Config.DefaultHero
+		end
+		return id
+	end,
 	skillOf = function(player)
 		local data = DataService.Get(player)
 		return data and data.skill or Config.DefaultSkill
@@ -1030,10 +1054,26 @@ function actions.Pull(player, data, arg)
 	remotes.GachaResult:FireClient(player, result)
 	for _, r in ipairs(result) do
 		if r.rarity == "Legendary" or r.rarity == "Mythic" then
-			announce(string.format("✨ %s 님이 %s 골프채를 뽑았어요!", player.DisplayName, Config.Skins[r.skin].name), 4)
+			if r.hero then
+				local h = Config.Heroes[r.hero]
+				announce(string.format("🦸 %s 님이 영웅 %s %s 을(를) 만났어요!", player.DisplayName, h.emoji, h.name), 4)
+			else
+				announce(string.format("✨ %s 님이 %s 골프채를 뽑았어요!", player.DisplayName, Config.Skins[r.skin].name), 4)
+			end
 		end
 	end
 	return true
+end
+
+-- 🦸 출전 영웅 고르기
+function actions.SelectHero(player, data, heroId)
+	local hero = type(heroId) == "string" and Config.Heroes[heroId]
+	if not hero or not ownedHeroes(data)[heroId] then
+		return false, "아직 만나지 못한 영웅이에요"
+	end
+	data.hero = heroId
+	player:SetAttribute("Hero", heroId)
+	return true, string.format("%s %s 출전! 궁극기: %s", hero.emoji, hero.name, hero.ult.name)
 end
 
 function actions.Equip(player, data, skinId)
@@ -1119,6 +1159,12 @@ function actions.Admin(player, data, req)
 		end
 		print(string.format("[Admin] %s → %s : 쿨타임 없음 %s", player.Name, target.Name, on and "켬" or "끔"))
 		return true, string.format("⚡ %s 님 쿨타임 없음: %s", target.DisplayName, on and "켬" or "끔")
+	elseif req.cmd == "allheroes" then
+		tdata.heroes = tdata.heroes or {}
+		for id in pairs(Config.Heroes) do
+			tdata.heroes[id] = true
+		end
+		what = "🦸 모든 영웅"
 	elseif req.cmd == "allskins" then
 		for id in pairs(Config.Skins) do
 			tdata.skins[id] = true

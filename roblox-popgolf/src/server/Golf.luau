@@ -340,6 +340,8 @@ function Golf.BeginHole(newHole, teamLists)
 				skillReady = 0,
 				gauge = 0,
 				ultUntil = 0,
+				ultKind = nil, -- 다음 스윙 강화형 궁극기 종류 (meteor · cannon · golden)
+				giantUntil = 0, -- 거인화 끝나는 시각
 				powerUntil = 0,
 				bubbleUntil = 0,
 				slowUntil = 0,
@@ -485,6 +487,7 @@ local function launchBall(t, dir, power, hitter, mult)
 	t.ball:SetAttribute("Resting", false)
 	t.restTimer = 0
 	t.lastHitter = hitter
+	t.prevPos = pos -- 되감기(크로노)용: 이 샷을 치기 전 자리
 	t.launchedAt = os.clock()
 	t.bonked = {} -- 이번 샷에 이미 맞은 선수
 	-- 공이 바닥 부품에 파묻혀 '잠든' 상태면 속도만 바꿔서는 안 움직임 → 바닥 위로 살짝 들어 올려(위치 이동 = 물리 깨움) 겹침에서 빼냄
@@ -550,18 +553,32 @@ function Golf.Swing(player, direction, power)
 			ps.powerUntil = 0
 			player:SetAttribute("Powered", false)
 		end
-		local ult = ps.ultUntil > t0
-		-- 퍼펙트 샷: 힘 게이지 하얀 칸 안에서 뗐으면 조금 더 멀리
-		local perfect = not ult and power >= CL.perfect[1] and power <= CL.perfect[2]
+		-- 다음 스윙 강화형 궁극기 (영웅마다): meteor = 주변 전부, cannon = 초강력 샷, golden = 홀컵 자동 조준 + 퍼펙트
+		local ultKind = ps.ultUntil > t0 and (ps.ultKind or "meteor") or nil
+		local ult = ultKind == "meteor"
+		local golden = ultKind == "golden"
+		local hero = Config.Heroes[ctx.heroOf(player)] or Config.Heroes[Config.DefaultHero]
+		-- 거인화(타이탄): 스윙 존·범위·넉백이 커짐
+		local giant = (ps.giantUntil or 0) > t0
+		-- 퍼펙트 샷: 힘 게이지 하얀 칸 안에서 뗐으면 조금 더 멀리 (황금 퍼팅은 무조건 퍼펙트)
+		local perfect = golden or (not ult and power >= CL.perfect[1] and power <= CL.perfect[2])
 		if perfect then
 			mult *= CL.perfectMult
 		end
-		if ult then
+		if ultKind then
 			ps.ultUntil = 0
+			ps.ultKind = nil
 			player:SetAttribute("UltActive", false)
+			ctx.announce(hero.emoji .. " " .. player.DisplayName .. " 님의 " .. hero.ult.name .. "!", 2)
+		end
+		if ult then
 			ctx.shockwave(origin, UL.radius, Config.Teams[index].color)
 			ctx.impact(origin, Color3.fromRGB(255, 140, 60), true, "meteor", UL.radius) -- 불꽃 소용돌이
-			ctx.announce("☄️ " .. player.DisplayName .. " 님의 메테오 스윙!", 2)
+		elseif ultKind == "cannon" then
+			mult *= hero.ult.mult or 2.2
+			ctx.shockwave(origin, 8, Color3.fromRGB(255, 90, 120))
+		elseif golden then
+			ctx.impact(origin, Color3.fromRGB(255, 220, 110), true, "golden", 6)
 		end
 		-- 선수는 목표(dir)를 왼쪽에 두고 옆으로 섬 → 얼굴 방향 = dir × 위
 		local facing = dir:Cross(UP)
@@ -571,7 +588,7 @@ function Golf.Swing(player, direction, power)
 		for _, t in pairs(teams) do
 			if not t.sunk and t.frozenUntil <= os.clock() then
 				local pos = t.ball.Position
-				local inZone = flat(pos - zone).Magnitude <= CL.ballZone or flat(pos - origin).Magnitude <= 2.2
+				local inZone = flat(pos - zone).Magnitude <= CL.ballZone * (giant and 1.6 or 1) or flat(pos - origin).Magnitude <= (giant and 3.5 or 2.2)
 				if ult then
 					inZone = flat(pos - origin).Magnitude <= UL.radius
 				end
@@ -580,7 +597,15 @@ function Golf.Swing(player, direction, power)
 						player.Name, t.ball.Name, flat(pos - zone).Magnitude, flat(pos - origin).Magnitude, math.abs(pos.Y - origin.Y), tostring(t.ball.Anchored), tostring(inZone and math.abs(pos.Y - origin.Y) < 6)))
 				end
 				if inZone and math.abs(pos.Y - origin.Y) < 6 then
-					launchBall(t, dir, ult and math.max(power, 0.8) or power, player, ult and UL.launchMult or mult)
+					local shotDir = dir
+					-- 황금 퍼팅: 우리 공이면 홀컵 쪽으로 자동 조준
+					if golden and t == teams[index] then
+						local toCup = flat(hole.cup - pos)
+						if toCup.Magnitude > 0.5 then
+							shotDir = toCup.Unit
+						end
+					end
+					launchBall(t, shotDir, ult and math.max(power, 0.8) or power, player, ult and UL.launchMult or mult)
 					if perfect then
 						perfect = false -- 알림은 한 번만
 						ctx.notify(player, "🎯 퍼펙트 샷!", Color3.fromRGB(255, 230, 90))
@@ -626,7 +651,7 @@ function Golf.Swing(player, direction, power)
 		end
 
 		-- 상대 선수: 골프채가 크게 도는 반경 안이면 맞음 (버블 쉴드면 내가 튕겨 나감)
-		local reach = ult and UL.radius or CL.reach
+		local reach = ult and UL.radius or (CL.reach * (giant and 2 or 1))
 		for _, enemy in ipairs(enemiesOf(player)) do
 			local er = rootOf(enemy)
 			local eps = pstate[enemy]
@@ -638,7 +663,7 @@ function Golf.Swing(player, direction, power)
 						stun(player, -dir * 55 + UP * 30, enemy)
 						ctx.notify(player, "🫧 " .. enemy.DisplayName .. " 님의 버블에 튕겨 나갔어요!", Color3.fromRGB(150, 230, 255))
 					else
-						local k = CL.knockback * (0.6 + power) * (ult and 1.6 or mult)
+						local k = CL.knockback * (0.6 + power) * (ult and 1.6 or mult) * (giant and 2 or 1)
 						local away = ult and flat(offset).Magnitude > 0.1 and flat(offset).Unit or dir
 						stun(enemy, away * k + UP * (20 + 25 * power), player, ult and UL.stunTime or nil)
 						hitSomething = true
@@ -1178,24 +1203,241 @@ function Golf.UseSkill(player, aim)
 end
 
 ----------------------------------------------------------------------
--- 궁극기 (R): 게이지가 다 차면 켜고, 다음 스윙이 메테오 스윙
+-- 영웅 궁극기 연출·동작 도우미
+----------------------------------------------------------------------
+-- 번개 한 줄기 (하늘에서 내리꽂힘)
+local function lightningFx(pos)
+	local model = Instance.new("Model")
+	model.Name = "LightningFx"
+	local prev = pos + UP * 45 + Vector3.new(math.random(-3, 3), 0, math.random(-3, 3))
+	for seg = 1, 8 do
+		local nextP = seg == 8 and pos or (pos + UP * (45 - seg * 5.6) + Vector3.new(math.random() * 4 - 2, 0, math.random() * 4 - 2))
+		local p = Instance.new("Part")
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Material = Enum.Material.Neon
+		p.Color = Color3.fromRGB(255, 240, 120)
+		p.Size = Vector3.new(0.5, 0.5, (nextP - prev).Magnitude)
+		p.CFrame = CFrame.lookAt((prev + nextP) / 2, nextP)
+		p.Parent = model
+		prev = nextP
+	end
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 240, 150)
+	light.Range = 30
+	light.Brightness = 6
+	light.Parent = model:FindFirstChildWhichIsA("BasePart")
+	model.Parent = ballsFolder
+	task.delay(0.35, function()
+		model:Destroy()
+	end)
+end
+
+-- 공을 땅 위 원하는 자리로 옮기고 멈춤 (블랙홀·되감기)
+local function moveBallTo(t, pos)
+	local r = B.diameter / 2
+	local hit = workspace:Raycast(Vector3.new(pos.X, pos.Y + 40, pos.Z), -UP * 80, groundParams)
+	local y = hit and (hit.Position.Y + r + 0.05) or pos.Y
+	t.ball.Anchored = false
+	t.ball.CFrame = CFrame.new(pos.X, y, pos.Z)
+	stopBall(t.ball)
+	serverOwn(t.ball)
+	t.lastSafe = Vector3.new(pos.X, y, pos.Z)
+end
+
+-- 즉시 발동형 궁극기
+local INSTANT = {}
+function INSTANT.blizzard(player, index, u)
+	local root = rootOf(player)
+	local ICE = Color3.fromRGB(150, 225, 255)
+	for i, t in pairs(teams) do
+		if i ~= index and not t.sunk then
+			t.frozenUntil = os.clock() + u.seconds
+			stopBall(t.ball)
+			t.ball.Anchored = true
+			pcall(freezeFx, t.ball, u.seconds)
+			ctx.impact(t.ball.Position, ICE, true)
+			task.delay(u.seconds, function()
+				if t.ball.Parent and not t.sunk then
+					t.ball.Anchored = false
+					serverOwn(t.ball)
+				end
+			end)
+		end
+	end
+	if root then
+		ctx.shockwave(root.Position, u.radius, ICE)
+		local now = os.clock()
+		for _, enemy in ipairs(enemiesOf(player)) do
+			local er, eh = rootOf(enemy)
+			local eps = pstate[enemy]
+			if er and eh and eps and flat(er.Position - root.Position).Magnitude <= u.radius then
+				eps.slowUntil = now + u.seconds
+				eh.WalkSpeed = CL.walkSpeed * 0.45
+				ctx.impact(er.Position, ICE, false)
+			end
+		end
+	end
+end
+function INSTANT.tornado(player, index, u)
+	local root = rootOf(player)
+	if not root then
+		return
+	end
+	ctx.shockwave(root.Position, u.radius, Color3.fromRGB(220, 245, 255))
+	tornadoFx(root.Position, 1.6)
+	for _, enemy in ipairs(enemiesOf(player)) do
+		local er = rootOf(enemy)
+		if er and flat(er.Position - root.Position).Magnitude <= u.radius then
+			tornadoFx(er.Position, 1.6)
+			windTrail(er, 1.4)
+			local a = math.random() * math.pi * 2
+			stun(enemy, Vector3.new(math.cos(a), 0, math.sin(a)) * 30 + UP * 90, player, UL.stunTime)
+		end
+	end
+end
+function INSTANT.thunder(player, index, u)
+	local list = enemiesOf(player)
+	for i = #list, 2, -1 do
+		local j = math.random(1, i)
+		list[i], list[j] = list[j], list[i]
+	end
+	for k = 1, math.min(u.targets, #list) do
+		local enemy = list[k]
+		task.delay((k - 1) * 0.25, function()
+			local er = rootOf(enemy)
+			if er then
+				lightningFx(er.Position - UP * 2.5)
+				ctx.impact(er.Position, Color3.fromRGB(255, 240, 120), true)
+				stun(enemy, UP * 25, player, UL.stunTime)
+			end
+		end)
+	end
+end
+function INSTANT.phantom(player, index, u)
+	local ps = pstate[player]
+	local char = player.Character
+	local _, h = rootOf(player)
+	if not (ps and char and h) then
+		return
+	end
+	local now = os.clock()
+	ps.dodgeUntil = now + u.seconds -- 모든 공격 회피
+	h.WalkSpeed = CL.walkSpeed * u.speed
+	for _, d in ipairs(char:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name ~= "HumanoidRootPart" and d.Transparency < 1 and d:GetAttribute("PhantomT") == nil then
+			d:SetAttribute("PhantomT", d.Transparency)
+			d.Transparency = 0.85
+		end
+	end
+	ctx.impact(char:GetPivot().Position, Color3.fromRGB(120, 100, 170), true)
+	task.delay(u.seconds, function()
+		if char.Parent then
+			for _, d in ipairs(char:GetDescendants()) do
+				if d:IsA("BasePart") and d:GetAttribute("PhantomT") ~= nil then
+					d.Transparency = d:GetAttribute("PhantomT")
+					d:SetAttribute("PhantomT", nil)
+				end
+			end
+		end
+		local _, h2 = rootOf(player)
+		if h2 and (ps.slowUntil or 0) < os.clock() then
+			h2.WalkSpeed = CL.walkSpeed
+		end
+	end)
+end
+function INSTANT.giant(player, index, u)
+	local ps = pstate[player]
+	local char = player.Character
+	if not (ps and char) then
+		return
+	end
+	ps.giantUntil = os.clock() + u.seconds
+	pcall(function()
+		char:ScaleTo(u.scale)
+	end)
+	ctx.shockwave(char:GetPivot().Position, 14, Color3.fromRGB(170, 140, 110))
+	task.delay(u.seconds, function()
+		if char.Parent then
+			pcall(function()
+				char:ScaleTo(1)
+			end)
+		end
+	end)
+end
+function INSTANT.rewind(player, index, u)
+	for i, t in pairs(teams) do
+		if i ~= index and not t.sunk and t.prevPos then
+			ctx.impact(t.ball.Position, Color3.fromRGB(110, 200, 255), true)
+			moveBallTo(t, t.prevPos)
+			ctx.impact(t.ball.Position, Color3.fromRGB(110, 200, 255), false)
+			t.prevPos = nil
+			for _, m in ipairs(t.members) do
+				ctx.notify(m, "⏳ 우리 공이 되감겼어요!", Color3.fromRGB(110, 200, 255))
+			end
+		end
+	end
+end
+function INSTANT.blackhole(player, index, u)
+	local VOID = Color3.fromRGB(150, 70, 255)
+	local root = rootOf(player)
+	if root then
+		ctx.impact(root.Position, VOID, true)
+	end
+	for i, t in pairs(teams) do
+		if not t.sunk then
+			local pos = t.ball.Position
+			local toCup = flat(hole.cup - pos)
+			local d = toCup.Magnitude
+			if d > 0.5 then
+				local target
+				if i == index then
+					target = pos + toCup.Unit * math.min(u.pull, math.max(0, d - 3)) -- 우리 공: 홀컵 쪽으로 (바로 앞에서 멈춤)
+				else
+					target = pos - toCup.Unit * u.push -- 상대 공: 홀컵에서 멀리
+				end
+				ctx.impact(pos, VOID, false)
+				ctx.shockwave(pos, 8, VOID)
+				moveBallTo(t, target)
+			end
+		end
+	end
+end
+
+----------------------------------------------------------------------
+-- 궁극기 (R): 출전 영웅에 따라 다름 (Config.Heroes[hero].ult)
 ----------------------------------------------------------------------
 function Golf.UseUltimate(player)
 	local ps = pstate[player]
+	local index = playerTeam[player]
 	if ps and noCd(player) then
 		ps.gauge = UL.gaugeMax -- 쿨타임 없음: 궁극기 게이지 항상 가득
 	end
-	if not (active and ps) or ps.gauge < UL.gaugeMax or ps.stunUntil > os.clock() then
+	if not (active and ps and index) or ps.gauge < UL.gaugeMax or ps.stunUntil > os.clock() or ps.ultUntil > os.clock() then
 		return
 	end
+	local hero = Config.Heroes[ctx.heroOf(player)] or Config.Heroes[Config.DefaultHero]
+	local u = hero.ult
 	ps.gauge = noCd(player) and UL.gaugeMax or 0
 	player:SetAttribute("Gauge", math.floor(ps.gauge))
+	if INSTANT[u.kind] then
+		-- 즉시 발동
+		ctx.announce(hero.emoji .. " " .. player.DisplayName .. " 님의 " .. u.name .. "!", 2)
+		INSTANT[u.kind](player, index, u)
+		ctx.onChange()
+		return
+	end
+	-- 다음 스윙 강화 (meteor · cannon · golden)
+	ps.ultKind = u.kind
 	ps.ultUntil = os.clock() + UL.window
 	player:SetAttribute("UltActive", true)
-	ctx.notify(player, UL.name .. " 준비! " .. UL.window .. "초 안에 휘둘러요!", Color3.fromRGB(255, 200, 80))
+	ctx.notify(player, u.name .. " 준비! " .. UL.window .. "초 안에 휘둘러요!", Color3.fromRGB(255, 200, 80))
 	task.delay(UL.window, function()
 		if ps.ultUntil > 0 and ps.ultUntil <= os.clock() then
 			ps.ultUntil = 0
+			ps.ultKind = nil
 			player:SetAttribute("UltActive", false)
 		end
 	end)

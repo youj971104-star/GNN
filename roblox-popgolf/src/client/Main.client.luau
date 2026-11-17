@@ -64,6 +64,13 @@ local function act(name, arg)
 	return ok
 end
 
+-- 출전 영웅의 궁극기 정보 (이름·설명)
+local function myUlt()
+	local id = state and state.hero
+	local hero = (id and Config.Heroes[id]) or Config.Heroes[Config.DefaultHero]
+	return hero.ult
+end
+
 local function rarityColor(id)
 	return Config.RarityById[id].color
 end
@@ -564,6 +571,11 @@ task.spawn(function()
 			skillBtn.iconSkill = skillId
 		end
 		setCooldown(skillBtn, (player:GetAttribute("SkillReady") or 0) - now, skill and skill.cooldown or 10)
+		-- 궁극기 버튼 그림 = 출전 영웅 (그림 아이콘이 따로 없을 때)
+		if ultBtn.icon:IsA("TextLabel") then
+			local h = Config.Heroes[state and state.hero or ""] or Config.Heroes[Config.DefaultHero]
+			ultBtn.icon.Text = h.emoji
+		end
 		-- 궁극기: 게이지가 아래에서 위로 '비어 있는 만큼' 덮임
 		local gauge = player:GetAttribute("Gauge") or 0
 		local full = gauge >= Config.Ultimate.gaugeMax
@@ -583,7 +595,7 @@ task.spawn(function()
 		end
 		-- 기울어진 궁극기 게이지 바
 		gaugeFill.Size = UDim2.fromScale(math.clamp(gauge / Config.Ultimate.gaugeMax, 0, 1), 1)
-		gaugeText.Text = string.format("%s  %s", Config.Ultimate.name, player:GetAttribute("UltActive") and "발동!" or (full and "준비 완료 [R]" or (math.floor(gauge) .. "%")))
+		gaugeText.Text = string.format("%s  %s", myUlt().name, player:GetAttribute("UltActive") and "발동!" or (full and "준비 완료 [R]" or (math.floor(gauge) .. "%")))
 	end
 end)
 
@@ -918,7 +930,12 @@ local function oddsBlock(parent, order, rows)
 	for i, row in ipairs(rows) do
 		local names = {}
 		for _, id in ipairs(row.skins) do
-			table.insert(names, Config.Skins[id].name)
+			if row.heroes then
+				local h = Config.Heroes[id]
+				table.insert(names, h.emoji .. " " .. h.name)
+			else
+				table.insert(names, Config.Skins[id].name)
+			end
 		end
 		UIKit.label({
 			Parent = parent,
@@ -985,6 +1002,57 @@ end
 ----------------------------------------------------------------------
 -- 메뉴: 내 골프채 (컬렉션 / 조각 상점)
 ----------------------------------------------------------------------
+----------------------------------------------------------------------
+-- 🦸 영웅: 이야기 · 궁극기 · 출전 고르기 · 영웅 캡슐
+----------------------------------------------------------------------
+screen.menu("Heroes", "🦸\n영웅", Color3.fromRGB(255, 150, 60), "🦸 영웅 (궁극기가 영웅마다 달라요)", function(parent)
+	local owned = state.heroes or {}
+	local cur = Config.Heroes[state.hero] or Config.Heroes[Config.DefaultHero]
+	UIKit.paragraph(parent, "하늘에 떠 있는 팝 아일랜드의 골프 리그 '팝 컵'. 섬의 심장 '골든 홀'이 깨지며 흩어진 힘의 조각이 골퍼들에게 깃들었어요. 출전 영웅에 따라 궁극기(R)가 바뀌어요.", 1, 56)
+	UIKit.section(parent, "지금 출전: " .. cur.emoji .. " " .. cur.name .. " · " .. cur.ult.name, 2)
+	-- 영웅 캡슐
+	if state.restricted then
+		UIKit.paragraph(parent, "🔒 이 지역에서는 영웅 캡슐을 이용할 수 없어요.", 3)
+	else
+		local cap = Config.Capsules.Hero
+		UIKit.row(parent, 3, cap.name, "💎 " .. cap.cost .. " · 중복은 🧩 조각 2배", "1회 뽑기", state.gems >= cap.cost and C.green or C.gray, function()
+			act("Pull", { capsule = "Hero", count = 1 })
+		end)
+		UIKit.row(parent, 4, cap.name .. " 10연차", "💎 " .. cap.tenCost .. " · 영웅 등급 이상 1개 보장", "10회 뽑기", state.gems >= cap.tenCost and C.green or C.gray, function()
+			act("Pull", { capsule = "Hero", count = 10 })
+		end)
+		UIKit.paragraph(parent, string.format("✨ 전설 영웅 확정까지 %d회 남음", Config.Pity.legendaryAt - (state.heroPity or 0)), 5, 24)
+	end
+	-- 영웅 목록
+	for i, id in ipairs(Config.HeroOrder) do
+		local h = Config.Heroes[id]
+		local has = owned[id] == true
+		local on = state.hero == id
+		local card = new("Frame", { Parent = parent, LayoutOrder = 10 + i, Size = UDim2.new(1, -8, 0, 132), BackgroundColor3 = on and C.cardHi or C.card }, { UIKit.corner(12), UIKit.stroke(rarityColor(h.rarity), on and 3 or 1.5) })
+		local face = new("Frame", { Parent = card, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = has and h.color or Color3.fromRGB(60, 60, 70) }, { UIKit.corner(28) })
+		label({ Parent = face, Size = UDim2.fromScale(1, 1), Text = has and h.emoji or "❔" })
+		label({ Parent = card, Position = UDim2.fromOffset(76, 8), Size = UDim2.new(1, -200, 0, 24), Font = UIKit.FONT_TITLE, TextXAlignment = Enum.TextXAlignment.Left, Text = h.name .. "  ·  " .. h.title })
+		label({ Parent = card, Position = UDim2.fromOffset(76, 32), Size = UDim2.new(1, -200, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarityColor(h.rarity), Text = Config.RarityById[h.rarity].name .. " · " .. h.ult.name })
+		label({ Parent = card, Position = UDim2.fromOffset(76, 50), Size = UDim2.new(1, -200, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.sub, Text = h.ult.desc })
+		UIKit.label({ Parent = card, Position = UDim2.fromOffset(12, 74), Size = UDim2.new(1, -24, 0, 52), TextScaled = false, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.text, Text = h.lore })
+		local text, color = "🔒 캡슐에서", C.gray
+		if on then
+			text, color = "✅ 출전 중", C.gold
+		elseif has then
+			text, color = "출전", C.green
+		end
+		button({ Parent = card, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 12), Size = UDim2.fromOffset(110, 40), BackgroundColor3 = color, Text = text }, function()
+			if has and not on then
+				act("SelectHero", id)
+			end
+		end)
+	end
+	if not state.restricted then
+		UIKit.section(parent, "📊 영웅 캡슐 확률", 40)
+		oddsBlock(parent, 40, state.oddsHero or {})
+	end
+end)
+
 screen.menu("Clubs", "🏌️\n골프채", Color3.fromRGB(90, 160, 255), "🏌️ 내 골프채 컬렉션", function(parent)
 	local owned = 0
 	for _ in pairs(state.skins) do
@@ -1038,8 +1106,8 @@ screen.menu("Skills", "⚡\n스킬", Color3.fromRGB(255, 170, 50), "⚡ 스킬 �
 			end
 		end)
 	end
-	UIKit.section(parent, Config.Ultimate.name .. " (R)", 20)
-	UIKit.paragraph(parent, Config.Ultimate.desc .. ". 공을 치거나(+" .. Config.Ultimate.perBallHit .. ") 상대를 넘어뜨리면(+" .. Config.Ultimate.perKnock .. ") 게이지가 차요.", 21, 44)
+	UIKit.section(parent, myUlt().name .. " (R · 출전 영웅의 궁극기)", 20)
+	UIKit.paragraph(parent, myUlt().desc .. ". 공을 치거나(+" .. Config.Ultimate.perBallHit .. ") 상대를 넘어뜨리면(+" .. Config.Ultimate.perKnock .. ") 게이지가 차요.", 21, 44)
 end)
 
 screen.menu("Shop", "💎\n상점", Color3.fromRGB(230, 80, 170), "💎 상점", function(parent)
@@ -1131,6 +1199,23 @@ remotes:WaitForChild("GachaResult").OnClientEvent:Connect(function(results)
 		resultOverlay.BackgroundTransparency = 0.35
 	end
 	for i, r in ipairs(results) do
+		if r.hero then
+			-- 영웅 카드: 큰 그림 문자 + 이름 + 별명
+			local h = Config.Heroes[r.hero]
+			local card = new("Frame", { Parent = resultGrid, LayoutOrder = i, BackgroundColor3 = C.card, ZIndex = 32, Visible = false }, { UIKit.corner(12), UIKit.stroke(rarityColor(r.rarity), 3) })
+			ClubFX.Shine(card:FindFirstChildOfClass("UIStroke"), r.rarity)
+			local face = new("Frame", { Parent = card, ZIndex = 33, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(64, 64), BackgroundColor3 = h.color }, { UIKit.corner(32) })
+			label({ Parent = face, ZIndex = 34, Size = UDim2.fromScale(1, 1), Text = h.emoji })
+			label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 22), Font = UIKit.FONT_TITLE, Text = h.name })
+			label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 94), Size = UDim2.new(1, -8, 0, 16), TextColor3 = rarityColor(r.rarity), Text = Config.RarityById[r.rarity].name .. " 영웅" })
+			label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 110), Size = UDim2.new(1, -8, 0, 16), TextColor3 = C.sub, Text = h.title })
+			label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 128), Size = UDim2.new(1, -8, 0, 18), TextColor3 = r.new and C.gold or C.sub, Text = r.new and "✨ NEW 영웅!" or ("🧩 +" .. r.shards) })
+			task.delay(0.12 * i, function()
+				card.Visible = true
+				UIKit.pop(card)
+			end)
+			continue
+		end
 		local skin = Config.Skins[r.skin]
 		local card = new("Frame", { Parent = resultGrid, LayoutOrder = i, BackgroundColor3 = C.card, ZIndex = 32, Visible = false }, { UIKit.corner(12), UIKit.stroke(rarityColor(r.rarity), 3) })
 		ClubFX.Preview(card, r.skin, { ZIndex = 33, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.fromOffset(96, 64) })
