@@ -200,7 +200,7 @@ function UIKit.Screen(name)
 		UIKit.pop(panel)
 	end
 
-	UIKit.button({ Parent = panel, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.fromOffset(38, 38), BackgroundColor3 = C.red, Text = "✕", ZIndex = 11 }, function()
+	UIKit.button({ Parent = panel, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.fromOffset(38, 38), BackgroundColor3 = C.red, Text = "X", ZIndex = 11 }, function()
 		screen.open(nil)
 	end)
 
