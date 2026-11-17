@@ -476,7 +476,7 @@ function LobbyBuilder.Build()
 
 	-- 오른쪽: 캡슐 포스터 + 캡슐 머신
 	local rx = hw - 3
-	capsulePoster(CFrame.new(CENTER + Vector3.new(rx, 11, -14)) * CFrame.Angles(0, math.rad(-90), 0), "일반 캡슐", "🪙 코인으로 뽑기", Color3.fromRGB(80, 220, 140), "🟢")
+	capsulePoster(CFrame.new(CENTER + Vector3.new(rx, 11, -14)) * CFrame.Angles(0, math.rad(-90), 0), "일반 캡슐", "💰 코인으로 뽑기", Color3.fromRGB(80, 220, 140), "🟢")
 	capsulePoster(CFrame.new(CENTER + Vector3.new(rx, 11, 4)) * CFrame.Angles(0, math.rad(-90), 0), "프리미엄 캡슐", "신화 골프채 등장!", PAL.purple, "💎")
 	-- 캡슐 머신
 	local mpos = CENTER + Vector3.new(hw - 16, 0, 22)

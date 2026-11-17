@@ -254,7 +254,7 @@ Golf.Start({
 			if data then
 				data.stats.sinks += 1
 				data.coins += 5
-				notify(hitter, "⛳ 홀인 보너스 🪙 +5", Color3.fromRGB(255, 230, 120))
+				notify(hitter, "⛳ 홀인 보너스 💰 +5", Color3.fromRGB(255, 230, 120))
 			end
 		end
 	end,
@@ -373,7 +373,7 @@ local function questProgress(player, key, amount)
 		q.done[key] = true
 		data.coins += def.coins or 0
 		data.gems += def.gems or 0
-		notify(player, string.format("✅ 일일 미션 '%s' 완료! 🪙 +%d%s", def.name, def.coins or 0, def.gems and ("  💎 +" .. def.gems) or ""), Color3.fromRGB(140, 255, 160))
+		notify(player, string.format("✅ 일일 미션 '%s' 완료! 💰 +%d%s", def.name, def.coins or 0, def.gems and ("  💎 +" .. def.gems) or ""), Color3.fromRGB(140, 255, 160))
 	end
 end
 
@@ -507,7 +507,7 @@ local function finishMatch()
 				data.coins += coins
 				data.gems += gems
 				local result = winnerTeam == nil and "무승부" or (winnerTeam == index and "승리!" or "패배")
-				notify(p, string.format("🏁 %s · 🪙 +%d%s", result, coins, gems > 0 and ("  💎 +" .. gems) or ""), Color3.fromRGB(255, 230, 120))
+				notify(p, string.format("🏁 %s · 💰 +%d%s", result, coins, gems > 0 and ("  💎 +" .. gems) or ""), Color3.fromRGB(255, 230, 120))
 				refresh(p)
 			end
 		end

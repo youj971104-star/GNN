@@ -419,7 +419,7 @@ local function renderQuests()
 		local done = fresh and q.done and q.done[key]
 		local row = new("Frame", { Parent = questPanel, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1 })
 		label({ Parent = row, Size = UDim2.new(0.62, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, Text = (done and "✅ " or "") .. def.name })
-		label({ Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0.38, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(255, 220, 120), Text = "🪙" .. (def.coins or 0) .. (def.gems and (" 💎" .. def.gems) or "") })
+		label({ Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0.38, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(255, 220, 120), Text = "💰" .. (def.coins or 0) .. (def.gems and (" 💎" .. def.gems) or "") })
 		local back = new("Frame", { Parent = row, Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 0, 12), BackgroundColor3 = Color3.fromRGB(10, 12, 30) }, { UIKit.corner(6) })
 		new("Frame", { Parent = back, Size = UDim2.fromScale(math.clamp(n / def.goal, 0, 1), 1), BackgroundColor3 = done and C.green or CYAN }, { UIKit.corner(6) })
 		label({ Parent = back, Size = UDim2.fromScale(1, 1), ZIndex = 2, Text = n .. " / " .. def.goal })
@@ -524,7 +524,7 @@ end
 
 screen.menu("Gacha", "🎰\n캡슐", Color3.fromRGB(255, 120, 180), "🎰 캡슐 뽑기 (골프채 꾸미기)", function(parent)
 	UIKit.paragraph(parent, "캡슐에서는 골프채 꾸미기만 나와요. 실력에는 영향이 없어요! 중복은 🧩 조각이 되고, 조각으로 원하는 골프채를 직접 살 수 있어요.", 1, 44)
-	UIKit.row(parent, 2, Config.Capsules.Basic.name, "🪙 " .. Config.Capsules.Basic.cost .. " · 게임에서 번 코인으로만", "1회 뽑기",
+	UIKit.row(parent, 2, Config.Capsules.Basic.name, "💰 " .. Config.Capsules.Basic.cost .. " · 게임에서 번 코인으로만", "1회 뽑기",
 		state.coins >= Config.Capsules.Basic.cost and C.green or C.gray, function()
 			act("Pull", { capsule = "Basic", count = 1 })
 		end)
@@ -639,7 +639,7 @@ screen.menu("Shop", "💎\n상점", Color3.fromRGB(230, 80, 170), "💎 상점",
 		hidden.Starter = true
 	end
 	UIKit.shop(parent, Config, { "VIP", "AimPlus" }, { "Starter", "Gems110", "Gems500", "Gems1300" }, state.passes, {}, hidden)
-	UIKit.paragraph(parent, "🪙 코인은 판매하지 않아요. 경기에서만 얻을 수 있어요!", 50, 26)
+	UIKit.paragraph(parent, "💰 코인은 판매하지 않아요. 경기에서만 얻을 수 있어요!", 50, 26)
 end)
 
 screen.menu("Stats", "📊\n기록", Color3.fromRGB(60, 190, 120), "📊 내 기록", function(parent)
@@ -810,7 +810,7 @@ end)
 
 remotes:WaitForChild("State").OnClientEvent:Connect(function(s)
 	state = s
-	wallet.Text = string.format("🪙 %s   💎 %s   🧩 %s", Format.Short(s.coins), Format.Short(s.gems), Format.Short(s.shards))
+	wallet.Text = string.format("💰 %s   💎 %s   🧩 %s", Format.Short(s.coins), Format.Short(s.gems), Format.Short(s.shards))
 	if s.queued ~= nil and s.queued ~= queued then
 		queued = s.queued
 		refreshPlay(nil)
