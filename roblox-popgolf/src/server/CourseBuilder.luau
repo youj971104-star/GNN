@@ -209,16 +209,16 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 			local s1 = seg * (k + 1) / n
 			local mid = a + dir * ((s0 + s1) / 2)
 			stripe += 1
-			bareBox(CFrame.lookAt(mid, mid + dir), Vector3.new(W, 0.2, (s1 - s0) + 0.05))
+			bareBox(CFrame.lookAt(mid, mid + dir), Vector3.new(W, 1, (s1 - s0) + 0.05))
 			part({
 				Name = "Fairway",
-				Size = Vector3.new(W, 0.2, (s1 - s0) + 0.05),
-				CFrame = CFrame.lookAt(mid, mid + dir), -- 두께 0.2, 윗면 높이 0.1
+				Size = Vector3.new(W, 1, (s1 - s0) + 0.05),
+				CFrame = CFrame.lookAt(mid, mid + dir), -- 두께 1, 윗면 높이 0.5 (지형 표면 굴곡에 묻히지 않게)
 				Color = stripe % 2 == 0 and theme.fairA or theme.fairB,
 				Material = Enum.Material.Grass,
 			}, folder)
 		end
-		disc("Fairway", b, W / 2, 0.11, 0.2, theme.fairA, Enum.Material.Grass, folder)
+		disc("Fairway", b, W / 2, 0.51, 1, theme.fairA, Enum.Material.Grass, folder)
 		bareDisc(b, W / 2)
 	end
 	bareDisc(path[1], W / 2)
@@ -226,11 +226,11 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- 4) 티(출발대)
 	local startDir = (path[2] - path[1]).Unit
 	bareBox(CFrame.lookAt(Vector3.zero, startDir), Vector3.new(30, 0.3, 18))
-	part({ Name = "Tee", Size = Vector3.new(30, 0.3, 18), CFrame = CFrame.lookAt(Vector3.new(0, 0.15, 0), startDir * 10 + Vector3.new(0, 0.15, 0)), Color = Color3.fromRGB(150, 225, 120), Material = Enum.Material.Grass }, folder)
+	part({ Name = "Tee", Size = Vector3.new(30, 1.2, 18), CFrame = CFrame.lookAt(Vector3.new(0, 0.2, 0), startDir * 10 + Vector3.new(0, 0.2, 0)), Color = Color3.fromRGB(150, 225, 120), Material = Enum.Material.Grass }, folder)
 	for i, sx in ipairs({ -12, 12 }) do
 		local marker = CFrame.lookAt(Vector3.zero, startDir) * CFrame.new(sx, 0.8, 0)
 		local teamColor = Config.Teams[i] and Config.Teams[i].color
-		if not asset("Tee_Marker", marker * CFrame.new(0, -0.5, 0), { teamColor = teamColor, collide = false }) then
+		if not asset("Tee_Marker", marker, { teamColor = teamColor, collide = false }) then
 			part({ Name = "TeeMarker", Shape = Enum.PartType.Ball, Size = Vector3.one * 1.2, CFrame = marker, Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.SmoothPlastic, CanCollide = false }, folder)
 		end
 	end
@@ -241,9 +241,9 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	-- 5) 그린 + 홀컵 + 깃발
 	local R = CC.greenRadius
 	bareDisc(greenCenter, R + 3)
-	local green = disc("Green", greenCenter, R, 0.25, 0.5, theme.green, Enum.Material.SmoothPlastic, folder)
+	local green = disc("Green", greenCenter, R, 0.7, 1.2, theme.green, Enum.Material.SmoothPlastic, folder)
 	green.CustomPhysicalProperties = PhysicalProperties.new(1, 0.15, 0.2, 1, 1)
-	disc("GreenFringe", greenCenter, R + 3, 0.2, 0.4, theme.fairA, Enum.Material.Grass, folder).Name = "Fairway"
+	disc("GreenFringe", greenCenter, R + 3, 0.6, 1.1, theme.fairA, Enum.Material.Grass, folder).Name = "Fairway"
 	-- 그린 테두리 네온 링 (노을·밤 홀에서도 그린 경계가 보이게). 공·레이캐스트에는 안 걸림
 	local ringN = 64
 	for k = 1, ringN do
@@ -251,13 +251,13 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local a1 = k / ringN * math.pi * 2
 		local p0 = greenCenter + Vector3.new(math.cos(a0), 0, math.sin(a0)) * R
 		local p1 = greenCenter + Vector3.new(math.cos(a1), 0, math.sin(a1)) * R
-		local mid = (p0 + p1) / 2 + UP * 0.27
+		local mid = (p0 + p1) / 2 + UP * 0.72
 		part({ Name = "GreenRing", Size = Vector3.new(0.35, 0.08, (p1 - p0).Magnitude + 0.05), CFrame = CFrame.lookAt(mid, mid + (p1 - p0)), Color = theme.night and NEON_CYAN or Color3.fromRGB(235, 255, 225), Material = Enum.Material.Neon, Transparency = theme.night and 0 or 0.25, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, folder)
 	end
 	local cupAngle = rng:NextNumber(0, math.pi * 2)
 	local cup = greenCenter + Vector3.new(math.cos(cupAngle), 0, math.sin(cupAngle)) * rng:NextNumber(0, R * 0.55)
 	-- 홀컵: 그린보다 확실히 보이게 (검은 구멍 + 하얀 테두리). 공·레이캐스트에는 안 걸림 (홀인 판정은 거리로 함)
-	local cupHole = disc("Cup", cup, Config.Ball.cupRadius - 0.35, 0.33, 0.12, Color3.fromRGB(8, 8, 10), Enum.Material.SmoothPlastic, folder)
+	local cupHole = disc("Cup", cup, Config.Ball.cupRadius - 0.35, 0.78, 0.12, Color3.fromRGB(8, 8, 10), Enum.Material.SmoothPlastic, folder)
 	cupHole.CanCollide = false
 	cupHole.CanQuery = false
 	local cupRingN = 32
@@ -266,13 +266,13 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local a1 = k / cupRingN * math.pi * 2
 		local p0 = cup + Vector3.new(math.cos(a0), 0, math.sin(a0)) * Config.Ball.cupRadius
 		local p1 = cup + Vector3.new(math.cos(a1), 0, math.sin(a1)) * Config.Ball.cupRadius
-		local mid = Vector3.new((p0.X + p1.X) / 2, 0.34, (p0.Z + p1.Z) / 2)
+		local mid = Vector3.new((p0.X + p1.X) / 2, 0.79, (p0.Z + p1.Z) / 2)
 		part({ Name = "CupRing", Size = Vector3.new(0.35, 0.12, (p1 - p0).Magnitude + 0.05), CFrame = CFrame.lookAt(mid, mid + (p1 - p0)), Color = Color3.fromRGB(250, 250, 250), Material = Enum.Material.SmoothPlastic, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, folder)
 	end
 	local flag
 	-- 깃발 에셋: 홀컵 가운데가 기준점. 공이 깃대에 막히지 않게 충돌 끔
 	-- 모델러 홀컵 테두리는 대부분 땅에 묻히게 만들어져 있어서 0.12 올려 금색 링이 보이게
-	local flagAsset = asset("Flag_Cup", CFrame.new(cup.X, 0.37, cup.Z), { collide = false, teamColor = Color3.fromRGB(255, 60, 60) })
+	local flagAsset = asset("Flag_Cup", CFrame.new(cup.X, 0.82, cup.Z), { collide = false, teamColor = Color3.fromRGB(255, 60, 60) })
 	if flagAsset then
 		flag = flagAsset.parts.TeamColor_Flag or flagAsset.model:FindFirstChildWhichIsA("BasePart", true)
 		for _, d in ipairs(flagAsset.model:GetDescendants()) do
@@ -401,7 +401,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local dir = (b - a).Unit
 		local side = Vector3.new(dir.Z, 0, -dir.X) * cartSide * (W / 2 + 7)
 		local mid = (a + b) / 2 + side
-		part({ Name = "CartPath", Size = Vector3.new(5, 0.2, (b - a).Magnitude + 5), CFrame = CFrame.lookAt(mid + UP * 0.05, mid + UP * 0.05 + dir), Color = Color3.fromRGB(175, 170, 160), Material = Enum.Material.Concrete }, folder)
+		part({ Name = "CartPath", Size = Vector3.new(5, 1, (b - a).Magnitude + 5), CFrame = CFrame.lookAt(mid + UP * 0.1, mid + UP * 0.1 + dir), Color = Color3.fromRGB(175, 170, 160), Material = Enum.Material.Concrete }, folder)
 	end
 
 	-- 카트 길 시작점 옆에 세워 둔 골프 카트
@@ -420,7 +420,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		local len = (b - a).Magnitude
 		for _, sgn in ipairs({ -1, 1 }) do
 			local mid = (a + b) / 2 + side * sgn * (W / 2)
-			part({ Name = "NeonEdge", Size = Vector3.new(0.45, 0.16, len + 1), CFrame = CFrame.lookAt(mid + UP * 0.13, mid + UP * 0.13 + dir), Color = sgn > 0 and NEON_CYAN or NEON_PINK, Material = Enum.Material.Neon, Transparency = edgeTrans, CanCollide = false, CanQuery = false }, folder)
+			part({ Name = "NeonEdge", Size = Vector3.new(0.45, 0.16, len + 1), CFrame = CFrame.lookAt(mid + UP * 0.55, mid + UP * 0.55 + dir), Color = sgn > 0 and NEON_CYAN or NEON_PINK, Material = Enum.Material.Neon, Transparency = edgeTrans, CanCollide = false, CanQuery = false }, folder)
 		end
 	end
 	-- 조명탑: 코스를 따라 양쪽에 번갈아, 밤에는 스포트라이트를 페어웨이로
@@ -550,7 +550,7 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 		folder = folder,
 		theme = theme,
 		path = path,
-		tee = Vector3.new(0, 0.3, 0),
+		tee = Vector3.new(0, 0.8, 0),
 		startDir = startDir,
 		cup = cup,
 		greenCenter = greenCenter,
@@ -581,7 +581,7 @@ function CourseBuilder.BallStart(hole, teamIndex, teamCount)
 	local side = Vector3.new(hole.startDir.Z, 0, -hole.startDir.X)
 	-- 팀 인원이 많을수록 두 팀 공 사이를 넓혀서 출발 때 안 겹치게
 	local spread = (teamIndex - (teamCount + 1) / 2) * (9 + math.max(0, (hole.teamSize or 2) - 2) * 4)
-	-- 티 윗면(0.3)보다 살짝 위에 놓기 (바닥 부품에 파묻히면 물리가 잠들어 공이 안 나감)
+	-- 티 윗면(0.8)보다 살짝 위에 놓기 (바닥 부품에 파묻히면 물리가 잠들어 공이 안 나감)
 	return hole.tee + side * spread + hole.startDir * 2 + UP * (Config.Ball.diameter / 2 + 0.45)
 end
 
