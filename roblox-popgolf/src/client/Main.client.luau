@@ -415,20 +415,21 @@ end
 ----------------------------------------------------------------------
 local queued = false
 local playButton = new("TextButton", {
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, isMobile and -96 or -104),
-	Size = UDim2.fromOffset(isMobile and 220 or 280, isMobile and 56 or 64),
+	-- 휴대폰: 오른쪽 아래 샷·점프 버튼 바로 위 / PC: 아래 가운데
+	AnchorPoint = isMobile and Vector2.new(1, 1) or Vector2.new(0.5, 1),
+	Position = isMobile and UDim2.new(1, -16, 1, -116) or UDim2.new(0.5, 0, 1, -104),
+	Size = UDim2.fromOffset(isMobile and 170 or 280, isMobile and 44 or 64),
 	BackgroundColor3 = Color3.new(1, 1, 1),
 	Text = "PLAY",
 	Font = UIKit.FONT_TITLE,
 	TextScaled = true,
 	TextColor3 = Color3.fromRGB(20, 60, 20),
 	Parent = screen.gui,
-}, { UIKit.corner(14), UIKit.stroke(Color3.fromRGB(20, 40, 20), 3), new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }) })
+}, { UIKit.corner(14), UIKit.stroke(Color3.fromRGB(20, 40, 20), 3), new("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }) })
 local playGradient = new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(170, 255, 90), Color3.fromRGB(70, 200, 60)), Parent = playButton })
 local function refreshPlay(count)
 	if queued then
-		playButton.Text = string.format("대기 중 %s · 취소", count and ("(" .. count .. "명)") or "")
+		playButton.Text = string.format("대기 %s· 취소", count and (count .. "명 ") or "")
 		playGradient.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(240, 130, 40))
 	else
 		playButton.Text = "PLAY"
@@ -446,9 +447,9 @@ playButton.Activated:Connect(function()
 end)
 
 local questPanel = new("Frame", {
-	AnchorPoint = Vector2.new(0, 0.5),
-	Position = UDim2.new(0, 12, 0.45, 0),
-	Size = UDim2.fromOffset(isMobile and 190 or 240, 0),
+	AnchorPoint = isMobile and Vector2.new(0, 0) or Vector2.new(0, 0.5),
+	Position = isMobile and UDim2.new(0, 12, 0, 8) or UDim2.new(0, 12, 0.45, 0),
+	Size = UDim2.fromOffset(isMobile and 150 or 240, 0),
 	AutomaticSize = Enum.AutomaticSize.Y,
 	BackgroundColor3 = NAVY,
 	BackgroundTransparency = 0.15,
@@ -465,7 +466,8 @@ local function renderQuests()
 			c:Destroy()
 		end
 	end
-	label({ Parent = questPanel, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 24), Font = UIKit.FONT_TITLE, TextXAlignment = Enum.TextXAlignment.Left, Text = "📋 일일 미션" })
+	local QH = isMobile and 0.7 or 1 -- 휴대폰은 줄 높이를 줄임
+	label({ Parent = questPanel, LayoutOrder = 0, Size = UDim2.new(1, 0, 0, 24 * QH), Font = UIKit.FONT_TITLE, TextXAlignment = Enum.TextXAlignment.Left, Text = "📋 일일 미션" })
 	local q = state and state.quests or {}
 	local today = os.time() // 86400
 	for i, key in ipairs(Config.QuestOrder) do
@@ -473,10 +475,10 @@ local function renderQuests()
 		local fresh = q.day == today
 		local n = fresh and (q[key] or 0) or 0
 		local done = fresh and q.done and q.done[key]
-		local row = new("Frame", { Parent = questPanel, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1 })
-		label({ Parent = row, Size = UDim2.new(0.62, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, Text = (done and "✅ " or "") .. def.name })
-		label({ Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0.38, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(255, 220, 120), Text = "💰" .. (def.coins or 0) .. (def.gems and (" 💎" .. def.gems) or "") })
-		local back = new("Frame", { Parent = row, Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 0, 12), BackgroundColor3 = Color3.fromRGB(10, 12, 30) }, { UIKit.corner(6) })
+		local row = new("Frame", { Parent = questPanel, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 40 * QH), BackgroundTransparency = 1 })
+		label({ Parent = row, Size = UDim2.new(0.62, 0, 0, 20 * QH), TextXAlignment = Enum.TextXAlignment.Left, Text = (done and "✅ " or "") .. def.name })
+		label({ Parent = row, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0.38, 0, 0, 20 * QH), TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = Color3.fromRGB(255, 220, 120), Text = "💰" .. (def.coins or 0) .. (def.gems and (" 💎" .. def.gems) or "") })
+		local back = new("Frame", { Parent = row, Position = UDim2.fromOffset(0, 24 * QH), Size = UDim2.new(1, 0, 0, 12 * QH), BackgroundColor3 = Color3.fromRGB(10, 12, 30) }, { UIKit.corner(6) })
 		new("Frame", { Parent = back, Size = UDim2.fromScale(math.clamp(n / def.goal, 0, 1), 1), BackgroundColor3 = done and C.green or CYAN }, { UIKit.corner(6) })
 		label({ Parent = back, Size = UDim2.fromScale(1, 1), ZIndex = 2, Text = n .. " / " .. def.goal })
 	end
@@ -486,7 +488,15 @@ end
 local function menuHorizontal(on)
 	local f = screen.menuFrame
 	local layout = f:FindFirstChildOfClass("UIListLayout")
-	if on then
+	if on and isMobile then
+		-- 휴대폰 로비: 왼쪽 아래 작은 가로 줄 (오른쪽 아래는 샷·점프·PLAY 버튼 자리)
+		f.AnchorPoint = Vector2.new(0, 1)
+		f.Position = UDim2.new(0, 12, 1, -10)
+		f.Size = UDim2.fromOffset(420, 54)
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	elseif on then
 		f.AnchorPoint = Vector2.new(0.5, 1)
 		f.Position = UDim2.new(0.5, 0, 1, -12)
 		f.Size = UDim2.fromOffset(600, 70)
@@ -496,7 +506,7 @@ local function menuHorizontal(on)
 	else
 		f.AnchorPoint = Vector2.new(0, 0.5)
 		f.Position = UDim2.new(0, 10, 0.5, 0)
-		f.Size = UDim2.fromOffset(92, 480)
+		f.Size = UDim2.fromOffset(isMobile and 60 or 92, 480)
 		layout.FillDirection = Enum.FillDirection.Vertical
 		layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		layout.VerticalAlignment = Enum.VerticalAlignment.Center
@@ -520,6 +530,9 @@ local function applyLayout(inGame)
 		playButton.Visible = false
 		questPanel.Visible = false
 		setAbilitiesVisible(true)
+		if isMobile then
+			hint.Position = UDim2.new(0.5, 0, 1, -54)
+		end
 	else
 		-- 로비: PLAY 버튼, 미션, 아래 메뉴 줄
 		menuHorizontal(true)
@@ -528,6 +541,9 @@ local function applyLayout(inGame)
 		playButton.Visible = true
 		questPanel.Visible = true
 		setAbilitiesVisible(false)
+		if isMobile then
+			hint.Position = UDim2.new(0.5, 0, 1, -72) -- 아래 메뉴 줄 위
+		end
 	end
 end
 
@@ -543,7 +559,7 @@ Shot.Start({
 		jumpButton.Visible = playing
 		shotButton.BackgroundColor3 = ballNear and C.green or Color3.fromRGB(255, 130, 80)
 		if practice then
-			hint.Text = "🏌️ 연습 스윙: 꾹 눌렀다 떼서 장착한 골프채 효과를 확인해 보세요 (🏌️ 골프채 메뉴에서 장착)"
+			hint.Text = isMobile and "🏌️ 연습 스윙: 꾹 눌렀다 떼서 골프채 효과 확인" or "🏌️ 연습 스윙: 꾹 눌렀다 떼서 장착한 골프채 효과를 확인해 보세요 (🏌️ 골프채 메뉴에서 장착)"
 		elseif not playing then
 			hint.Text = ""
 		elseif player:GetAttribute("Stunned") then
@@ -908,6 +924,9 @@ end)
 local NAV_ICON = { Gacha = "NavGacha", Clubs = "NavClubs", Skills = "NavSkills", Shop = "NavShop", Stats = "NavStats" }
 for key, m in pairs(screen.menuButtons) do
 	local b = m.button
+	if isMobile then
+		b.Size = UDim2.fromOffset(60, 50)
+	end
 	local accent = b.BackgroundColor3
 	b.BackgroundColor3 = NAVY
 	local stroke = b:FindFirstChildOfClass("UIStroke")
