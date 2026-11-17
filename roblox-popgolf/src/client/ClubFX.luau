@@ -232,6 +232,112 @@ function SWING.panda(pos, fx, n)
 	emitAt(pos, { texture = TEXTURES.smoke, color = ColorSequence.new(Color3.new(1, 1, 1)), count = math.ceil(n / 2), speed = NumberRange.new(5, 10), size = NumberSequence.new(1.2, 2.5), transparency = NumberSequence.new(0.2, 1), light = 0.2, life = NumberRange.new(0.5, 0.9) })
 end
 
+-- ⬛🟨 블랙 골드 (신화): 검은 구체가 빨려 들었다가 → 금빛 폭발, 바닥에 금빛 균열, 세로 금빛 베기, 검은 연기
+local GOLD = Color3.fromRGB(255, 205, 80)
+function SWING.blackgold(pos, fx, n)
+	local core = glowPart(Enum.PartType.Ball, Vector3.one * 7, Color3.fromRGB(10, 10, 12))
+	core.Material = Enum.Material.Glass
+	core.Transparency = 0.15
+	core.CFrame = CFrame.new(pos)
+	core.Parent = fxFolder
+	TweenService:Create(core, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Size = Vector3.one * 0.4 }):Play()
+	Debris:AddItem(core, 0.13)
+	task.delay(0.12, function()
+		local ground = pos - Vector3.new(0, 1.2, 0)
+		-- 바닥 금빛 균열 (지그재그로 사방 8갈래)
+		for k = 1, 8 do
+			local a = k / 8 * math.pi * 2 + math.random() * 0.4
+			local prev = ground
+			for seg = 1, 3 do
+				local nextP = ground + Vector3.new(math.cos(a + (math.random() - 0.5) * 0.5), 0, math.sin(a + (math.random() - 0.5) * 0.5)) * seg * 2.3
+				local len = (nextP - prev).Magnitude
+				local crack = glowPart(Enum.PartType.Block, Vector3.new(0.22, 0.08, len), GOLD)
+				crack.CFrame = CFrame.lookAt((prev + nextP) / 2, nextP)
+				crack.Parent = fxFolder
+				TweenService:Create(crack, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Transparency = 1 }):Play()
+				Debris:AddItem(crack, 1)
+				prev = nextP
+			end
+		end
+		-- 세로 금빛 베기 (얇은 빛 판이 위아래로 쫙 펴졌다 사라짐)
+		local slash = glowPart(Enum.PartType.Block, Vector3.new(0.12, 1, 0.9), GOLD)
+		slash.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0)) * CFrame.Angles(0, math.random() * math.pi, math.rad(18))
+		slash.Parent = fxFolder
+		TweenService:Create(slash, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = Vector3.new(0.05, 14, 0.25), Transparency = 1 }):Play()
+		Debris:AddItem(slash, 0.4)
+		flatRing(pos, GOLD, 24, 0.5, 0, 0.1)
+		flatRing(pos, Color3.fromRGB(20, 20, 20), 16, 0.6, 0.05, 0.3)
+		emitAt(pos, { texture = TEXTURES.smoke, color = ColorSequence.new(Color3.fromRGB(15, 15, 18)), count = math.ceil(n / 3), speed = NumberRange.new(6, 12), size = NumberSequence.new(1.5, 3.5), transparency = NumberSequence.new(0.1, 1), light = 0, life = NumberRange.new(0.6, 1.1) })
+		emitAt(pos, { color = ColorSequence.new(Color3.fromRGB(255, 240, 170), GOLD), count = n, speed = NumberRange.new(16, 30), size = NumberSequence.new(0.45, 0), drag = 4, life = NumberRange.new(0.4, 0.9) })
+		-- 위로 천천히 오르는 금빛 불씨
+		emitAt(pos, { color = ColorSequence.new(GOLD), count = math.ceil(n / 3), speed = NumberRange.new(1, 3), size = NumberSequence.new(0.3, 0), accel = Vector3.new(0, 6, 0), life = NumberRange.new(1, 1.6), drag = 1 })
+	end)
+end
+
+-- 👑 VIP 왕관: 하늘에서 빛기둥이 내리꽂히고, 빛나는 금 왕관이 돌며 솟아오름, 보라·금 색종이
+local PURPLE = Color3.fromRGB(170, 90, 255)
+function SWING.royal(pos, fx, n)
+	-- 빛기둥
+	local pillar = glowPart(Enum.PartType.Cylinder, Vector3.new(60, 3.5, 3.5), Color3.fromRGB(255, 230, 140))
+	pillar.Transparency = 0.25
+	pillar.CFrame = CFrame.new(pos + Vector3.new(0, 30, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	pillar.Parent = fxFolder
+	TweenService:Create(pillar, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = Vector3.new(60, 0.2, 0.2), Transparency = 1 }):Play()
+	Debris:AddItem(pillar, 0.65)
+	-- 왕관 (고리 + 뾰족 6개 + 끝마다 보석)
+	local crown = {}
+	local base = glowPart(Enum.PartType.Cylinder, Vector3.new(0.5, 3.2, 3.2), GOLD)
+	base.Material = Enum.Material.Foil
+	table.insert(crown, { part = base, off = CFrame.Angles(0, 0, math.rad(90)) })
+	for k = 1, 6 do
+		local a = k / 6 * math.pi * 2
+		local spike = glowPart(Enum.PartType.Block, Vector3.new(0.35, 1.1, 0.35), GOLD)
+		spike.Material = Enum.Material.Foil
+		table.insert(crown, { part = spike, off = CFrame.new(math.cos(a) * 1.45, 0.75, math.sin(a) * 1.45) * CFrame.Angles(0, -a, math.rad(-12)) })
+		local gem = glowPart(Enum.PartType.Ball, Vector3.one * 0.38, k % 2 == 0 and PURPLE or Color3.fromRGB(255, 80, 120))
+		table.insert(crown, { part = gem, off = CFrame.new(math.cos(a) * 1.5, 1.4, math.sin(a) * 1.5) })
+	end
+	for _, c in ipairs(crown) do
+		c.part.Parent = fxFolder
+	end
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 220, 120)
+	light.Range = 16
+	light.Brightness = 3
+	light.Parent = base
+	local t0 = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local t = (os.clock() - t0) / 1.3
+		if t >= 1 then
+			conn:Disconnect()
+			for _, c in ipairs(crown) do
+				c.part:Destroy()
+			end
+			return
+		end
+		local grow = 0.4 + 0.8 * (1 - (1 - math.min(t * 2, 1)) ^ 3)
+		local center = CFrame.new(pos + Vector3.new(0, 2 + t * 5, 0)) * CFrame.Angles(0, t * math.pi * 2.5, 0)
+		local fade = t < 0.6 and 0 or (t - 0.6) / 0.4
+		for _, c in ipairs(crown) do
+			local o = c.off
+			c.part.CFrame = center * CFrame.new(o.Position * grow) * o.Rotation
+			c.part.Transparency = fade
+		end
+		light.Brightness = 3 * (1 - fade)
+	end)
+	-- 색종이 + 고리
+	throwBits(pos + Vector3.new(0, 2, 0), math.ceil(n / 2), 20, function(i)
+		local colors = { GOLD, PURPLE, Color3.new(1, 1, 1) }
+		local p = glowPart(Enum.PartType.Block, Vector3.new(0.4, 0.05, 0.25), colors[(i % 3) + 1])
+		p.Material = Enum.Material.SmoothPlastic
+		return p
+	end)
+	flatRing(pos, PURPLE, 18, 0.5, 0, 0.15)
+	flatRing(pos, GOLD, 26, 0.7, 0.08, 0.2)
+	emitAt(pos, { color = ColorSequence.new(Color3.fromRGB(255, 240, 170), PURPLE), count = n, speed = NumberRange.new(10, 20) })
+end
+
 local function burst(e, full)
 	local fx = e.fx
 	if e.burstEmitter then
