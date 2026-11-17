@@ -391,6 +391,94 @@ function Club.RemoveCap(player)
 	end
 end
 
+----------------------------------------------------------------------
+-- 🦸 영웅 외형 (Assets > Hero_<영웅 id>): 이름 앞부분으로 붙는 자리를 정함
+--   Head_  → 머리 정수리 (모델의 Point_Head 기준)
+--   Back_ / Waist_ / Float_ → 몸통 등 (Point_Back 기준, Float_ 은 Point_Float 이 있으면 그 기준)
+--   이름 안에 TeamColor_ = 팀 색 (로비에서는 영웅 색), Neon_<색> = 빛남
+--   Pinwheel · ClockHand · Ring 이 들어간 부품은 빙글빙글, Float_ 은 둥실둥실 (클라이언트 ClubFX 가 움직임)
+----------------------------------------------------------------------
+local NEON_WORDS = {
+	Orange = Color3.fromRGB(255, 140, 50), Cyan = Color3.fromRGB(60, 220, 255), Pink = Color3.fromRGB(255, 90, 180),
+	Yellow = Color3.fromRGB(255, 230, 60), Purple = Color3.fromRGB(170, 90, 255), Gold = Color3.fromRGB(255, 205, 80),
+	White = Color3.fromRGB(240, 245, 255), Green = Color3.fromRGB(80, 255, 140), Red = Color3.fromRGB(255, 70, 70),
+}
+local SPIN_WORDS = { "Pinwheel", "ClockHand", "Ring" }
+
+function Club.RemoveHeroLook(player)
+	local character = player.Character
+	local look = character and character:FindFirstChild("HeroLook")
+	if look then
+		look:Destroy()
+	end
+end
+
+function Club.GiveHeroLook(player, heroId, teamColor)
+	local character = player.Character
+	local head = character and character:FindFirstChild("Head")
+	local torso = character and (character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso"))
+	if not (head and torso) then
+		return
+	end
+	Club.RemoveHeroLook(player)
+	local hero = Config.Heroes[heroId]
+	local h = hero and AssetLib.Spawn("Hero_" .. heroId, CFrame.new(), { anchored = false, collide = false })
+	if not h then
+		return
+	end
+	local pHead, pBack = h.points.Point_Head, h.points.Point_Back
+	local pFloat = h.points.Point_Float or pBack
+	local pWaist = h.points.Point_Waist or pBack
+	-- 캐릭터 쪽 기준 자리: 머리 정수리 / 등 가운데 (R6 몸통은 가슴이 가운데보다 조금 위)
+	local headAnchor = CFrame.new(0, head.Size.Y / 2, 0)
+	local backAnchor = CFrame.new(0, torso.Name == "Torso" and 0.2 or 0, torso.Size.Z / 2)
+	local folder = Instance.new("Model")
+	folder.Name = "HeroLook"
+	folder:SetAttribute("Hero", heroId)
+	for _, p in ipairs(h.model:GetDescendants()) do
+		if p:IsA("BasePart") and not p.Name:find("^Point_") then
+			local n = p.Name
+			local slot = n:match("^(%a+)_") or "Back"
+			local base, anchor, ref = torso, backAnchor, pBack
+			if slot == "Head" then
+				base, anchor, ref = head, headAnchor, pHead
+			elseif slot == "Float" then
+				ref = pFloat
+				p:SetAttribute("Bob", true)
+			elseif slot == "Waist" then
+				ref = pWaist
+			end
+			if not ref then
+				continue
+			end
+			-- 색·재질
+			if n:find("TeamColor_") then
+				p.Color = teamColor or hero.color
+				p.Material = Enum.Material.SmoothPlastic
+			elseif n:find("Neon_") then
+				p.Material = Enum.Material.Neon
+				for word, c in pairs(NEON_WORDS) do
+					if n:find("Neon_" .. word) then
+						p.Color = c
+					end
+				end
+			end
+			for _, w in ipairs(SPIN_WORDS) do
+				if n:find(w) then
+					p:SetAttribute("Spin", 2.5) -- 초당 회전(라디안)
+				end
+			end
+			-- 모델 기준점(Point_)에서의 상대 위치 그대로 캐릭터 기준 자리에 붙임
+			local offset = ref:ToObjectSpace(p.CFrame)
+			p.Anchored = false
+			p.Parent = folder
+			weldTo(base, p, anchor * offset)
+		end
+	end
+	h.model:Destroy()
+	folder.Parent = character
+end
+
 function Club.Remove(player)
 	local character = player.Character
 	if not character then

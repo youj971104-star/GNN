@@ -343,7 +343,40 @@ local function impact(pos, color, big, kind, radius)
 	end
 end
 
+-- 영웅 외형의 움직이는 부품 (서버가 붙인 HeroLook 안: Spin = 빙글빙글, Bob = 둥실둥실)
+-- 용접(Weld)의 C0 를 각 화면에서 조금씩 바꿔서 움직임 → 서버 부담 없음
+local function animateHeroLooks()
+	local baseC0 = setmetatable({}, { __mode = "k" })
+	RunService.RenderStepped:Connect(function()
+		local t = os.clock()
+		for _, p in ipairs(Players:GetPlayers()) do
+			local look = p.Character and p.Character:FindFirstChild("HeroLook")
+			if look then
+				for _, part in ipairs(look:GetChildren()) do
+					local spin, bob = part:GetAttribute("Spin"), part:GetAttribute("Bob")
+					if spin or bob then
+						local w = part:FindFirstChildOfClass("Weld")
+						if w then
+							baseC0[w] = baseC0[w] or w.C0
+							local c = baseC0[w]
+							if bob then
+								c = c + Vector3.new(0, math.sin(t * 2.2) * 0.18, 0)
+								c *= CFrame.Angles(0, t * 1.2, 0)
+							end
+							if spin then
+								c *= CFrame.Angles(0, 0, t * spin)
+							end
+							w.C0 = c
+						end
+					end
+				end
+			end
+		end
+	end)
+end
+
 function VFX.Start()
+	animateHeroLooks()
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")
 	remotes:WaitForChild("Impact").OnClientEvent:Connect(impact)
 	local function watchPlayer(p)

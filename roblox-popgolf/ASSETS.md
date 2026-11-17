@@ -83,3 +83,8 @@ FBX를 가져온 뒤 모델 이름을 `FX_Meteor` 로 바꿔서 `Assets` 폴더�
 ## 9. Meshy AI 블랙 골드 드라이버 (통째 모델 골프채)
 
 모델 이름을 `Club_Driver_BlackGold` 로 바꿔 `Assets` 에 넣으면 신화 등급 스킨 **블랙 골드 드라이버**의 모양이 됩니다 (뽑기에서 나옴). 손잡이~헤드 전체가 이 모델로 바뀌고, 길이는 캐릭터에 맞게 자동으로 맞춥니다. 헤드가 엉뚱한 방향을 보면 `Config.Skins.BlackGold.modelYaw` 를 90 / 180 / -90 으로 바꿔 주세요.
+
+## 10. 영웅 외형 (Hero_<영웅 id>)
+
+영웅마다 FBX 하나 (`Hero_Leo`, `Hero_Yuki`, `Hero_Gale` …). 가져온 모델 이름을 그대로 `Hero_<id>` 로 `Assets` 에 넣으면, 그 영웅으로 출전한 캐릭터에 자동으로 붙습니다 (로비: 영웅 색 / 경기: `TeamColor_` 부품이 팀 색).
+부품 이름 앞부분으로 자리를 정함: `Head_` 머리 정수리(Point_Head 기준), `Back_`·`Waist_` 등(Point_Back 기준), `Float_` 둥실둥실 반주인(Point_Float 기준). Pinwheel·ClockHand·Ring 이 들어간 부품은 빙글빙글 돕니다.

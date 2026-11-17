@@ -55,7 +55,7 @@ Config.StudioUnlockAllSkins = true
 -- 게임 주인(그룹 게임이면 그룹 소유자)은 자동으로 운영자. 다른 사람을 추가하려면 로블록스 UserId 를 넣기
 Config.Admins = {}
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1122b"
+Config.Build = "1123a"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀

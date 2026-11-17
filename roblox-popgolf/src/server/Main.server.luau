@@ -548,6 +548,8 @@ local function sendToLobby(player)
 	end
 	Club.RemoveCap(player)
 	player:SetAttribute("Team", nil)
+	local ldata = DataService.Get(player)
+	Club.GiveHeroLook(player, ldata and ldata.hero or Config.DefaultHero, nil) -- 로비: 영웅 색
 	player:SetAttribute("UltActive", false)
 	player:SetAttribute("Powered", false)
 	player:SetAttribute("Gauge", 0)
@@ -665,6 +667,7 @@ local function playMatch(participants, presetTeams)
 			local data = DataService.Get(p)
 			Club.Give(p, data and data.equipped or "White")
 			Club.GiveCap(p, Config.Teams[index].color)
+			Club.GiveHeroLook(p, data and data.hero or Config.DefaultHero, Config.Teams[index].color)
 			notify(p, "당신은 " .. Config.Teams[index].name .. "!", Config.Teams[index].color)
 		end
 	end
@@ -1012,6 +1015,9 @@ local function onPlayerAdded(player)
 		end
 		-- 골프채는 로비에서도 항상 들고 있음 (장착한 스킨 바로 보이게)
 		Club.Give(player, data.equipped)
+		-- 출전 영웅 외형 (경기 중이면 팀 색)
+		local team = player:GetAttribute("Team")
+		Club.GiveHeroLook(player, data.hero or Config.DefaultHero, team and Config.Teams[team].color or nil)
 	end
 	player.CharacterAdded:Connect(onCharacter)
 	if player.Character then
@@ -1073,6 +1079,8 @@ function actions.SelectHero(player, data, heroId)
 	end
 	data.hero = heroId
 	player:SetAttribute("Hero", heroId)
+	local team = player:GetAttribute("Team")
+	Club.GiveHeroLook(player, heroId, team and Config.Teams[team].color or nil)
 	return true, string.format("%s %s 출전! 궁극기: %s", hero.emoji, hero.name, hero.ult.name)
 end
 
