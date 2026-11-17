@@ -283,15 +283,15 @@ Config.ShardPrice = { Common = 10, Rare = 30, Epic = 100, Legendary = 400, Mythi
 --    코인을 돈으로 살 수 있게 되면 일반 캡슐도 유료 확률형 아이템이 되기 때문입니다.
 ----------------------------------------------------------------------
 Config.GamePasses = {
-	VIP = { id = 0, name = "👑 VIP", desc = "VIP 전용 왕관 골프채 + 채팅 태그 + 매일 젬 +20", price = 299 },
-	AimPlus = { id = 0, name = "🎯 정밀 조준", desc = "샷 조준선이 2배 길게 보여요", price = 149 },
+	VIP = { id = 2089138053, name = "👑 VIP", desc = "VIP 전용 왕관 골프채 + 채팅 태그 + 매일 젬 +20", price = 299 },
+	AimPlus = { id = 2088406112, name = "🎯 정밀 조준", desc = "샷 조준선이 2배 길게 보여요", price = 149 },
 }
 
 Config.Products = {
-	Gems110 = { id = 0, name = "💎 젬 110", desc = "프리미엄 캡슐 2번", price = 49, gems = 110 },
-	Gems500 = { id = 0, name = "💎 젬 500", desc = "10연차 + 50 보너스", price = 199, gems = 500 },
-	Gems1300 = { id = 0, name = "💎 젬 1300", desc = "가장 이득!", price = 449, gems = 1300 },
-	Starter = { id = 0, name = "🎁 스타터 팩 (1회)", desc = "젬 300 + 희귀 '바다' 골프채 확정", price = 99, gems = 300, skin = "Ocean", once = true },
+	Gems110 = { id = 3731739437, name = "💎 젬 110", desc = "프리미엄 캡슐 2번", price = 49, gems = 110 },
+	Gems500 = { id = 3731739550, name = "💎 젬 500", desc = "10연차 + 50 보너스", price = 199, gems = 500 },
+	Gems1300 = { id = 3731739684, name = "💎 젬 1300", desc = "가장 이득!", price = 449, gems = 1300 },
+	Starter = { id = 3731739280, name = "🎁 스타터 팩 (1회)", desc = "젬 300 + 희귀 '바다' 골프채 확정", price = 99, gems = 300, skin = "Ocean", once = true },
 }
 
 -- 프리미엄 회원 혜택은 코인 대신 '매일 젬'으로 (코인을 어떤 식으로든 돈과 연결하지 않기 위해)
