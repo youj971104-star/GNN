@@ -220,6 +220,25 @@ local function styleParts(model, opts)
 	return parts
 end
 
+-- 부품들을 모두 감싸는 상자(축 정렬)의 밑면 가운데
+local function boundsBottomCenter(parts)
+	local minV = Vector3.new(math.huge, math.huge, math.huge)
+	local maxV = -minV
+	for _, p in ipairs(parts) do
+		local h = p.Size / 2
+		for _, sx in ipairs({ -1, 1 }) do
+			for _, sy in ipairs({ -1, 1 }) do
+				for _, sz in ipairs({ -1, 1 }) do
+					local w = p.CFrame:PointToWorldSpace(Vector3.new(h.X * sx, h.Y * sy, h.Z * sz))
+					minV = minV:Min(w)
+					maxV = maxV:Max(w)
+				end
+			end
+		end
+	end
+	return Vector3.new((minV.X + maxV.X) / 2, minV.Y, (minV.Z + maxV.Z) / 2)
+end
+
 -- 이름이 name 인 에셋을 cf(기준점 = 바닥 가운데, 정면 = -Z)에 놓습니다.
 -- opts: parent, teamColor, scale, collide(기본 true), anchored(기본 true)
 -- 반환: { model, parts = {이름 → 부품}, points = {Point_이름 → CFrame} } 또는 에셋이 없으면 nil
@@ -242,28 +261,25 @@ function AssetLib.Spawn(name, cf, opts)
 		return nil
 	end
 
-	-- 지금 놓인 상태에서 모든 부품을 감싸는 상자 → 밑면 가운데 → 기준점
-	local minV = Vector3.new(math.huge, math.huge, math.huge)
-	local maxV = -minV
-	for _, p in ipairs(parts) do
-		local h = p.Size / 2
-		for _, sx in ipairs({ -1, 1 }) do
-			for _, sy in ipairs({ -1, 1 }) do
-				for _, sz in ipairs({ -1, 1 }) do
-					local w = p.CFrame:PointToWorldSpace(Vector3.new(h.X * sx, h.Y * sy, h.Z * sz))
-					minV = minV:Min(w)
-					maxV = maxV:Max(w)
-				end
-			end
-		end
+	-- 가져온 모델에 대표 부품(PrimaryPart)이 잡혀 있으면 기준점 설정이 무시될 수 있어서 비움
+	model.PrimaryPart = nil
+	local offset = AssetLib.ORIGIN[name] or Vector3.zero
+	local bottomCenter = boundsBottomCenter(parts)
+	model.WorldPivot = CFrame.new(bottomCenter - offset)
+	local scale = opts.scale or 1
+	if scale ~= 1 then
+		model:ScaleTo(scale)
 	end
-	local bottomCenter = Vector3.new((minV.X + maxV.X) / 2, minV.Y, (minV.Z + maxV.Z) / 2)
-	local origin = bottomCenter - (AssetLib.ORIGIN[name] or Vector3.zero)
-	model.WorldPivot = CFrame.new(origin)
-	if opts.scale and opts.scale ~= 1 then
-		model:ScaleTo(opts.scale)
+	cf = cf or CFrame.new()
+	model:PivotTo(cf)
+	-- 놓은 뒤 실제 모양을 다시 재서, 바닥 가운데가 정확히 cf 기준점 자리에 오도록 보정 (땅에 묻히거나 뜨지 않게)
+	local want = (cf * CFrame.new(offset * scale)).Position
+	local got = boundsBottomCenter(parts)
+	-- 높이만 보정 (돌려 놓은 모델은 감싸는 상자 가운데가 달라져서 앞뒤·좌우는 기준점을 그대로 믿음)
+	local dy = want.Y - got.Y
+	if math.abs(dy) > 0.02 then
+		model:TranslateBy(Vector3.new(0, dy, 0))
 	end
-	model:PivotTo(cf or CFrame.new())
 
 	local handle = { model = model, parts = {}, points = {} }
 	for _, p in ipairs(parts) do
