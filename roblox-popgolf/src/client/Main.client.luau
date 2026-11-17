@@ -11,6 +11,8 @@ local UIKit = require(script.Parent.UIKit)
 local Shot = require(script.Parent.Shot)
 local ClubFX = require(script.Parent.ClubFX)
 local VFX = require(script.Parent.VFX)
+local CameraView = require(script.Parent.CameraView)
+CameraView.Start()
 
 local C = UIKit.C
 local new, label, button = UIKit.new, UIKit.label, UIKit.button
