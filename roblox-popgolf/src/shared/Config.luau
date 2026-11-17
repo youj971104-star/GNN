@@ -37,7 +37,7 @@ Config.Ball = {
 -- 휘두르기 (공치기 + 사람 치기가 하나의 동작)
 -- 꾹 누르면 골프채가 뒤로 올라가며 힘이 모이고, 떼면 휘두름 → 앞에 있는 공(우리 팀/상대 팀 모두)과 상대 선수가 맞음
 -- 공이 안 맞을 때 원인 찾기용: true 면 스윙마다 Output 창에 판정 내용을 찍음 (출시 전 false 로)
-Config.DebugShots = true
+Config.DebugShots = false
 
 Config.Club = {
 	chargeCycle = 1.4, -- 힘 게이지가 0→100%→0 한 번 왕복하는 시간(초)

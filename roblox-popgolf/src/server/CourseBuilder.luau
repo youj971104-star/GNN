@@ -18,7 +18,7 @@ local THEMES = {
 	{ name = "봄 골프장", fairA = Color3.fromRGB(120, 205, 90), fairB = Color3.fromRGB(105, 190, 80), rough = Color3.fromRGB(70, 140, 60), green = Color3.fromRGB(140, 225, 110), leaves = Color3.fromRGB(70, 160, 70), clock = 13 },
 	{ name = "바닷가 코스", fairA = Color3.fromRGB(150, 200, 100), fairB = Color3.fromRGB(135, 185, 90), rough = Color3.fromRGB(200, 190, 130), green = Color3.fromRGB(160, 220, 120), leaves = Color3.fromRGB(60, 150, 90), clock = 15 },
 	{ name = "가을 단풍 코스", fairA = Color3.fromRGB(150, 190, 80), fairB = Color3.fromRGB(135, 175, 70), rough = Color3.fromRGB(110, 120, 50), green = Color3.fromRGB(160, 210, 100), leaves = Color3.fromRGB(230, 120, 50), clock = 16 },
-	{ name = "노을 코스", fairA = Color3.fromRGB(110, 180, 90), fairB = Color3.fromRGB(95, 165, 80), rough = Color3.fromRGB(60, 110, 60), green = Color3.fromRGB(130, 200, 110), leaves = Color3.fromRGB(200, 90, 120), clock = 18 },
+	{ name = "노을 코스", fairA = Color3.fromRGB(110, 180, 90), fairB = Color3.fromRGB(95, 165, 80), rough = Color3.fromRGB(60, 110, 60), green = Color3.fromRGB(130, 200, 110), leaves = Color3.fromRGB(200, 90, 120), clock = 17.2 },
 }
 -- 마지막 홀 전용: 밤 경기장 (조명탑·네온이 가장 돋보임)
 local NIGHT = { name = "🌙 네온 나이트", fairA = Color3.fromRGB(45, 125, 70), fairB = Color3.fromRGB(38, 110, 62), rough = Color3.fromRGB(30, 75, 50), green = Color3.fromRGB(70, 175, 100), leaves = Color3.fromRGB(110, 70, 170), clock = 21, night = true }
@@ -228,6 +228,16 @@ function CourseBuilder.Build(holeNumber, seed, teamSize)
 	local green = disc("Green", greenCenter, R, 0.25, 0.5, theme.green, Enum.Material.SmoothPlastic, folder)
 	green.CustomPhysicalProperties = PhysicalProperties.new(1, 0.15, 0.2, 1, 1)
 	disc("GreenFringe", greenCenter, R + 3, 0.2, 0.4, theme.fairA, Enum.Material.Grass, folder).Name = "Fairway"
+	-- 그린 테두리 네온 링 (노을·밤 홀에서도 그린 경계가 보이게). 공·레이캐스트에는 안 걸림
+	local ringN = 64
+	for k = 1, ringN do
+		local a0 = (k - 1) / ringN * math.pi * 2
+		local a1 = k / ringN * math.pi * 2
+		local p0 = greenCenter + Vector3.new(math.cos(a0), 0, math.sin(a0)) * R
+		local p1 = greenCenter + Vector3.new(math.cos(a1), 0, math.sin(a1)) * R
+		local mid = (p0 + p1) / 2 + UP * 0.27
+		part({ Name = "GreenRing", Size = Vector3.new(0.35, 0.08, (p1 - p0).Magnitude + 0.05), CFrame = CFrame.lookAt(mid, mid + (p1 - p0)), Color = theme.night and NEON_CYAN or Color3.fromRGB(235, 255, 225), Material = Enum.Material.Neon, Transparency = theme.night and 0 or 0.25, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false }, folder)
+	end
 	local cupAngle = rng:NextNumber(0, math.pi * 2)
 	local cup = greenCenter + Vector3.new(math.cos(cupAngle), 0, math.sin(cupAngle)) * rng:NextNumber(0, R * 0.55)
 	disc("Cup", cup, Config.Ball.cupRadius, 0.27, 0.1, Color3.fromRGB(15, 15, 15), Enum.Material.SmoothPlastic, folder).CanCollide = false
