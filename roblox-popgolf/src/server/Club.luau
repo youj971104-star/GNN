@@ -336,6 +336,11 @@ function Club.GiveCap(player, color)
 		return
 	end
 	Club.RemoveCap(player)
+	-- 왕관·마법사 모자처럼 모자 자체가 영웅 외형인 경우 팀 모자는 씌우지 않음 (팀 색은 모자 띠·쿠션으로 표시)
+	local look = character:FindFirstChild("HeroLook")
+	if look and look:GetAttribute("HatReplace") then
+		return
+	end
 	local cap = Instance.new("Model")
 	cap.Name = "TeamCap"
 	local crown = Instance.new("Part")
@@ -403,9 +408,13 @@ local NEON_WORDS = {
 	Yellow = Color3.fromRGB(255, 230, 60), Purple = Color3.fromRGB(170, 90, 255), Gold = Color3.fromRGB(255, 205, 80),
 	White = Color3.fromRGB(240, 245, 255), Green = Color3.fromRGB(80, 255, 140), Red = Color3.fromRGB(255, 70, 70),
 }
-local SPIN_WORDS = { "Pinwheel", "ClockHand", "Ring" }
+-- 이름 단어 → 초당 회전(라디안). ClockHand 는 시계 링 중심을 축으로 거꾸로 (되감기!)
+local SPIN_WORDS = { { "ClockHand_Long", -1.4 }, { "ClockHand_Short", -0.35 }, { "ClockHand", -1 }, { "ClockRing", 0 }, { "Pinwheel", 2.5 }, { "Ring", 2.5 } }
 -- 가져오면 색이 빠져 하얗게 들어오는 경우가 있어서 색을 직접 입힘: 이름에 이 단어가 있으면 이 색, 없으면 영웅 색
 local PART_COLORS = {
+	{ "Glass", Color3.fromRGB(170, 230, 255), "Glass", 0.45 },
+	{ "RoyalCape", Color3.fromRGB(165, 25, 40), "Fabric" },
+	{ "ClockHand", Color3.fromRGB(255, 205, 80), "Foil" },
 	{ "ScrollWood", Color3.fromRGB(110, 70, 40), "Wood" },
 	{ "ScrollPaper", Color3.fromRGB(235, 218, 175), "SmoothPlastic" },
 	{ "SnowBand", Color3.fromRGB(235, 245, 255), "SmoothPlastic" },
@@ -455,6 +464,13 @@ function Club.GiveHeroLook(player, heroId, teamColor)
 	-- 캐릭터 쪽 기준 자리: 머리 정수리 / 등 가운데 (R6 몸통은 가슴이 가운데보다 조금 위)
 	local headAnchor = CFrame.new(0, head.Size.Y / 2, 0)
 	local backAnchor = CFrame.new(0, torso.Name == "Torso" and 0.2 or 0, torso.Size.Z / 2)
+	-- 시계 링 중심 (부품들을 옮기기 전에 모델 안 위치로 미리 기록)
+	local clockCenter
+	for _, q in ipairs(h.model:GetDescendants()) do
+		if q:IsA("BasePart") and q.Name:find("ClockRing") then
+			clockCenter = q.Position
+		end
+	end
 	local folder = Instance.new("Model")
 	folder.Name = "HeroLook"
 	folder:SetAttribute("Hero", heroId)
@@ -494,13 +510,26 @@ function Club.GiveHeroLook(player, heroId, teamColor)
 					if n:find(pc[1]) then
 						p.Color = pc[2]
 						p.Material = Enum.Material[pc[3]]
+						p.Transparency = pc[4] or 0
 						break
 					end
 				end
 			end
-			for _, w in ipairs(SPIN_WORDS) do
-				if n:find(w) then
-					p:SetAttribute("Spin", 2.5) -- 초당 회전(라디안)
+			-- 둥실 떠다니는(Float_) 부품은 이미 돌고 있으니 회전 단어는 무시 (기울어진 고리가 흔들려 보임)
+			if slot ~= "Float" then
+				for _, sw in ipairs(SPIN_WORDS) do
+					if n:find(sw[1]) then
+						if sw[2] ~= 0 then
+							p:SetAttribute("Spin", sw[2])
+						end
+						break
+					end
+				end
+			end
+			-- 시계 바늘: 자기 가운데가 아니라 시계 링 중심을 축으로 돌도록 축 위치를 기록
+			if n:find("ClockHand") then
+				if clockCenter then
+					p:SetAttribute("SpinPivot", p.CFrame:PointToObjectSpace(clockCenter))
 				end
 			end
 			-- 모델 기준점(Point_)에서의 상대 위치 그대로 캐릭터 기준 자리에 붙임
@@ -511,6 +540,10 @@ function Club.GiveHeroLook(player, heroId, teamColor)
 		end
 	end
 	h.model:Destroy()
+	if hero.hatReplace then
+		folder:SetAttribute("HatReplace", true)
+		Club.RemoveCap(player)
+	end
 	folder.Parent = character
 end
 

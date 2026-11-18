@@ -55,7 +55,7 @@ Config.StudioUnlockAllSkins = true
 -- 게임 주인(그룹 게임이면 그룹 소유자)은 자동으로 운영자. 다른 사람을 추가하려면 로블록스 UserId 를 넣기
 Config.Admins = {}
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1124b"
+Config.Build = "1125a"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
@@ -373,12 +373,12 @@ Config.Heroes = {
 		ult = { kind = "cannon", name = "🚀 골프 대포", desc = "다음 스윙이 공을 2.2배 세기로 쏘아 보내요", mult = 2.2 },
 	},
 	Midas = {
-		emoji = "🌟", name = "마이다스", title = "황금 손의 귀족", rarity = "Legendary", color = Color3.fromRGB(255, 210, 80),
+		emoji = "🌟", name = "마이다스", title = "황금 손의 귀족", rarity = "Legendary", color = Color3.fromRGB(255, 210, 80), hatReplace = true,
 		lore = "손대는 것마다 황금으로 바뀌는 저주를 받은 귀족. 골프공만은 황금이 되지 않아 골프에 빠졌다. 저주를 풀 방법을 팝 컵에서 찾고 있다.",
 		ult = { kind = "golden", name = "🌟 황금 퍼팅", desc = "다음 스윙이 홀컵 방향으로 자동 조준되고 퍼펙트 샷이 돼요" },
 	},
 	Void = {
-		emoji = "🕳️", name = "보이드", title = "별을 삼킨 마법사", rarity = "Mythic", color = Color3.fromRGB(150, 70, 255),
+		emoji = "🕳️", name = "보이드", title = "별을 삼킨 마법사", rarity = "Mythic", color = Color3.fromRGB(150, 70, 255), hatReplace = true,
 		lore = "골든 홀을 깨뜨린 장본인이라는 소문의 마법사. 손바닥 위에 작은 블랙홀을 띄운다. 그가 팝 컵에 나온 진짜 이유는 아무도 모른다.",
 		ult = { kind = "blackhole", name = "🕳️ 블랙홀", desc = "우리 공을 홀컵 쪽으로 30 끌어당기고, 상대 공은 홀컵에서 20 밀어내요", pull = 30, push = 20 },
 	},

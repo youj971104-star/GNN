@@ -374,7 +374,12 @@ local function animateHeroLooks()
 								c *= CFrame.Angles(0, t * 1.2, 0)
 							end
 							if spin then
-								c *= CFrame.Angles(0, 0, t * spin)
+								local pv = part:GetAttribute("SpinPivot")
+								if pv then
+									c *= CFrame.new(pv) * CFrame.Angles(0, 0, t * spin) * CFrame.new(-pv)
+								else
+									c *= CFrame.Angles(0, 0, t * spin)
+								end
 							end
 							w.C0 = c
 						end
