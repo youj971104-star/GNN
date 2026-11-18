@@ -55,7 +55,7 @@ Config.StudioUnlockAllSkins = true
 -- 게임 주인(그룹 게임이면 그룹 소유자)은 자동으로 운영자. 다른 사람을 추가하려면 로블록스 UserId 를 넣기
 Config.Admins = {}
 -- 코드 버전 표시 (화면 왼쪽 아래). 업데이트마다 바꿔서 폰·Studio에 최신 코드가 들어갔는지 확인
-Config.Build = "1125a"
+Config.Build = "1125b"
 
 -- 모델러 이펙트 이미지 (PNG를 로블록스에 올리고 받은 숫자 ID를 넣으면 바로 적용됨)
 -- 0 이면 로블록스 기본 이펙트 이미지를 씀
@@ -382,6 +382,21 @@ Config.Heroes = {
 		lore = "골든 홀을 깨뜨린 장본인이라는 소문의 마법사. 손바닥 위에 작은 블랙홀을 띄운다. 그가 팝 컵에 나온 진짜 이유는 아무도 모른다.",
 		ult = { kind = "blackhole", name = "🕳️ 블랙홀", desc = "우리 공을 홀컵 쪽으로 30 끌어당기고, 상대 공은 홀컵에서 20 밀어내요", pull = 30, push = 20 },
 	},
+}
+
+-- 영웅 일러스트 (assets/heroes/Hero_<id>_Art.png). 로블록스에 올리고 받은 이미지 ID 를 넣으면
+-- 영웅 메뉴·영웅 캡슐 결과에 그림이 나옴 (0 이면 이모지로 표시). 없는 영웅은 검은 실루엣으로 보임
+Config.HeroArt = {
+	Leo = 0,
+	Yuki = 0,
+	Gale = 0,
+	Volt = 0,
+	Shade = 0,
+	Titan = 0,
+	Chrono = 0,
+	Nova = 0,
+	Midas = 0,
+	Void = 0,
 }
 
 Config.Capsules = {

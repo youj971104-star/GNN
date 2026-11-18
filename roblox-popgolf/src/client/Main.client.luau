@@ -102,6 +102,11 @@ local function uiImage(key)
 	local id = Config.UIImages and Config.UIImages[key]
 	return id and id ~= 0 and ("rbxassetid://" .. id) or nil
 end
+-- 영웅 일러스트 이미지 (Config.HeroArt). 없으면 nil → 이모지로 표시
+local function heroArt(id)
+	local n = Config.HeroArt and Config.HeroArt[id]
+	return n and n ~= 0 and ("rbxassetid://" .. n) or nil
+end
 local function skinImage(parent, key, z)
 	return new("ImageLabel", {
 		Name = key,
@@ -1028,13 +1033,28 @@ screen.menu("Heroes", "🦸\n영웅", Color3.fromRGB(255, 150, 60), "🦸 영웅
 		local h = Config.Heroes[id]
 		local has = owned[id] == true
 		local on = state.hero == id
-		local card = new("Frame", { Parent = parent, LayoutOrder = 10 + i, Size = UDim2.new(1, -8, 0, 132), BackgroundColor3 = on and C.cardHi or C.card }, { UIKit.corner(12), UIKit.stroke(rarityColor(h.rarity), on and 3 or 1.5) })
-		local face = new("Frame", { Parent = card, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = has and h.color or Color3.fromRGB(60, 60, 70) }, { UIKit.corner(28) })
-		label({ Parent = face, Size = UDim2.fromScale(1, 1), Text = has and h.emoji or "❔" })
-		label({ Parent = card, Position = UDim2.fromOffset(76, 8), Size = UDim2.new(1, -200, 0, 24), Font = UIKit.FONT_TITLE, TextXAlignment = Enum.TextXAlignment.Left, Text = h.name .. "  ·  " .. h.title })
-		label({ Parent = card, Position = UDim2.fromOffset(76, 32), Size = UDim2.new(1, -200, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarityColor(h.rarity), Text = Config.RarityById[h.rarity].name .. " · " .. h.ult.name })
-		label({ Parent = card, Position = UDim2.fromOffset(76, 50), Size = UDim2.new(1, -200, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.sub, Text = h.ult.desc })
-		UIKit.label({ Parent = card, Position = UDim2.fromOffset(12, 74), Size = UDim2.new(1, -24, 0, 52), TextScaled = false, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.text, Text = h.lore })
+		local art = heroArt(id)
+		local card = new("Frame", { Parent = parent, LayoutOrder = 10 + i, Size = UDim2.new(1, -8, 0, art and 144 or 132), BackgroundColor3 = on and C.cardHi or C.card }, { UIKit.corner(12), UIKit.stroke(rarityColor(h.rarity), on and 3 or 1.5) })
+		local tx = 76
+		if art then
+			-- 일러스트: 가진 영웅은 컬러, 없는 영웅은 검은 실루엣 + ❔
+			tx = 140
+			local pic = new("ImageLabel", { Parent = card, Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(124, 124), BackgroundColor3 = h.color, Image = art, ImageColor3 = has and Color3.new(1, 1, 1) or Color3.fromRGB(28, 26, 36), ScaleType = Enum.ScaleType.Crop }, { UIKit.corner(10), UIKit.stroke(rarityColor(h.rarity), 2) })
+			if not has then
+				label({ Parent = pic, Size = UDim2.fromScale(1, 1), TextSize = 40, TextScaled = false, Text = "❔" })
+			end
+		else
+			local face = new("Frame", { Parent = card, Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = has and h.color or Color3.fromRGB(60, 60, 70) }, { UIKit.corner(28) })
+			label({ Parent = face, Size = UDim2.fromScale(1, 1), Text = has and h.emoji or "❔" })
+		end
+		label({ Parent = card, Position = UDim2.fromOffset(tx, 8), Size = UDim2.new(1, -tx - 124, 0, 24), Font = UIKit.FONT_TITLE, TextXAlignment = Enum.TextXAlignment.Left, Text = h.name .. "  ·  " .. h.title })
+		label({ Parent = card, Position = UDim2.fromOffset(tx, 32), Size = UDim2.new(1, -tx - 124, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarityColor(h.rarity), Text = Config.RarityById[h.rarity].name .. " · " .. h.ult.name })
+		label({ Parent = card, Position = UDim2.fromOffset(tx, 50), Size = UDim2.new(1, -tx - 124, 0, 18), TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = C.sub, Text = h.ult.desc })
+		if art then
+			UIKit.label({ Parent = card, Position = UDim2.fromOffset(tx, 72), Size = UDim2.new(1, -tx - 10, 0, 66), TextScaled = false, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.text, Text = h.lore })
+		else
+			UIKit.label({ Parent = card, Position = UDim2.fromOffset(12, 74), Size = UDim2.new(1, -24, 0, 52), TextScaled = false, TextSize = 13, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = C.text, Text = h.lore })
+		end
 		local text, color = "🔒 캡슐에서", C.gray
 		if on then
 			text, color = "✅ 출전 중", C.gold
@@ -1204,8 +1224,13 @@ remotes:WaitForChild("GachaResult").OnClientEvent:Connect(function(results)
 			local h = Config.Heroes[r.hero]
 			local card = new("Frame", { Parent = resultGrid, LayoutOrder = i, BackgroundColor3 = C.card, ZIndex = 32, Visible = false }, { UIKit.corner(12), UIKit.stroke(rarityColor(r.rarity), 3) })
 			ClubFX.Shine(card:FindFirstChildOfClass("UIStroke"), r.rarity)
-			local face = new("Frame", { Parent = card, ZIndex = 33, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(64, 64), BackgroundColor3 = h.color }, { UIKit.corner(32) })
-			label({ Parent = face, ZIndex = 34, Size = UDim2.fromScale(1, 1), Text = h.emoji })
+			local art = heroArt(r.hero)
+			if art then
+				new("ImageLabel", { Parent = card, ZIndex = 33, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.fromOffset(66, 66), BackgroundColor3 = h.color, Image = art, ScaleType = Enum.ScaleType.Crop }, { UIKit.corner(10) })
+			else
+				local face = new("Frame", { Parent = card, ZIndex = 33, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(64, 64), BackgroundColor3 = h.color }, { UIKit.corner(32) })
+				label({ Parent = face, ZIndex = 34, Size = UDim2.fromScale(1, 1), Text = h.emoji })
+			end
 			label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 72), Size = UDim2.new(1, -8, 0, 22), Font = UIKit.FONT_TITLE, Text = h.name })
 			label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 94), Size = UDim2.new(1, -8, 0, 16), TextColor3 = rarityColor(r.rarity), Text = Config.RarityById[r.rarity].name .. " 영웅" })
 			label({ Parent = card, ZIndex = 33, Position = UDim2.fromOffset(4, 110), Size = UDim2.new(1, -8, 0, 16), TextColor3 = C.sub, Text = h.title })
